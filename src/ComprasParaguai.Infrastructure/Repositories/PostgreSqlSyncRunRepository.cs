@@ -2,6 +2,7 @@ using ComprasParaguai.Core.Interfaces;
 using ComprasParaguai.Core.Models;
 using Dapper;
 using Npgsql;
+using static ComprasParaguai.Core.Interfaces.ISyncRunRepository;
 
 namespace ComprasParaguai.Infrastructure.Repositories;
 
@@ -97,6 +98,36 @@ public class PostgreSqlSyncRunRepository : ISyncRunRepository
         {
             await connection.OpenAsync(cancellationToken);
             var result = await connection.QueryFirstOrDefaultAsync<DateTime?>(
+                query,
+                commandTimeout: 30);
+
+            return result;
+        }
+    }
+
+    /// <summary>
+    /// Obtiene la información completa de la última corrida de sync.
+    /// </summary>
+    public async Task<SyncRunDto?> GetLastSyncRunAsync(CancellationToken cancellationToken = default)
+    {
+        const string query = @"
+            SELECT
+                started_at AS StartedAt,
+                finished_at AS FinishedAt,
+                new_count AS NewCount,
+                updated_count AS UpdatedCount,
+                sent AS SentCount,
+                failed AS ErrorCount
+            FROM sync_runs
+            WHERE finished_at IS NOT NULL
+            ORDER BY finished_at DESC
+            LIMIT 1
+        ";
+
+        using (var connection = new NpgsqlConnection(_connectionString))
+        {
+            await connection.OpenAsync(cancellationToken);
+            var result = await connection.QueryFirstOrDefaultAsync<SyncRunDto>(
                 query,
                 commandTimeout: 30);
 

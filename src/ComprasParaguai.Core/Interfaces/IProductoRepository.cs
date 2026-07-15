@@ -43,4 +43,32 @@ public interface IProductoRepository
     /// Marca un producto como Error (sync_status = 2, last_error = mensaje).
     /// </summary>
     Task MarkAsErrorAsync(string code, string errorMessage, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Carga un producto por código (valores actuales).
+    /// </summary>
+    Task<ProductoApi?> LoadProductByCodeAsync(string code, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Carga el historial de cambios de un producto (antes de cada UPDATE).
+    /// Retorna lista ordenada por fecha descendente (más reciente primero).
+    /// </summary>
+    Task<List<ProductHistorialDto>> LoadProductHistorialAsync(string code, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Obtiene el último registro del historial de un producto (para comparación diff).
+    /// </summary>
+    Task<ProductHistorialDto?> GetLastHistorialAsync(string code, CancellationToken cancellationToken = default);
+}
+
+public class ProductHistorialDto
+{
+    public DateTime ChangedAt { get; set; }
+    public string? NameEs { get; set; }
+    public string? NamePt { get; set; }
+    public decimal? Price { get; set; }
+    public decimal? PriceIva { get; set; }
+    public int? Stock { get; set; }
+    public string? Brand { get; set; }
+    public string? UrlImage { get; set; }
 }

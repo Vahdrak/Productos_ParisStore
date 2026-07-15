@@ -4,6 +4,7 @@ using Dapper;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 using NpgsqlTypes;
+using static ComprasParaguai.Core.Interfaces.IProductoRepository;
 
 namespace ComprasParaguai.Infrastructure.Repositories;
 
@@ -238,6 +239,86 @@ public class PostgreSqlProductoRepository : IProductoRepository
             await connection.OpenAsync(cancellationToken);
             await connection.ExecuteAsync(query, new { code, error = errorMessage });
             _logger.LogWarning("Producto {Code} marcado como Error: {Error}", code, errorMessage);
+        }
+    }
+
+    /// <summary>
+    /// Carga un producto por código (valores actuales).
+    /// </summary>
+    public async Task<ProductoApi?> LoadProductByCodeAsync(string code, CancellationToken cancellationToken = default)
+    {
+        const string query = @"
+            SELECT
+                code, name_es, name_pt, price, price_iva, stock, brand,
+                description_es, description_pt, url_image, link, link_purchase,
+                force_image_update, source_hash
+            FROM productos
+            WHERE code = @code
+        ";
+
+        using (var connection = new NpgsqlConnection(_connectionString))
+        {
+            await connection.OpenAsync(cancellationToken);
+            var product = await connection.QueryFirstOrDefaultAsync<ProductoApi>(query, new { code });
+            return product;
+        }
+    }
+
+    /// <summary>
+    /// Carga el historial de cambios de un producto.
+    /// Retorna lista ordenada por fecha descendente (más reciente primero).
+    /// </summary>
+    public async Task<List<ProductHistorialDto>> LoadProductHistorialAsync(string code, CancellationToken cancellationToken = default)
+    {
+        const string query = @"
+            SELECT
+                changed_at AS ChangedAt,
+                name_es AS NameEs,
+                name_pt AS NamePt,
+                price AS Price,
+                price_iva AS PriceIva,
+                stock AS Stock,
+                brand AS Brand,
+                url_image AS UrlImage
+            FROM productos_historial
+            WHERE code = @code
+            ORDER BY changed_at DESC
+        ";
+
+        using (var connection = new NpgsqlConnection(_connectionString))
+        {
+            await connection.OpenAsync(cancellationToken);
+            var historial = await connection.QueryAsync<ProductHistorialDto>(query, new { code });
+            return historial.ToList();
+        }
+    }
+
+    /// <summary>
+    /// Obtiene el último registro del historial de un producto.
+    /// </summary>
+    public async Task<ProductHistorialDto?> GetLastHistorialAsync(string code, CancellationToken cancellationToken = default)
+    {
+        const string query = @"
+            SELECT
+                changed_at AS ChangedAt,
+                name_es AS NameEs,
+                name_pt AS NamePt,
+                price AS Price,
+                price_iva AS PriceIva,
+                stock AS Stock,
+                brand AS Brand,
+                url_image AS UrlImage
+            FROM productos_historial
+            WHERE code = @code
+            ORDER BY changed_at DESC
+            LIMIT 1
+        ";
+
+        using (var connection = new NpgsqlConnection(_connectionString))
+        {
+            await connection.OpenAsync(cancellationToken);
+            var historial = await connection.QueryFirstOrDefaultAsync<ProductHistorialDto>(query, new { code });
+            return historial;
         }
     }
 }

@@ -27,4 +27,19 @@ public interface ISyncRunRepository
     /// Obtiene la última corrida exitosa (para saber cuándo fue la última reconciliación).
     /// </summary>
     Task<DateTime?> GetLastSuccessfulSyncAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Obtiene la información completa de la última corrida de sync.
+    /// </summary>
+    Task<SyncRunDto?> GetLastSyncRunAsync(CancellationToken cancellationToken = default);
+}
+
+public class SyncRunDto
+{
+    public DateTime? StartedAt { get; set; }
+    public DateTime? FinishedAt { get; set; }
+    public int NewCount { get; set; }
+    public int UpdatedCount { get; set; }
+    public int SentCount { get; set; }
+    public int ErrorCount { get; set; }
 }
