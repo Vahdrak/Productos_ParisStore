@@ -1,0 +1,33 @@
+# EditorConfig — estilo consistente en todo el repo. https://editorconfig.org
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+
+# C#
+[*.cs]
+indent_size = 4
+# Convenciones básicas .NET
+dotnet_sort_system_directives_first = true
+csharp_new_line_before_open_brace = all
+dotnet_style_namespace_match_folder = true
+
+# Proyectos / config .NET
+[*.{csproj,props,targets,json}]
+indent_size = 2
+
+# Front (Angular / TS / HTML / CSS)
+[*.{ts,js,html,css,scss,json,yml,yaml}]
+indent_size = 2
+
+# SQL
+[*.sql]
+indent_size = 4
+
+# Markdown (no recortar espacios: los dobles espacios son saltos de línea)
+[*.md]
+trim_trailing_whitespace = false

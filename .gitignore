@@ -1,0 +1,58 @@
+# ==========================================================================
+#  .NET
+# ==========================================================================
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+project.lock.json
+artifacts/
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+*.coveragexml
+coverage/
+
+# ==========================================================================
+#  Node / Angular
+# ==========================================================================
+node_modules/
+frontend/**/dist/
+frontend/**/.angular/
+frontend/**/tmp/
+frontend/**/out-tsc/
+npm-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ==========================================================================
+#  Secretos / configuración local  (NUNCA commitear tokens ni cadenas)
+# ==========================================================================
+appsettings.*.local.json
+*.local.json
+.env
+.env.*
+secrets.json
+
+# ==========================================================================
+#  Editores / SO
+# ==========================================================================
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+*.swp
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# ==========================================================================
+#  Logs
+# ==========================================================================
+logs/
+*.log
