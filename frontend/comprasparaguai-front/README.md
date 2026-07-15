@@ -1,18 +1,100 @@
-# comprasparaguai-front (Angular)
+# Compras Paraguai - Frontend Angular
 
-App Angular de monitoreo. Consume la Web API (`ComprasParaguai.Api`), solo lectura.
+Frontend de monitoreo y prueba de productos para Compras Paraguai.
 
-Pantallas (ver Sección 11 del plan):
-- **Dashboard** — contadores + últimas corridas (`sync_runs`).
-- **Productos** — tabla con `code`, nombre, precio, stock, badge de `sync_status` y marca de
-  "modificado" si tiene historial. Filtros arriba.
-- **Detalle** — datos actuales + **diff "antes/después"** (`/diff`) + timeline del `/historial`.
+## Estructura de carpetas
 
-Scaffold (Angular CLI vía npx, sin instalación global):
-```bash
-cd frontend
-npx @angular/cli@latest new comprasparaguai-front --standalone --routing --style scss
+```
+src/
+├── app/
+│   ├── shared/
+│   │   ├── components/      # Componentes reutilizables (librería)
+│   │   │   ├── btn.component.ts         # Botón
+│   │   │   ├── input.component.ts       # Campo de texto
+│   │   │   ├── card.component.ts        # Contenedor tarjeta
+│   │   │   ├── badge.component.ts       # Etiqueta de estado
+│   │   │   └── index.ts                 # Barrel export
+│   │   └── services/
+│   │       ├── http.service.ts          # Cliente HTTP base
+│   │       └── producto.service.ts      # Consumo API de productos
+│   ├── pages/
+│   │   └── productos-test/
+│   │       └── productos-test.component.ts   # Página CRUD de prueba
+│   └── app.component.ts      # Componente raíz
+├── main.ts                   # Entry point
+├── index.html               # Template HTML
+├── styles.css               # Estilos globales
+└── favicon.ico              # Favicon
 ```
 
-> Ojo: el scaffold crea la app **dentro** de esta carpeta. Al generarla, este README puede
-> integrarse o moverse según prefieras.
+## Componentes (Librería)
+
+### BtnComponent
+```html
+<app-btn 
+  label="Guardar" 
+  variant="primary|danger|default"
+  [disabled]="false"
+  (onClick)="onSave()" />
+```
+
+### InputComponent
+```html
+<app-input
+  label="Nombre"
+  placeholder="Ingresa tu nombre"
+  type="text|number|email"
+  hint="Campo requerido"
+  [(ngModel)]="value"
+  (inputValue)="onValueChange($event)" />
+```
+
+### CardComponent
+```html
+<app-card 
+  title="Mi tarjeta"
+  [elevated]="true"
+  [showFooter]="true">
+  
+  <!-- Contenido principal -->
+  <p>Contenido de la tarjeta</p>
+  
+  <!-- Footer (opcional) -->
+  <div card-footer>
+    <app-btn label="Aceptar" />
+  </div>
+</app-card>
+```
+
+### BadgeComponent
+```html
+<app-badge 
+  label="Pendiente" 
+  variant="pending|sent|error|info" />
+```
+
+## Instalación
+
+```bash
+cd frontend/comprasparaguai-front
+npm install
+```
+
+## Desarrollo
+
+```bash
+npm start
+```
+
+La aplicación estará disponible en `http://localhost:4200`
+
+## API
+
+Conecta a `http://localhost:5000/api`
+
+Endpoints consumidos:
+- GET `/productos/pending`
+- GET `/productos/{code}`
+- GET `/productos/{code}/historial`
+- GET `/productos/{code}/diff`
+- PUT `/productos/{code}`

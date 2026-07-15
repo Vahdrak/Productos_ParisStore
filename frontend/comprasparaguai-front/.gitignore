@@ -1,0 +1,19 @@
+# Angular
+/dist
+/node_modules
+/.angular
+
+# IDE
+/.vscode
+/.idea
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Build
+npm-debug.log
+yarn-error.log
+
+# Testing
+/coverage
