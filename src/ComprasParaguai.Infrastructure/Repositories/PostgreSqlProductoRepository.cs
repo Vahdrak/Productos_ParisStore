@@ -181,9 +181,20 @@ public class PostgreSqlProductoRepository : IProductoRepository
     {
         const string query = @"
             SELECT
-                code, name_es, name_pt, price, price_iva, stock, brand,
-                description_es, description_pt, url_image, link, link_purchase,
-                force_image_update, source_hash
+                code AS Code,
+                name_es AS NameEs,
+                name_pt AS NamePt,
+                price AS Price,
+                price_iva AS PriceIva,
+                stock AS Stock,
+                brand AS Brand,
+                description_es AS DescriptionEs,
+                description_pt AS DescriptionPt,
+                url_image AS UrlImage,
+                link AS Link,
+                link_purchase AS LinkPurchase,
+                force_image_update AS ForceImageUpdate,
+                source_hash AS SourceHash
             FROM productos
             WHERE sync_status = 0
             ORDER BY code
