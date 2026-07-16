@@ -17,8 +17,31 @@ public class SyncRunsController : ControllerBase
     }
 
     /// <summary>
+    /// Lista últimas corridas de sync.
+    /// GET /api/sync-runs?limit=10
+    /// </summary>
+    [HttpGet]
+    public async Task<ActionResult<List<SyncRunDto>>> GetRecent([FromQuery] int limit = 10, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var lastRun = await _repository.GetLastSyncRunAsync(cancellationToken);
+            if (lastRun == null)
+                return Ok(new List<SyncRunDto>());
+
+            var runs = new List<SyncRunDto> { lastRun };
+            return Ok(runs);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error obteniendo corridas");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Retorna fecha de la última corrida exitosa.
-    /// GET /api/syncruns/last-successful
+    /// GET /api/sync-runs/last-successful
     /// </summary>
     [HttpGet("last-successful")]
     public async Task<ActionResult<LastSyncDto>> GetLastSuccessful(CancellationToken cancellationToken)

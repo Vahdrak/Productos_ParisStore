@@ -47,6 +47,26 @@ export interface Dashboard {
   status: string;
 }
 
+export interface SyncRun {
+  id?: number;
+  startedAt: string;
+  finishedAt?: string;
+  rowsInView?: number;
+  newCount: number;
+  updatedCount: number;
+  sentCount: number;
+  errorCount: number;
+  notes?: string;
+}
+
+export interface ProductList {
+  items: Producto[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -71,6 +91,18 @@ export class ProductoService {
 
   getDashboard(): Observable<Dashboard> {
     return this.http.get<Dashboard>('/dashboard');
+  }
+
+  getSyncRuns(): Observable<SyncRun[]> {
+    return this.http.get<SyncRun[]>('/sync-runs');
+  }
+
+  getProductos(filters?: any, page: number = 1, pageSize: number = 50): Observable<ProductList> {
+    let url = `/productos?page=${page}&pageSize=${pageSize}`;
+    if (filters?.code) url += `&code=${encodeURIComponent(filters.code)}`;
+    if (filters?.name) url += `&name=${encodeURIComponent(filters.name)}`;
+    if (filters?.syncStatus !== null && filters?.syncStatus !== undefined) url += `&syncStatus=${filters.syncStatus}`;
+    return this.http.get<ProductList>(url);
   }
 
   createProduct(producto: Producto): Observable<Producto> {

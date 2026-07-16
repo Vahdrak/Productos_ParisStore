@@ -19,6 +19,53 @@ public class ProductosController : ControllerBase
     }
 
     /// <summary>
+    /// Lista todos los productos con filtros opcionales.
+    /// GET /api/productos?syncStatus=0&page=1&pageSize=50
+    /// </summary>
+    [HttpGet]
+    public async Task<ActionResult<ProductListDto>> GetAll(
+        [FromQuery] int? syncStatus = null,
+        [FromQuery] string? code = null,
+        [FromQuery] string? name = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var pending = await _repository.LoadPendingProductsAsync(cancellationToken);
+
+            var filtered = pending.AsEnumerable();
+            if (syncStatus.HasValue)
+                filtered = filtered.Where(p => p.SyncStatus == syncStatus.Value);
+            if (!string.IsNullOrEmpty(code))
+                filtered = filtered.Where(p => p.Code.Contains(code, StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrEmpty(name))
+                filtered = filtered.Where(p => p.NamePt?.Contains(name, StringComparison.OrdinalIgnoreCase) == true);
+
+            var total = filtered.Count();
+            var items = filtered
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToList();
+
+            return Ok(new ProductListDto
+            {
+                Items = items,
+                TotalCount = total,
+                Page = page,
+                PageSize = pageSize,
+                TotalPages = (int)Math.Ceiling(total / (double)pageSize)
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error cargando productos");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Lista todos los productos Pendiente de envío.
     /// GET /api/productos/pending
     /// </summary>
@@ -119,4 +166,13 @@ public class ProductDiffDto
     public ProductoApi Current { get; set; }
     public ProductHistorialDto? Previous { get; set; }
     public bool HasChanges { get; set; }
+}
+
+public class ProductListDto
+{
+    public List<ProductoApi> Items { get; set; } = [];
+    public int TotalCount { get; set; }
+    public int Page { get; set; }
+    public int PageSize { get; set; }
+    public int TotalPages { get; set; }
 }

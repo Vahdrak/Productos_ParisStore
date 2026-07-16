@@ -2,13 +2,13 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpClientModule } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
-import { BtnComponent, InputComponent, CardComponent } from './shared/components';
+import { BtnComponent, InputComponent, CardComponent, BadgeComponent } from './shared/components';
 import { ProductoService } from './shared/services/producto.service';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, HttpClientModule, FormsModule, BtnComponent, InputComponent, CardComponent],
+  imports: [CommonModule, HttpClientModule, FormsModule, BtnComponent, InputComponent, CardComponent, BadgeComponent],
   template: `
     <div class="app-layout">
       <!-- Sidebar -->
@@ -18,369 +18,297 @@ import { ProductoService } from './shared/services/producto.service';
         </div>
 
         <nav class="sidebar-nav">
-          <button [class.active]="page === 'dashboard'" (click)="page = 'dashboard'" class="nav-btn">
+          <button [class.active]="page === 'dashboard'" (click)="page = 'dashboard'; resetFilters()" class="nav-btn">
             📊 Dashboard
           </button>
-          <button [class.active]="page === 'buscar'" (click)="page = 'buscar'" class="nav-btn">
-            🔍 Buscar
+          <button [class.active]="page === 'productos'" (click)="page = 'productos'; loadProductos()" class="nav-btn">
+            📋 Productos
           </button>
         </nav>
       </aside>
 
       <!-- Content -->
       <main class="content">
-        <!-- DASHBOARD -->
+        <!-- DASHBOARD PAGE -->
         <div *ngIf="page === 'dashboard'">
           <h2>Dashboard Operativo</h2>
-          <p class="subtitle">Resumen en tiempo real</p>
+          <p class="subtitle">Resumen de sincronización en tiempo real</p>
 
+          <!-- Stats Grid -->
           <div *ngIf="dashboard" class="stats-grid">
             <app-card title="Pendientes" [elevated]="true">
               <div class="big-number">{{ dashboard.pendingCount }}</div>
               <p class="desc">Sin enviar</p>
             </app-card>
-
             <app-card title="Nuevos" [elevated]="true">
               <div class="big-number">{{ dashboard.newCount }}</div>
               <p class="desc">Última sync</p>
             </app-card>
-
             <app-card title="Actualizados" [elevated]="true">
               <div class="big-number">{{ dashboard.updatedCount }}</div>
               <p class="desc">Cambios</p>
             </app-card>
-
             <app-card title="Enviados" [elevated]="true">
               <div class="big-number">{{ dashboard.sentCount }}</div>
               <p class="desc">API</p>
             </app-card>
-
             <app-card title="Errores" [elevated]="true">
               <div class="big-number error">{{ dashboard.errorCount }}</div>
               <p class="desc">Con error</p>
             </app-card>
-
             <app-card title="Estado" [elevated]="true">
               <div class="big-number" [class.ok]="dashboard.status === 'OK'">{{ dashboard.status }}</div>
-              <p class="desc">{{ dashboard.lastSyncAt | date:'short' }}</p>
+              <p class="desc" *ngIf="dashboard.lastSyncAt">{{ dashboard.lastSyncAt | date:'short' }}</p>
+              <p class="desc" *ngIf="!dashboard.lastSyncAt">Sin sincronización</p>
             </app-card>
           </div>
 
-          <div *ngIf="!dashboard" class="loading">Cargando...</div>
+          <div *ngIf="!dashboard" class="loading">Cargando dashboard...</div>
+
+          <!-- Tabla de Últimas Corridas -->
+          <div *ngIf="syncRuns" class="section">
+            <h3>Últimas Corridas</h3>
+            <table class="runs-table">
+              <thead>
+                <tr>
+                  <th>Inicio</th>
+                  <th>Fin</th>
+                  <th>Nuevos</th>
+                  <th>Actualizados</th>
+                  <th>Enviados</th>
+                  <th>Errores</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let run of syncRuns">
+                  <td>{{ run.startedAt | date:'short' }}</td>
+                  <td>{{ run.finishedAt | date:'short' }}</td>
+                  <td>{{ run.newCount }}</td>
+                  <td>{{ run.updatedCount }}</td>
+                  <td>{{ run.sentCount }}</td>
+                  <td>{{ run.errorCount }}</td>
+                </tr>
+              </tbody>
+            </table>
+            <div *ngIf="syncRuns.length === 0" class="empty-state">Sin corridas registradas</div>
+          </div>
         </div>
 
-        <!-- BUSCAR -->
-        <div *ngIf="page === 'buscar'">
-          <h2>Buscar Producto</h2>
-          <p class="subtitle">Edita y visualiza cambios</p>
+        <!-- PRODUCTOS PAGE -->
+        <div *ngIf="page === 'productos'">
+          <h2>Productos</h2>
+          <p class="subtitle">Gestión de catálogo sincronizado</p>
 
-          <app-card title="Búsqueda" [elevated]="true">
-            <div class="search-box">
-              <app-input label="Código" placeholder="Ej: PROD-001847" [(ngModel)]="searchCode" />
-              <app-btn label="Buscar" variant="primary" (onClick)="search()" />
+          <!-- Filtros -->
+          <div class="filters-bar">
+            <div class="filter-group">
+              <label>Código:</label>
+              <input [(ngModel)]="filterCode" placeholder="Buscar por código" class="filter-input">
             </div>
-            <div *ngIf="loading" class="msg loading">Buscando...</div>
-            <div *ngIf="error" class="msg error">⚠️ {{ error }}</div>
-          </app-card>
-
-          <!-- Resultado -->
-          <div *ngIf="product">
-            <app-card [title]="product.code" [elevated]="true">
-              <div class="product-info">
-                <div><strong>Nombre:</strong> {{ product.namePt }}</div>
-                <div><strong>Precio:</strong> {{ product.price | currency }}</div>
-                <div><strong>Stock:</strong> {{ product.stock }}</div>
-                <div *ngIf="product.brand"><strong>Marca:</strong> {{ product.brand }}</div>
-              </div>
-
-              <div class="actions">
-                <app-btn label="Editar" (onClick)="toggleEdit()" />
-                <app-btn label="Ver Diff" variant="primary" (onClick)="loadDiff()" />
-                <app-btn label="Historial" (onClick)="loadHistory()" />
-              </div>
-            </app-card>
+            <div class="filter-group">
+              <label>Nombre:</label>
+              <input [(ngModel)]="filterName" placeholder="Buscar por nombre" class="filter-input">
+            </div>
+            <div class="filter-group">
+              <label>Estado:</label>
+              <select [(ngModel)]="filterSyncStatus" class="filter-input">
+                <option value="">Todos</option>
+                <option value="0">Pendiente</option>
+                <option value="1">Enviado</option>
+                <option value="2">Error</option>
+              </select>
+            </div>
+            <app-btn label="Filtrar" variant="primary" (onClick)="loadProductos()" />
           </div>
 
-          <!-- Edición -->
-          <div *ngIf="editing && product">
-            <app-card title="Editar" [elevated]="true">
-              <div class="form">
-                <app-input label="Nombre" [(ngModel)]="edited.namePt" />
-                <app-input label="Precio" type="number" [(ngModel)]="edited.price" />
-                <app-input label="Stock" type="number" [(ngModel)]="edited.stock" />
-              </div>
+          <!-- Tabla de Productos -->
+          <div *ngIf="productList && productList.items.length > 0" class="section">
+            <table class="productos-table">
+              <thead>
+                <tr>
+                  <th>Código</th>
+                  <th>Nombre</th>
+                  <th>Precio</th>
+                  <th>Stock</th>
+                  <th>Estado</th>
+                  <th>Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let prod of productList.items">
+                  <td class="code">{{ prod.code }}</td>
+                  <td>{{ prod.namePt }}</td>
+                  <td class="price">{{ prod.price | currency }}</td>
+                  <td class="stock">{{ prod.stock }}</td>
+                  <td>
+                    <app-badge [variant]="getStatusVariant(prod.syncStatus)">
+                      {{ getStatusLabel(prod.syncStatus) }}
+                    </app-badge>
+                  </td>
+                  <td>
+                    <app-btn label="Ver" (onClick)="viewProductDetail(prod.code)" />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
 
-              <div class="actions">
-                <app-btn label="Guardar" variant="primary" (onClick)="save()" />
-                <app-btn label="Cancelar" (onClick)="toggleEdit()" />
+            <!-- Paginación -->
+            <div class="pagination">
+              <p>Página {{ productList.page }} de {{ productList.totalPages }} ({{ productList.totalCount }} productos)</p>
+              <div class="pagination-controls">
+                <app-btn label="← Anterior" (onClick)="previousPage()" [disabled]="productList.page <= 1" />
+                <app-btn label="Siguiente →" (onClick)="nextPage()" [disabled]="productList.page >= productList.totalPages" />
               </div>
-            </app-card>
+            </div>
           </div>
 
-          <!-- Diff -->
-          <div *ngIf="diff && !showHistory">
-            <app-card [title]="'Cambios: ' + diff.code" [elevated]="true">
-              <div *ngIf="diff.hasChanges; else noDiff" class="diff">
+          <div *ngIf="productList && productList.items.length === 0" class="empty-state">
+            No hay productos con los filtros especificados
+          </div>
+
+          <div *ngIf="!productList" class="loading">Cargando productos...</div>
+        </div>
+
+        <!-- DETALLE PAGE -->
+        <div *ngIf="page === 'detalle' && productDetail">
+          <div class="detalle-header">
+            <app-btn label="← Volver" (onClick)="page = 'productos'" />
+            <h2>{{ productDetail.code }}</h2>
+          </div>
+
+          <div class="detalle-grid">
+            <!-- Datos Actuales -->
+            <app-card title="Datos Actuales" [elevated]="true">
+              <div class="detail-row"><strong>Código:</strong> {{ productDetail.code }}</div>
+              <div class="detail-row"><strong>Nombre (PT):</strong> {{ productDetail.namePt }}</div>
+              <div class="detail-row"><strong>Nombre (ES):</strong> {{ productDetail.nameEs }}</div>
+              <div class="detail-row"><strong>Precio:</strong> {{ productDetail.price | currency }}</div>
+              <div class="detail-row"><strong>Stock:</strong> {{ productDetail.stock }}</div>
+              <div class="detail-row"><strong>Marca:</strong> {{ productDetail.brand || 'N/A' }}</div>
+              <div class="detail-row">
+                <strong>Estado:</strong>
+                <app-badge [variant]="getStatusVariant(productDetail.syncStatus)">
+                  {{ getStatusLabel(productDetail.syncStatus) }}
+                </app-badge>
+              </div>
+            </app-card>
+
+            <!-- Diff (Antes/Después) -->
+            <app-card *ngIf="productDiff" title="Últimos Cambios" [elevated]="true">
+              <div *ngIf="productDiff.hasChanges" class="diff-view">
                 <div class="diff-col">
                   <h4>Antes</h4>
-                  <div *ngIf="diff.previous">
-                    <div>Precio: {{ diff.previous.price | currency }}</div>
-                    <div>Stock: {{ diff.previous.stock }}</div>
+                  <div *ngIf="productDiff.previous">
+                    <div>Precio: {{ productDiff.previous.price | currency }}</div>
+                    <div>Stock: {{ productDiff.previous.stock }}</div>
+                    <div>Fecha: {{ productDiff.previous.changedAt | date:'short' }}</div>
                   </div>
                 </div>
                 <div class="diff-col">
                   <h4>Ahora</h4>
-                  <div>Precio: {{ diff.current.price | currency }}</div>
-                  <div>Stock: {{ diff.current.stock }}</div>
+                  <div>Precio: {{ productDiff.current.price | currency }}</div>
+                  <div>Stock: {{ productDiff.current.stock }}</div>
+                  <div>Fecha: {{ productDiff.current.changedAt | date:'short' }}</div>
                 </div>
               </div>
-              <ng-template #noDiff>
-                <p class="info">Sin cambios</p>
-              </ng-template>
+              <div *ngIf="!productDiff.hasChanges" class="empty-state">Sin cambios registrados</div>
             </app-card>
           </div>
 
-          <!-- Historial -->
-          <div *ngIf="showHistory">
-            <app-card title="Historial" [elevated]="true">
-              <div *ngIf="history.length > 0; else noHistory" class="history">
-                <div *ngFor="let h of history" class="hist-row">
-                  <div class="hist-date">{{ h.changedAt | date:'short' }}</div>
-                  <div>Precio: {{ h.price | currency }} | Stock: {{ h.stock }}</div>
+          <!-- Timeline del Historial -->
+          <app-card *ngIf="productHistory" title="Historial de Cambios" [elevated]="true">
+            <div *ngIf="productHistory.length > 0" class="timeline">
+              <div *ngFor="let h of productHistory" class="timeline-item">
+                <div class="timeline-date">{{ h.changedAt | date:'short' }}</div>
+                <div class="timeline-content">
+                  <div>Precio: {{ h.price | currency }} → Stock: {{ h.stock }}</div>
+                  <div class="timeline-note">Cambio detectado en sincronización</div>
                 </div>
               </div>
-              <ng-template #noHistory>
-                <p class="info">Sin historial</p>
-              </ng-template>
-
-              <div class="actions">
-                <app-btn label="Volver" (onClick)="showHistory = false" />
-              </div>
-            </app-card>
-          </div>
+            </div>
+            <div *ngIf="productHistory.length === 0" class="empty-state">Sin historial de cambios</div>
+          </app-card>
         </div>
       </main>
     </div>
   `,
   styles: [`
-    .app-layout {
-      display: flex;
-      height: 100vh;
-      background: var(--surface-0);
-    }
+    .app-layout { display: flex; height: 100vh; background: var(--surface-0); }
+    .sidebar { width: 240px; background: var(--surface-1); border-right: 0.5px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; }
+    .sidebar-header { padding: 20px; border-bottom: 0.5px solid var(--border); background: var(--surface-2); }
+    .sidebar-header h1 { margin: 0; font-size: 18px; font-weight: 500; }
+    .sidebar-nav { display: flex; flex-direction: column; padding: 12px; gap: 4px; }
+    .nav-btn { padding: 12px 16px; background: transparent; border: 0.5px solid transparent; border-radius: var(--radius); cursor: pointer; font-size: 14px; color: var(--text-secondary); text-align: left; transition: all 0.2s; font-family: inherit; }
+    .nav-btn:hover { background: var(--surface-2); color: var(--text-primary); }
+    .nav-btn.active { background: var(--fill-accent); color: white; border-color: var(--fill-accent); }
 
-    .sidebar {
-      width: 240px;
-      background: var(--surface-1);
-      border-right: 0.5px solid var(--border);
-      display: flex;
-      flex-direction: column;
-      overflow-y: auto;
-    }
+    .content { flex: 1; overflow-y: auto; padding: 24px; max-width: 1400px; }
+    h2 { margin: 0 0 4px 0; font-size: 24px; font-weight: 500; }
+    h3 { margin: 0 0 12px 0; font-size: 18px; font-weight: 500; }
+    .subtitle { margin: 0 0 20px 0; color: var(--text-secondary); font-size: 14px; }
+    .section { margin-top: 32px; }
 
-    .sidebar-header {
-      padding: 20px;
-      border-bottom: 0.5px solid var(--border);
-      background: var(--surface-2);
-    }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 32px; }
+    .big-number { font-size: 32px; font-weight: 500; color: var(--fill-accent); margin: 12px 0; }
+    .big-number.error { color: var(--fill-danger); }
+    .big-number.ok { color: var(--fill-success); }
+    .desc { font-size: 12px; color: var(--text-secondary); margin: 8px 0 0 0; }
 
-    .sidebar-header h1 {
-      margin: 0;
-      font-size: 18px;
-      font-weight: 500;
-    }
+    .filters-bar { display: flex; gap: 12px; align-items: flex-end; margin-bottom: 20px; padding: 12px; background: var(--surface-1); border-radius: var(--radius); }
+    .filter-group { display: flex; flex-direction: column; gap: 6px; }
+    .filter-group label { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
+    .filter-input { padding: 8px 12px; border: 0.5px solid var(--border); border-radius: var(--radius); font-size: 13px; font-family: inherit; background: var(--surface-2); color: var(--text-primary); }
 
-    .sidebar-nav {
-      display: flex;
-      flex-direction: column;
-      padding: 12px;
-      gap: 4px;
-    }
+    .runs-table, .productos-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .runs-table th, .productos-table th { background: var(--surface-1); padding: 12px; text-align: left; font-weight: 500; border-bottom: 0.5px solid var(--border); }
+    .runs-table td, .productos-table td { padding: 12px; border-bottom: 0.5px solid var(--border); }
+    .runs-table tr:hover, .productos-table tr:hover { background: var(--surface-1); }
+    .code { font-family: monospace; font-size: 12px; }
+    .price { text-align: right; }
+    .stock { text-align: center; }
 
-    .nav-btn {
-      padding: 12px 16px;
-      background: transparent;
-      border: 0.5px solid transparent;
-      border-radius: var(--radius);
-      cursor: pointer;
-      font-size: 14px;
-      color: var(--text-secondary);
-      text-align: left;
-      transition: all 0.2s;
-      font-family: inherit;
-    }
+    .pagination { margin-top: 20px; display: flex; justify-content: space-between; align-items: center; padding: 12px; background: var(--surface-1); border-radius: var(--radius); }
+    .pagination p { margin: 0; font-size: 13px; }
+    .pagination-controls { display: flex; gap: 8px; }
 
-    .nav-btn:hover {
-      background: var(--surface-2);
-      color: var(--text-primary);
-    }
+    .detalle-header { display: flex; gap: 16px; align-items: center; margin-bottom: 20px; }
+    .detalle-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+    .detail-row { padding: 8px 0; font-size: 13px; border-bottom: 0.5px solid var(--border); }
+    .detail-row strong { font-weight: 500; }
+    .diff-view { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .diff-col { font-size: 13px; }
+    .diff-col h4 { margin: 0 0 8px 0; color: var(--text-secondary); font-size: 12px; }
+    .diff-col div { margin: 4px 0; }
 
-    .nav-btn.active {
-      background: var(--fill-accent);
-      color: white;
-      border-color: var(--fill-accent);
-    }
+    .timeline { display: flex; flex-direction: column; gap: 12px; }
+    .timeline-item { padding: 12px; border-left: 3px solid var(--fill-accent); background: var(--surface-1); border-radius: var(--radius); }
+    .timeline-date { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; font-weight: 500; }
+    .timeline-content { font-size: 13px; }
+    .timeline-note { font-size: 11px; color: var(--text-secondary); margin-top: 4px; }
 
-    .content {
-      flex: 1;
-      overflow-y: auto;
-      padding: 24px;
-      max-width: 1200px;
-    }
-
-    h2 {
-      margin: 0 0 4px 0;
-      font-size: 24px;
-      font-weight: 500;
-    }
-
-    .subtitle {
-      margin: 0 0 20px 0;
-      color: var(--text-secondary);
-      font-size: 14px;
-    }
-
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-      gap: 12px;
-    }
-
-    .big-number {
-      font-size: 32px;
-      font-weight: 500;
-      color: var(--fill-accent);
-      margin: 12px 0;
-    }
-
-    .big-number.error {
-      color: var(--fill-danger);
-    }
-
-    .big-number.ok {
-      color: var(--fill-success);
-    }
-
-    .desc {
-      font-size: 12px;
-      color: var(--text-secondary);
-      margin: 8px 0 0 0;
-    }
-
-    .search-box {
-      display: flex;
-      gap: 12px;
-      align-items: flex-end;
-      margin-bottom: 12px;
-    }
-
-    .search-box app-input {
-      flex: 1;
-    }
-
-    .product-info {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      padding: 12px 0;
-      font-size: 14px;
-    }
-
-    .form {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      margin-bottom: 12px;
-    }
-
-    .actions {
-      display: flex;
-      gap: 8px;
-      margin-top: 16px;
-      padding-top: 12px;
-      border-top: 0.5px solid var(--border);
-    }
-
-    .diff {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 24px;
-      padding: 12px 0;
-    }
-
-    .diff-col {
-      font-size: 13px;
-    }
-
-    .diff-col h4 {
-      margin: 0 0 8px 0;
-      color: var(--text-secondary);
-      font-size: 13px;
-    }
-
-    .diff-col div {
-      margin: 4px 0;
-    }
-
-    .history {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      padding: 12px 0;
-    }
-
-    .hist-row {
-      padding: 12px;
-      border-left: 2px solid var(--fill-accent);
-      background: var(--surface-1);
-      border-radius: var(--radius);
-      font-size: 13px;
-    }
-
-    .hist-date {
-      font-size: 12px;
-      color: var(--text-secondary);
-      margin-bottom: 4px;
-    }
-
-    .msg {
-      padding: 12px;
-      border-radius: var(--radius);
-      font-size: 13px;
-      margin-top: 12px;
-    }
-
-    .loading {
-      background: var(--bg-accent);
-      color: var(--text-accent);
-    }
-
-    .error {
-      background: var(--bg-danger);
-      color: var(--text-danger);
-    }
-
-    .info {
-      padding: 12px;
-      text-align: center;
-      color: var(--text-secondary);
-      font-size: 13px;
-    }
+    .empty-state { padding: 32px; text-align: center; color: var(--text-secondary); }
+    .loading { padding: 32px; text-align: center; color: var(--text-secondary); }
   `],
   providers: [ProductoService]
 })
 export class AppComponent implements OnInit {
-  page: 'dashboard' | 'buscar' = 'dashboard';
+  page: 'dashboard' | 'productos' | 'detalle' = 'dashboard';
+
+  // Dashboard
   dashboard: any = null;
-  searchCode = '';
-  product: any = null;
-  edited: any = {};
-  editing = false;
-  loading = false;
-  error = '';
-  diff: any = null;
-  history: any[] = [];
-  showHistory = false;
+  syncRuns: any[] = [];
+
+  // Productos
+  productList: any = null;
+  filterCode = '';
+  filterName = '';
+  filterSyncStatus = '';
+  currentPage = 1;
+
+  // Detalle
+  productDetail: any = null;
+  productDiff: any = null;
+  productHistory: any[] = [];
 
   constructor(private service: ProductoService) {}
 
@@ -394,68 +322,69 @@ export class AppComponent implements OnInit {
       next: (d) => { this.dashboard = d; },
       error: (e) => console.error(e)
     });
+    this.loadSyncRuns();
   }
 
-  search() {
-    if (!this.searchCode.trim()) {
-      this.error = 'Ingresa código';
-      return;
+  loadSyncRuns() {
+    this.service.getSyncRuns().subscribe({
+      next: (r) => { this.syncRuns = r; },
+      error: (e) => console.error(e)
+    });
+  }
+
+  loadProductos() {
+    const syncStatus = this.filterSyncStatus ? parseInt(this.filterSyncStatus) : null;
+    this.service.getProductos(
+      { syncStatus, code: this.filterCode, name: this.filterName },
+      this.currentPage
+    ).subscribe({
+      next: (list) => { this.productList = list; },
+      error: (e) => console.error(e)
+    });
+  }
+
+  nextPage() {
+    this.currentPage++;
+    this.loadProductos();
+  }
+
+  previousPage() {
+    if (this.currentPage > 1) {
+      this.currentPage--;
+      this.loadProductos();
     }
-    this.loading = true;
-    this.error = '';
-    this.service.getProductByCode(this.searchCode).subscribe({
-      next: (p) => {
-        this.product = p;
-        this.edited = { ...p };
-        this.loading = false;
-      },
-      error: (e) => {
-        this.error = e.message;
-        this.loading = false;
-      }
+  }
+
+  viewProductDetail(code: string) {
+    this.page = 'detalle';
+    this.service.getProductByCode(code).subscribe({
+      next: (p) => { this.productDetail = p; },
+      error: (e) => console.error(e)
+    });
+    this.service.getProductDiff(code).subscribe({
+      next: (d) => { this.productDiff = d; },
+      error: (e) => console.error(e)
+    });
+    this.service.getProductHistorial(code).subscribe({
+      next: (h) => { this.productHistory = h; },
+      error: (e) => console.error(e)
     });
   }
 
-  toggleEdit() {
-    this.editing = !this.editing;
-    if (!this.editing) {
-      this.edited = { ...this.product };
-    }
+  resetFilters() {
+    this.filterCode = '';
+    this.filterName = '';
+    this.filterSyncStatus = '';
+    this.currentPage = 1;
   }
 
-  save() {
-    if (!this.product) return;
-    this.loading = true;
-    this.service.updateProduct(this.product.code, this.edited).subscribe({
-      next: (p) => {
-        this.product = p;
-        this.editing = false;
-        this.loading = false;
-      },
-      error: (e) => {
-        this.error = e.message;
-        this.loading = false;
-      }
-    });
+  getStatusLabel(status: number): string {
+    const labels = { 0: 'Pendiente', 1: 'Enviado', 2: 'Error' };
+    return labels[status as keyof typeof labels] || 'Desconocido';
   }
 
-  loadDiff() {
-    if (!this.product) return;
-    this.service.getProductDiff(this.product.code).subscribe({
-      next: (d) => {
-        this.diff = d;
-        this.showHistory = false;
-      },
-      error: (e) => { this.error = e.message; }
-    });
-  }
-
-  loadHistory() {
-    if (!this.product) return;
-    this.showHistory = true;
-    this.service.getProductHistorial(this.product.code).subscribe({
-      next: (h) => { this.history = h; },
-      error: (e) => { this.error = e.message; }
-    });
+  getStatusVariant(status: number): 'pending' | 'sent' | 'error' | 'info' {
+    const variants: Record<number, 'pending' | 'sent' | 'error' | 'info'> = { 0: 'pending', 1: 'sent', 2: 'error' };
+    return variants[status] || 'info';
   }
 }

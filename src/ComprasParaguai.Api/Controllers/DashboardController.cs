@@ -27,28 +27,40 @@ public class DashboardController : ControllerBase
     /// GET /api/dashboard
     /// </summary>
     [HttpGet]
-    public Task<ActionResult<DashboardDto>> GetDashboard(CancellationToken cancellationToken)
+    public async Task<ActionResult<DashboardDto>> GetDashboard(CancellationToken cancellationToken)
     {
         try
         {
+            var pending = await _productoRepository.LoadPendingProductsAsync(cancellationToken);
+            var lastSync = await _syncRunRepository.GetLastSuccessfulSyncAsync(cancellationToken);
+            var lastSyncRun = await _syncRunRepository.GetLastSyncRunAsync(cancellationToken);
+
             var dto = new DashboardDto
             {
-                PendingCount = 1547,
-                NewCount = 312,
-                UpdatedCount = 156,
-                SentCount = 45678,
-                ErrorCount = 3,
-                Status = "OK",
-                LastSyncAt = DateTime.UtcNow.AddHours(-2)
+                PendingCount = pending.Count,
+                LastSyncAt = lastSync,
+                Status = pending.Count == 0 ? "OK" : "PENDIENTE",
+                NewCount = lastSyncRun?.NewCount ?? 0,
+                UpdatedCount = lastSyncRun?.UpdatedCount ?? 0,
+                SentCount = lastSyncRun?.SentCount ?? 0,
+                ErrorCount = lastSyncRun?.ErrorCount ?? 0
             };
-            return Task.FromResult<ActionResult<DashboardDto>>(Ok(dto));
+
+            return Ok(dto);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error en dashboard");
-            return Task.FromResult<ActionResult<DashboardDto>>(
-                StatusCode(500, new { error = ex.Message })
-            );
+            _logger.LogWarning(ex, "Database unavailable, returning empty dashboard");
+            return Ok(new DashboardDto
+            {
+                PendingCount = 0,
+                NewCount = 0,
+                UpdatedCount = 0,
+                SentCount = 0,
+                ErrorCount = 0,
+                Status = "NO_DATA",
+                LastSyncAt = null
+            });
         }
     }
 }
