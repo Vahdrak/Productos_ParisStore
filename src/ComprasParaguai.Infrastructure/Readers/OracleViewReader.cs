@@ -50,28 +50,25 @@ public class OracleViewReader : IViewReader
             using (var reader = await connection.ExecuteReaderAsync(query))
             {
                 int rowCount = 0;
-                while (await reader.NextResultAsync(cancellationToken))
+                while (reader.Read())
                 {
-                    while (reader.Read())
+                    rowCount++;
+                    if (rowCount % 10000 == 0)
+                        _logger.LogInformation("Leídas {RowCount} filas", rowCount);
+
+                    var view = new ProductoView
                     {
-                        rowCount++;
-                        if (rowCount % 10000 == 0)
-                            _logger.LogInformation("Leídas {RowCount} filas", rowCount);
+                        Code = reader.GetString(0) ?? string.Empty,
+                        Nombre = reader.GetString(1) ?? string.Empty,
+                        PrecioNormal = reader.IsDBNull(2) ? null : reader.GetDecimal(2),
+                        Inventario = reader.IsDBNull(3) ? null : reader.GetInt32(3),
+                        ValorAtributo1 = reader.IsDBNull(4) ? null : reader.GetString(4),
+                        NombreAtributo1 = reader.IsDBNull(5) ? null : reader.GetString(5),
+                        Categoria = reader.IsDBNull(6) ? null : reader.GetString(6),
+                        Imagenes = reader.IsDBNull(7) ? null : reader.GetString(7)
+                    };
 
-                        var view = new ProductoView
-                        {
-                            Code = reader.GetString(0) ?? string.Empty,
-                            Nombre = reader.GetString(1) ?? string.Empty,
-                            PrecioNormal = reader.IsDBNull(2) ? null : reader.GetDecimal(2),
-                            Inventario = reader.IsDBNull(3) ? null : reader.GetInt32(3),
-                            ValorAtributo1 = reader.IsDBNull(4) ? null : reader.GetString(4),
-                            NombreAtributo1 = reader.IsDBNull(5) ? null : reader.GetString(5),
-                            Categoria = reader.IsDBNull(6) ? null : reader.GetString(6),
-                            Imagenes = reader.IsDBNull(7) ? null : reader.GetString(7)
-                        };
-
-                        yield return view;
-                    }
+                    yield return view;
                 }
 
                 _logger.LogInformation("Lectura completada. Total de filas: {RowCount}", rowCount);
