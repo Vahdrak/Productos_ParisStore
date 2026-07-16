@@ -1,22 +1,21 @@
 import { Component, Input, Output, EventEmitter, forwardRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
+import { ControlValueAccessor, NG_VALUE_ACCESSOR, FormsModule } from '@angular/forms';
 
 @Component({
   selector: 'app-input',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   template: `
     <div class="input-group">
       <label *ngIf="label" [for]="inputId">{{ label }}</label>
       <input
         [id]="inputId"
         [type]="type"
-        [value]="value"
+        [(ngModel)]="value"
         [placeholder]="placeholder"
         [disabled]="disabled"
         (input)="onInput($event)"
-        (change)="onChange($event)"
         class="input-field" />
       <span *ngIf="hint" class="hint">{{ hint }}</span>
     </div>
@@ -59,44 +58,19 @@ import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
     }
   `]
 })
-export class InputComponent implements ControlValueAccessor {
+export class InputComponent {
   @Input() label: string = '';
   @Input() placeholder: string = '';
   @Input() type: string = 'text';
   @Input() disabled: boolean = false;
   @Input() hint: string = '';
   @Input() inputId: string = 'input-' + Math.random();
+  @Input() value: string = '';
   @Output() inputValue = new EventEmitter<string>();
-
-  value: string = '';
-  private onChange = (value: string) => {};
-  private onTouched = () => {};
 
   onInput(event: Event): void {
     const target = event.target as HTMLInputElement;
     this.value = target.value;
     this.inputValue.emit(this.value);
-    this.onChange(this.value);
-  }
-
-  onChange(event: Event): void {
-    const target = event.target as HTMLInputElement;
-    this.onTouched();
-  }
-
-  writeValue(value: any): void {
-    this.value = value || '';
-  }
-
-  registerOnChange(fn: any): void {
-    this.onChange = fn;
-  }
-
-  registerOnTouched(fn: any): void {
-    this.onTouched = fn;
-  }
-
-  setDisabledState(isDisabled: boolean): void {
-    this.disabled = isDisabled;
   }
 }

@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ng-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start", "--prefix", "frontend/comprasparaguai-front"],
+      "port": 4200
+    },
+    {
+      "name": "api-dev",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "src/ComprasParaguai.Api/ComprasParaguai.Api.csproj"],
+      "port": 5000
+    },
+    {
+      "name": "worker",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "src/ComprasParaguai.Worker/ComprasParaguai.Worker.csproj"],
+      "port": 5001
+    }
+  ]
+}
