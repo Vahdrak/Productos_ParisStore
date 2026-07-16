@@ -37,31 +37,31 @@ try
     // Core: servicios de lógica.
     builder.Services.AddSingleton(
         new ProductoMapperService(imageBaseUrl, imagenPorDefecto, linkPattern));
-    builder.Services.AddScoped<ISyncService>(sp =>
+    builder.Services.AddTransient<ISyncService>(sp =>
         new SyncService(
             sp.GetRequiredService<IViewReader>(),
             sp.GetRequiredService<IProductoRepository>(),
             sp.GetRequiredService<ProductoMapperService>()));
-    builder.Services.AddScoped<ISendService>(sp =>
+    builder.Services.AddTransient<ISendService>(sp =>
         new SendService(
             sp.GetRequiredService<IProductoRepository>(),
             sp.GetRequiredService<IComprasParaguaiClient>()));
-    builder.Services.AddScoped<IWorkerService>(sp =>
+    builder.Services.AddTransient<IWorkerService>(sp =>
         new WorkerService(
             sp.GetRequiredService<ISyncService>(),
             sp.GetRequiredService<ISendService>(),
             sp.GetRequiredService<ISyncRunRepository>()));
 
     // Infrastructure: acceso a datos.
-    builder.Services.AddScoped<IViewReader>(sp =>
+    builder.Services.AddTransient<IViewReader>(sp =>
         new OracleViewReader(oracleConnStr, sp.GetRequiredService<ILogger<OracleViewReader>>()));
-    builder.Services.AddScoped<IProductoRepository>(sp =>
+    builder.Services.AddTransient<IProductoRepository>(sp =>
         new PostgreSqlProductoRepository(postgresConnStr, sp.GetRequiredService<ILogger<PostgreSqlProductoRepository>>()));
-    builder.Services.AddScoped<ISyncRunRepository>(sp =>
+    builder.Services.AddTransient<ISyncRunRepository>(sp =>
         new PostgreSqlSyncRunRepository(postgresConnStr));
 
     // Cliente HTTP.
-    builder.Services.AddScoped<IComprasParaguaiClient>(sp =>
+    builder.Services.AddTransient<IComprasParaguaiClient>(sp =>
         new ComprasParaguaiHttpClient(
             new HttpClient(),
             token,
