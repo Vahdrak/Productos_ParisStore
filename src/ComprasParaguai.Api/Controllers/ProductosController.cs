@@ -19,6 +19,40 @@ public class ProductosController : ControllerBase
     }
 
     /// <summary>
+    /// Lista productos agrupados por categoría con paginación por categoría.
+    /// GET /api/productos/categories?pageSize=15
+    /// </summary>
+    [HttpGet("categories")]
+    public async Task<ActionResult<List<CategoryProductsDto>>> GetByCategories(
+        [FromQuery] int pageSize = 15,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var products = await _repository.LoadPendingProductsAsync(cancellationToken);
+
+            var grouped = products
+                .GroupBy(p => p.Brand ?? "Sin Categoría")
+                .OrderBy(g => g.Key)
+                .Select(g => new CategoryProductsDto
+                {
+                    Category = g.Key,
+                    TotalCount = g.Count(),
+                    Products = g.Take(pageSize).ToList(),
+                    PageSize = pageSize
+                })
+                .ToList();
+
+            return Ok(grouped);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error cargando productos por categoría");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Lista todos los productos con filtros opcionales.
     /// GET /api/productos?syncStatus=0&page=1&pageSize=50
     /// </summary>
@@ -175,4 +209,12 @@ public class ProductListDto
     public int Page { get; set; }
     public int PageSize { get; set; }
     public int TotalPages { get; set; }
+}
+
+public class CategoryProductsDto
+{
+    public string Category { get; set; } = string.Empty;
+    public int TotalCount { get; set; }
+    public List<ProductoApi> Products { get; set; } = [];
+    public int PageSize { get; set; }
 }

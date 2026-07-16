@@ -18,10 +18,10 @@ import { ProductoService } from './shared/services/producto.service';
         </div>
 
         <nav class="sidebar-nav">
-          <button [class.active]="page === 'dashboard'" (click)="page = 'dashboard'; resetFilters()" class="nav-btn">
+          <button [class.active]="page === 'dashboard'" (click)="page = 'dashboard'" class="nav-btn">
             📊 Dashboard
           </button>
-          <button [class.active]="page === 'productos'" (click)="page = 'productos'; loadProductos()" class="nav-btn">
+          <button [class.active]="page === 'productos'" (click)="page = 'productos'" class="nav-btn">
             📋 Productos
           </button>
         </nav>
@@ -97,76 +97,61 @@ import { ProductoService } from './shared/services/producto.service';
         <!-- PRODUCTOS PAGE -->
         <div *ngIf="page === 'productos'">
           <h2>Productos</h2>
-          <p class="subtitle">Gestión de catálogo sincronizado</p>
+          <p class="subtitle">Organizados por categoría</p>
 
-          <!-- Filtros -->
-          <div class="filters-bar">
-            <div class="filter-group">
-              <label>Código:</label>
-              <input [(ngModel)]="filterCode" placeholder="Buscar por código" class="filter-input">
-            </div>
-            <div class="filter-group">
-              <label>Nombre:</label>
-              <input [(ngModel)]="filterName" placeholder="Buscar por nombre" class="filter-input">
-            </div>
-            <div class="filter-group">
-              <label>Estado:</label>
-              <select [(ngModel)]="filterSyncStatus" class="filter-input">
-                <option value="">Todos</option>
-                <option value="0">Pendiente</option>
-                <option value="1">Enviado</option>
-                <option value="2">Error</option>
-              </select>
-            </div>
-            <app-btn label="Filtrar" variant="primary" (onClick)="loadProductos()" />
-          </div>
+          <div *ngIf="!categoriesWithProducts" class="loading">Cargando productos...</div>
 
-          <!-- Tabla de Productos -->
-          <div *ngIf="productList && productList.items.length > 0" class="section">
-            <table class="productos-table">
-              <thead>
-                <tr>
-                  <th>Código</th>
-                  <th>Nombre</th>
-                  <th>Precio</th>
-                  <th>Stock</th>
-                  <th>Estado</th>
-                  <th>Acción</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let prod of productList.items">
-                  <td class="code">{{ prod.code }}</td>
-                  <td>{{ prod.namePt }}</td>
-                  <td class="price">{{ prod.price | currency }}</td>
-                  <td class="stock">{{ prod.stock }}</td>
-                  <td>
-                    <app-badge [variant]="getStatusVariant(prod.syncStatus)">
-                      {{ getStatusLabel(prod.syncStatus) }}
-                    </app-badge>
-                  </td>
-                  <td>
-                    <app-btn label="Ver" (onClick)="viewProductDetail(prod.code)" />
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+          <!-- Categorías con Acordeón -->
+          <div *ngIf="categoriesWithProducts && categoriesWithProducts.length > 0" class="categories-container">
+            <div *ngFor="let category of categoriesWithProducts" class="category-section">
+              <button (click)="toggleCategory(category.category)" class="category-header">
+                <span class="category-icon">{{ expandedCategories[category.category] ? '▼' : '▶' }}</span>
+                <span class="category-name">{{ category.category }}</span>
+                <span class="category-count">({{ category.totalCount }} productos)</span>
+              </button>
 
-            <!-- Paginación -->
-            <div class="pagination">
-              <p>Página {{ productList.page }} de {{ productList.totalPages }} ({{ productList.totalCount }} productos)</p>
-              <div class="pagination-controls">
-                <app-btn label="← Anterior" (onClick)="previousPage()" [disabled]="productList.page <= 1" />
-                <app-btn label="Siguiente →" (onClick)="nextPage()" [disabled]="productList.page >= productList.totalPages" />
+              <!-- Productos dentro de la categoría -->
+              <div *ngIf="expandedCategories[category.category]" class="category-content">
+                <table class="productos-table">
+                  <thead>
+                    <tr>
+                      <th>Código</th>
+                      <th>Nombre</th>
+                      <th>Precio</th>
+                      <th>Stock</th>
+                      <th>Estado</th>
+                      <th>Acción</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr *ngFor="let prod of category.products">
+                      <td class="code">{{ prod.code }}</td>
+                      <td>{{ prod.namePt }}</td>
+                      <td class="price">{{ prod.price | currency }}</td>
+                      <td class="stock">{{ prod.stock }}</td>
+                      <td>
+                        <app-badge [variant]="getStatusVariant(prod.syncStatus)">
+                          {{ getStatusLabel(prod.syncStatus) }}
+                        </app-badge>
+                      </td>
+                      <td>
+                        <app-btn label="Ver" (onClick)="viewProductDetail(prod.code)" />
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+
+                <!-- Paginación por categoría (placeholder para futuro) -->
+                <div class="category-pagination">
+                  <p>{{ category.products.length }} de {{ category.totalCount }} productos mostrados</p>
+                </div>
               </div>
             </div>
           </div>
 
-          <div *ngIf="productList && productList.items.length === 0" class="empty-state">
-            No hay productos con los filtros especificados
+          <div *ngIf="categoriesWithProducts && categoriesWithProducts.length === 0" class="empty-state">
+            No hay productos
           </div>
-
-          <div *ngIf="!productList" class="loading">Cargando productos...</div>
         </div>
 
         <!-- DETALLE PAGE -->
@@ -288,6 +273,16 @@ import { ProductoService } from './shared/services/producto.service';
 
     .empty-state { padding: 32px; text-align: center; color: var(--text-secondary); }
     .loading { padding: 32px; text-align: center; color: var(--text-secondary); }
+
+    .categories-container { display: flex; flex-direction: column; gap: 12px; }
+    .category-section { border: 0.5px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .category-header { width: 100%; padding: 16px; background: var(--surface-1); border: none; cursor: pointer; display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 500; color: var(--text-primary); transition: all 0.2s; }
+    .category-header:hover { background: var(--surface-2); }
+    .category-icon { display: inline-block; width: 20px; text-align: center; }
+    .category-name { flex: 1; text-align: left; }
+    .category-count { font-size: 12px; color: var(--text-secondary); }
+    .category-content { padding: 12px; background: var(--surface-0); }
+    .category-pagination { margin-top: 12px; padding-top: 12px; border-top: 0.5px solid var(--border); font-size: 12px; color: var(--text-secondary); text-align: center; }
   `],
   providers: [ProductoService]
 })
@@ -299,11 +294,8 @@ export class AppComponent implements OnInit {
   syncRuns: any[] = [];
 
   // Productos
-  productList: any = null;
-  filterCode = '';
-  filterName = '';
-  filterSyncStatus = '';
-  currentPage = 1;
+  categoriesWithProducts: any[] = [];
+  expandedCategories: { [key: string]: boolean } = {};
 
   // Detalle
   productDetail: any = null;
@@ -314,6 +306,7 @@ export class AppComponent implements OnInit {
 
   ngOnInit() {
     this.loadDashboard();
+    this.loadCategories();
     setInterval(() => this.loadDashboard(), 30000);
   }
 
@@ -332,27 +325,21 @@ export class AppComponent implements OnInit {
     });
   }
 
-  loadProductos() {
-    const syncStatus = this.filterSyncStatus ? parseInt(this.filterSyncStatus) : null;
-    this.service.getProductos(
-      { syncStatus, code: this.filterCode, name: this.filterName },
-      this.currentPage
-    ).subscribe({
-      next: (list) => { this.productList = list; },
+  loadCategories() {
+    this.service.getProductsByCategories().subscribe({
+      next: (categories) => {
+        this.categoriesWithProducts = categories;
+        // Expandir la primera categoría por defecto
+        if (categories.length > 0) {
+          this.expandedCategories[categories[0].category] = true;
+        }
+      },
       error: (e) => console.error(e)
     });
   }
 
-  nextPage() {
-    this.currentPage++;
-    this.loadProductos();
-  }
-
-  previousPage() {
-    if (this.currentPage > 1) {
-      this.currentPage--;
-      this.loadProductos();
-    }
+  toggleCategory(categoryName: string) {
+    this.expandedCategories[categoryName] = !this.expandedCategories[categoryName];
   }
 
   viewProductDetail(code: string) {
@@ -369,13 +356,6 @@ export class AppComponent implements OnInit {
       next: (h) => { this.productHistory = h; },
       error: (e) => console.error(e)
     });
-  }
-
-  resetFilters() {
-    this.filterCode = '';
-    this.filterName = '';
-    this.filterSyncStatus = '';
-    this.currentPage = 1;
   }
 
   getStatusLabel(status: number): string {
