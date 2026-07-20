@@ -30,7 +30,7 @@ public class OracleViewReader : IViewReader
     {
         const string query = @"
             SELECT
-                CODIGO_INTERNO AS Code,
+                SKU AS Code,
                 NOMBRE AS Nombre,
                 PRECIO_NORMAL AS PrecioNormal,
                 INVENTARIO AS Inventario,
@@ -39,7 +39,7 @@ public class OracleViewReader : IViewReader
                 CATEGORIAS AS Categoria,
                 IMAGENES AS Imagenes
             FROM SENSEI.PARAGUAY_COMPRAS_VIEW
-            ORDER BY CODIGO_INTERNO
+            ORDER BY SKU
         ";
 
         using (var connection = new OracleConnection(_connectionString))

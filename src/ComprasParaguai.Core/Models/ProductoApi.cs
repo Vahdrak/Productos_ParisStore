@@ -47,4 +47,11 @@ public class ProductoApi
 
     /// <summary>Hash SHA-256 del payload final. Se recalcula en cada sync para detectar cambios.</summary>
     public string? SourceHash { get; set; }
+
+    /// <summary>Estado de sincronización: 0=Pendiente, 1=Enviado, 2=Error.</summary>
+    public int SyncStatus { get; set; }
+
+    /// <summary>Categoría del producto.</summary>
+    public string? Categoria { get; set; }
 }
+

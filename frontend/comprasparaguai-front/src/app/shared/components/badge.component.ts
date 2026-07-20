@@ -6,7 +6,7 @@ import { CommonModule } from '@angular/common';
   standalone: true,
   imports: [CommonModule],
   template: `
-    <span [class]="badgeClass">{{ label }}</span>
+    <span [class]="variant"><ng-content></ng-content>{{ label }}</span>
   `,
   styles: [`
     span {

@@ -17,6 +17,7 @@ export interface Producto {
   linkPurchase?: string;
   forceImageUpdate?: boolean;
   sourceHash?: string;
+  syncStatus?: number;
 }
 
 export interface ProductHistorial {
@@ -115,5 +116,17 @@ export class ProductoService {
 
   updateProduct(code: string, producto: Partial<Producto>): Observable<Producto> {
     return this.http.put<Producto>(`/productos/${code}`, producto);
+  }
+
+  getCPProducts(token: string, code?: string): Observable<any> {
+    let url = `/comprasparaguai/products?token=${encodeURIComponent(token)}`;
+    if (code) {
+      url += `&code=${encodeURIComponent(code)}`;
+    }
+    return this.http.get<any>(url);
+  }
+
+  importCPProducts(token: string, payload: any): Observable<any> {
+    return this.http.post<any>(`/comprasparaguai/import?token=${encodeURIComponent(token)}`, payload);
   }
 }

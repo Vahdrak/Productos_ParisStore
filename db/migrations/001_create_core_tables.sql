@@ -11,7 +11,7 @@ BEGIN;
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS categorias (
     id   INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    ruta VARCHAR(4000) NOT NULL UNIQUE  -- "TOKU>COMESTIBLES>CHOCOLATES>ALFAJORES"
+    name VARCHAR(4000) NOT NULL UNIQUE  -- "TOKU>COMESTIBLES>CHOCOLATES>ALFAJORES"
 );
 
 -- ---------------------------------------------------------------------------

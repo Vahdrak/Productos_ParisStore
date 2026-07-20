@@ -101,7 +101,8 @@ public class ProductoMapperService
             UrlImage = urlImage,
             Link = link,
             LinkPurchase = null,
-            ForceImageUpdate = false
+            ForceImageUpdate = false,
+            Categoria = view.Categoria
         };
 
         // Calcular hash del payload final.

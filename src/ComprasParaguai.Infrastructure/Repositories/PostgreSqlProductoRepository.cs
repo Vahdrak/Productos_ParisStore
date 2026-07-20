@@ -60,6 +60,20 @@ public class PostgreSqlProductoRepository : IProductoRepository
         {
             await connection.OpenAsync(cancellationToken);
 
+            // Insertar categorías únicas de manera relacional
+            var uniqueCategories = productList
+                .Select(p => p.Categoria)
+                .Where(c => !string.IsNullOrWhiteSpace(c))
+                .Distinct()
+                .ToList();
+
+            if (uniqueCategories.Any())
+            {
+                const string insertCats = "INSERT INTO categorias (name) VALUES (@name) ON CONFLICT (name) DO NOTHING";
+                await connection.ExecuteAsync(insertCats, uniqueCategories.Select(c => new { name = c }));
+                _logger.LogInformation("Categorías actualizadas/insertadas en la base de datos");
+            }
+
             // Crear tabla staging temporal.
             const string createStaging = @"
                 DROP TABLE IF EXISTS productos_staging;
@@ -77,7 +91,8 @@ public class PostgreSqlProductoRepository : IProductoRepository
                     link VARCHAR(1000),
                     link_purchase VARCHAR(1000),
                     force_image_update BOOLEAN,
-                    source_hash CHAR(64)
+                    source_hash CHAR(64),
+                    categoria_name VARCHAR(255)
                 );
             ";
 
@@ -86,7 +101,7 @@ public class PostgreSqlProductoRepository : IProductoRepository
 
             // COPY: escribir filas a staging en bulk.
             using (var writer = await connection.BeginBinaryImportAsync(
-                "COPY productos_staging (code, name_es, name_pt, price, price_iva, stock, brand, description_es, description_pt, url_image, link, link_purchase, force_image_update, source_hash) FROM STDIN (FORMAT BINARY)"))
+                "COPY productos_staging (code, name_es, name_pt, price, price_iva, stock, brand, description_es, description_pt, url_image, link, link_purchase, force_image_update, source_hash, categoria_name) FROM STDIN (FORMAT BINARY)"))
             {
                 foreach (var product in productList)
                 {
@@ -105,6 +120,7 @@ public class PostgreSqlProductoRepository : IProductoRepository
                     await writer.WriteAsync(product.LinkPurchase, NpgsqlDbType.Varchar);
                     await writer.WriteAsync(product.ForceImageUpdate, NpgsqlDbType.Boolean);
                     await writer.WriteAsync(product.SourceHash, NpgsqlDbType.Char);
+                    await writer.WriteAsync(product.Categoria, NpgsqlDbType.Varchar);
                 }
 
                 await writer.CompleteAsync();
@@ -112,21 +128,24 @@ public class PostgreSqlProductoRepository : IProductoRepository
 
             _logger.LogInformation("COPY completado: {Count} filas en staging", productList.Count);
 
-            // Upsert: INSERT ... ON CONFLICT DO UPDATE.
+            // Upsert: INSERT ... ON CONFLICT DO UPDATE relacionando categoria_id.
             const string upsert = @"
                 INSERT INTO productos (
                     code, name_es, name_pt, price, price_iva, stock, brand,
                     description_es, description_pt, url_image, link, link_purchase,
-                    force_image_update, source_hash, sync_status, last_changed_at, updated_at
+                    force_image_update, source_hash, sync_status, last_changed_at, updated_at,
+                    categoria_id
                 )
                 SELECT
-                    code, name_es, name_pt, price, price_iva, stock, brand,
-                    description_es, description_pt, url_image, link, link_purchase,
-                    force_image_update, source_hash,
+                    ps.code, ps.name_es, ps.name_pt, ps.price, ps.price_iva, ps.stock, ps.brand,
+                    ps.description_es, ps.description_pt, ps.url_image, ps.link, ps.link_purchase,
+                    ps.force_image_update, ps.source_hash,
                     0 AS sync_status,  -- Pendiente
                     @now AS last_changed_at,
-                    @now AS updated_at
-                FROM productos_staging
+                    @now AS updated_at,
+                    c.id AS categoria_id
+                FROM productos_staging ps
+                LEFT JOIN categorias c ON c.name = ps.categoria_name
                 ON CONFLICT (code) DO UPDATE SET
                     name_es = EXCLUDED.name_es,
                     name_pt = EXCLUDED.name_pt,
@@ -143,7 +162,8 @@ public class PostgreSqlProductoRepository : IProductoRepository
                     source_hash = EXCLUDED.source_hash,
                     sync_status = 0,  -- Resetear a Pendiente
                     last_changed_at = @now,
-                    updated_at = @now;
+                    updated_at = @now,
+                    categoria_id = EXCLUDED.categoria_id;
             ";
 
             int affected = await connection.ExecuteAsync(upsert, new { now });
@@ -194,7 +214,8 @@ public class PostgreSqlProductoRepository : IProductoRepository
                 link AS Link,
                 link_purchase AS LinkPurchase,
                 force_image_update AS ForceImageUpdate,
-                source_hash AS SourceHash
+                source_hash AS SourceHash,
+                sync_status AS SyncStatus
             FROM productos
             WHERE sync_status = 0
             ORDER BY code
@@ -262,7 +283,7 @@ public class PostgreSqlProductoRepository : IProductoRepository
             SELECT
                 code, name_es, name_pt, price, price_iva, stock, brand,
                 description_es, description_pt, url_image, link, link_purchase,
-                force_image_update, source_hash
+                force_image_update, source_hash, sync_status AS SyncStatus
             FROM productos
             WHERE code = @code
         ";
@@ -330,6 +351,83 @@ public class PostgreSqlProductoRepository : IProductoRepository
             await connection.OpenAsync(cancellationToken);
             var historial = await connection.QueryFirstOrDefaultAsync<ProductHistorialDto>(query, new { code });
             return historial;
+        }
+    }
+
+    /// <summary>
+    /// Busca y pagina productos en la BD.
+    /// </summary>
+    public async Task<ProductListDto> SearchProductsAsync(
+        string? code, string? name, int? syncStatus, int page, int pageSize, CancellationToken cancellationToken = default)
+    {
+        var conditions = new List<string>();
+        var parameters = new DynamicParameters();
+
+        if (!string.IsNullOrEmpty(code))
+        {
+            conditions.Add("code ILIKE @code");
+            parameters.Add("code", $"%{code}%");
+        }
+
+        if (!string.IsNullOrEmpty(name))
+        {
+            conditions.Add("(name_pt ILIKE @name OR name_es ILIKE @name)");
+            parameters.Add("name", $"%{name}%");
+        }
+
+        if (syncStatus.HasValue)
+        {
+            conditions.Add("sync_status = @syncStatus");
+            parameters.Add("syncStatus", syncStatus.Value);
+        }
+
+        string whereClause = conditions.Count > 0 ? "WHERE " + string.Join(" AND ", conditions) : "";
+
+        string query = $@"
+            SELECT
+                code AS Code,
+                name_es AS NameEs,
+                name_pt AS NamePt,
+                price AS Price,
+                price_iva AS PriceIva,
+                stock AS Stock,
+                brand AS Brand,
+                description_es AS DescriptionEs,
+                description_pt AS DescriptionPt,
+                url_image AS UrlImage,
+                link AS Link,
+                link_purchase AS LinkPurchase,
+                force_image_update AS ForceImageUpdate,
+                source_hash AS SourceHash,
+                sync_status AS SyncStatus
+            FROM productos
+            {whereClause}
+            ORDER BY code
+            LIMIT @pageSize OFFSET @offset
+        ";
+
+        string countQuery = $@"
+            SELECT COUNT(*) FROM productos {whereClause}
+        ";
+
+        var offset = (page - 1) * pageSize;
+        parameters.Add("pageSize", pageSize);
+        parameters.Add("offset", offset);
+
+        using (var connection = new NpgsqlConnection(_connectionString))
+        {
+            await connection.OpenAsync(cancellationToken);
+            var items = await connection.QueryAsync<ProductoApi>(query, parameters);
+            var total = await connection.ExecuteScalarAsync<int>(countQuery, parameters);
+
+            return new ProductListDto
+            {
+                Items = items.ToList(),
+                TotalCount = total,
+                Page = page,
+                PageSize = pageSize,
+                TotalPages = (int)Math.Ceiling(total / (double)pageSize)
+            };
         }
     }
 }

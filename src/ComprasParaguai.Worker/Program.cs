@@ -1,5 +1,6 @@
 using ComprasParaguai.Core.Interfaces;
 using ComprasParaguai.Core.Services;
+using ComprasParaguai.Infrastructure;
 using ComprasParaguai.Infrastructure.Clients;
 using ComprasParaguai.Infrastructure.Readers;
 using ComprasParaguai.Infrastructure.Repositories;
@@ -27,6 +28,11 @@ try
         ?? throw new InvalidOperationException("Oracle connection string no encontrada");
     var postgresConnStr = config.GetConnectionString("PostgreSQL")
         ?? throw new InvalidOperationException("PostgreSQL connection string no encontrada");
+
+    // Ejecutar migraciones automáticas.
+    Log.Information("Ejecutando migraciones de base de datos...");
+    DbMigrator.Migrate(postgresConnStr);
+    Log.Information("Migraciones de base de datos finalizadas.");
     var token = config["ComprasParaguai:Token"]
         ?? throw new InvalidOperationException("Token de Compras Paraguai no configurado");
     var imageBaseUrl = config["Sync:ImageBaseUrl"] ?? "https://default.image.url/";

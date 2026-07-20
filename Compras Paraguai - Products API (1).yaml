@@ -1,0 +1,367 @@
+openapi: 3.0.3
+info:
+  title: Compras Paraguai - Products API
+  version: 1.0.0
+  description: Este endpoint permite a importação de um conjunto de produtos, incluindo
+    informações detalhadas sobre cada item.
+paths:
+  /api/products/import/:
+    post:
+      operationId: products_import_create
+      description: Este endpoint aceita o `token` no header e um JSON no body com
+        os produtos a serem importados. <br>O token é necessário para autenticação
+        e autorização. <br> <br><strong>⁠Lógica de envio:</strong> <br><ul><li>Listar
+        somente os `produtos que tiveram alteração` no dia (primeiro envio) ou produtos
+        que tiverem alteração após o último envio com sucesso; </li><li>Enviar a lista
+        de produtos atualizados a cada `15 minutos` enquanto a loja estiver aberta
+        (horário comercial); </li><li>Dividir o envio em lotes, cada lote deve ter
+        no `máximo 500 produtos`;</li><li>O campo stock define a disponibilidade do
+        produto, mandar 0 (zero) caso deseje indisponibilizar o produto;</li><li>O
+        campo <code>force_image_update</code> é opcional (padrão <code>false</code>).
+        Envie <code>true</code> para forçar o re-download da imagem mesmo que a <code>url_image</code>
+        não tenha mudado — útil quando a loja atualiza a imagem mantendo a mesma URL.</li></ul>
+      summary: Insere/Atualiza produtos da loja
+      parameters:
+      - in: header
+        name: token
+        schema:
+          type: string
+        description: Store token for authentication
+        required: true
+      tags:
+      - products
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                properties:
+                  code:
+                    type: string
+                    example: AP0700017R
+                  name:
+                    type: object
+                    properties:
+                      pt:
+                        type: string
+                        example: Iphone 16 em português
+                      es:
+                        type: string
+                        example: Iphone 16 en español
+                    required:
+                    - pt
+                  price:
+                    type: number
+                    example: 929.0
+                  price_iva:
+                    type: number
+                    example: 1021.9
+                    nullable: true
+                    description: Opcional. Preço do produto com IVA aplicado, usado
+                      na venda a paraguaios. Quando não enviado, o domínio paraguaio
+                      exibe o `price` padrão.
+                  stock:
+                    type: number
+                    example: 20
+                  brand:
+                    type: string
+                    nullable: true
+                    example: Apple
+                  description:
+                    type: object
+                    properties:
+                      pt:
+                        type: string
+                        example: Detalhes do produto em português
+                      es:
+                        type: string
+                        example: Detalles del producto en español
+                    required:
+                    - pt
+                  url_image:
+                    type: string
+                    example: https://www.apple.com/v/iphone-16/c/images/overview/contrast/iphone_16__flbknhdndb22_xlarge_2x.jpg
+                  link:
+                    type: string
+                    example: https://www.dominioloja.com/celular-apple-iphone-16-pro-128gb_55846/
+                  link_purchase:
+                    type: string
+                    example: https://www.dominioloja.com/celular-apple-iphone-16-pro-128gb_55846/comprar/
+                  force_image_update:
+                    type: boolean
+                    example: false
+                    default: false
+                    description: Opcional. Quando true, força o re-download e atualização
+                      da imagem mesmo que a url_image não tenha sido alterada. Útil
+                      quando a loja substitui a imagem mantendo a mesma URL.
+                required:
+                - code
+                - name
+                - price
+                - stock
+                - description
+                - url_image
+                - link
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '207':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Import completed.
+                  products_processed:
+                    type: number
+                    example: 1
+                  products_failed:
+                    type: number
+                    example: 0
+                  validation_errors:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        product:
+                          type: object
+                          properties:
+                            code:
+                              type: string
+                              example: AP0700017R
+                            name:
+                              type: object
+                              properties:
+                                pt:
+                                  type: string
+                                  example: PRODUTO NOVO
+                                es:
+                                  type: string
+                                  example: PRODUCTO NUEVO
+                            price:
+                              type: number
+                              example: 0.04
+                            stock:
+                              type: number
+                              example: 20
+                            brand:
+                              type: string
+                              nullable: true
+                              example: Apple
+                            description:
+                              type: object
+                              properties:
+                                pt:
+                                  type: string
+                                  example: Detalhes do produto...
+                                es:
+                                  type: string
+                                  example: Detalles del producto...
+                            url_image:
+                              type: string
+                              example: https://www.apple.com/v/iphone-16/c/images/overview/contrast/iphone_16__flbknhdndb22_xlarge_2x.jpg
+                            link:
+                              type: string
+                              example: https://dominioloja.com/br/catalog/product/view/id/122851
+                            link_purchase:
+                              type: string
+                              example: https://dominioloja.com/py/catalog/product/sale/id/122851
+                        errors:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              field:
+                                type: string
+                                example: price
+                              message:
+                                type: string
+                                example: Value error, The price must be between 0.05
+                                  and 99999.
+          description: Success.
+        '403':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: You are not authorized to perform this task! Check your
+                      credentials.
+          description: UNAUTHORIZED
+        '500':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unexpected error during import.
+                  errors:
+                    type: string
+                    example: Internal server error or problem details.
+          description: Unexpected error.
+  /api/products/list/:
+    get:
+      operationId: products_list_retrieve
+      description: Esse endpoint aceita o cabeçalho customizado `token`e retorna uma
+        lista paginada de produtos.
+      summary: Lista produtos da loja
+      parameters:
+      - in: query
+        name: available
+        schema:
+          type: boolean
+        description: Filter by product availability (true/false)
+      - in: query
+        name: code
+        schema:
+          type: string
+        description: Filter by product code
+      - in: query
+        name: name
+        schema:
+          type: string
+        description: Search by product name
+      - in: query
+        name: page
+        schema:
+          type: integer
+          default: 1
+        description: Number of the page
+      - in: header
+        name: token
+        schema:
+          type: string
+        description: Token from store for authentication
+        required: true
+      - in: query
+        name: with_stock
+        schema:
+          type: boolean
+        description: Filter by product stock (true/false)
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    data:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                          example: 12345
+                        code:
+                          type: string
+                          example: '123456'
+                        name_pt:
+                          type: string
+                          example: iPhone 16 Pro Max
+                        name_es:
+                          type: string
+                          example: iPhone 16 Pro Max
+                        price:
+                          type: number
+                          example: 929.0
+                        price_iva:
+                          type: number
+                          example: 1021.9
+                          nullable: true
+                        stock:
+                          type: number
+                          example: 20
+                        description_pt:
+                          type: string
+                          example: Detalhes do produto...
+                        description_es:
+                          type: string
+                          example: Detalles del producto...
+                        available:
+                          type: boolean
+                          example: true
+                        link:
+                          type: string
+                          example: https://www.dominioloja.com.br/123456
+                        link_purchase:
+                          type: string
+                          example: https://www.dominioloja.com.br/sale/123456
+                  current_page:
+                    type: integer
+                    example: 1
+                  per_page:
+                    type: integer
+                    example: 100
+                  total_items:
+                    type: integer
+                    example: 250
+                  total_pages:
+                    type: integer
+                    example: 3
+                  has_next:
+                    type: boolean
+                    example: true
+                  has_previous:
+                    type: boolean
+                    example: false
+          description: Success.
+        '403':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: You are not authorized to perform this task! Check your
+                      credentials.
+          description: UNAUTHORIZED
+        '500':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unexpected error during import.
+                  errors:
+                    type: string
+                    example: Internal server error or problem details.
+          description: Unexpected error.
+components:
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

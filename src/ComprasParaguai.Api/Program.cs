@@ -1,6 +1,8 @@
 using ComprasParaguai.Infrastructure.Repositories;
 using ComprasParaguai.Infrastructure.Readers;
+using ComprasParaguai.Infrastructure;
 using ComprasParaguai.Core.Interfaces;
+using ComprasParaguai.Core.Services;
 using Npgsql;
 using Dapper;
 
@@ -20,8 +22,21 @@ builder.Services.AddCors(options =>
     });
 });
 
-var postgresConnStr = builder.Configuration["PostgreSQL:ConnectionString"]
-    ?? throw new InvalidOperationException("PostgreSQL:ConnectionString not configured");
+var postgresConnStr = builder.Configuration.GetConnectionString("PostgreSQL")
+    ?? builder.Configuration["PostgreSQL:ConnectionString"]
+    ?? throw new InvalidOperationException("PostgreSQL connection string not configured");
+
+// Ejecutar migraciones automáticas
+try
+{
+    Console.WriteLine("Ejecutando migraciones de base de datos...");
+    DbMigrator.Migrate(postgresConnStr);
+    Console.WriteLine("Migraciones de base de datos finalizadas.");
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"Error al ejecutar migraciones en la API: {ex.Message}");
+}
 
 builder.Services.AddTransient<IProductoRepository>(sp =>
 {
@@ -31,6 +46,8 @@ builder.Services.AddTransient<IProductoRepository>(sp =>
 
 builder.Services.AddTransient<ISyncRunRepository>(sp =>
     new PostgreSqlSyncRunRepository(postgresConnStr));
+
+builder.Services.AddSingleton(new ImageUrlService("https://www.toku.com.py/media/"));
 
 var app = builder.Build();
 

@@ -1,5 +1,6 @@
 using ComprasParaguai.Core.Interfaces;
 using ComprasParaguai.Core.Models;
+using ComprasParaguai.Core.Services;
 using Microsoft.AspNetCore.Mvc;
 using static ComprasParaguai.Core.Interfaces.IProductoRepository;
 
@@ -10,11 +11,13 @@ namespace ComprasParaguai.Api.Controllers;
 public class ProductosController : ControllerBase
 {
     private readonly IProductoRepository _repository;
+    private readonly ImageUrlService _imageUrlService;
     private readonly ILogger<ProductosController> _logger;
 
-    public ProductosController(IProductoRepository repository, ILogger<ProductosController> logger)
+    public ProductosController(IProductoRepository repository, ImageUrlService imageUrlService, ILogger<ProductosController> logger)
     {
         _repository = repository;
+        _imageUrlService = imageUrlService;
         _logger = logger;
     }
 
@@ -31,7 +34,14 @@ public class ProductosController : ControllerBase
         {
             var products = await _repository.LoadPendingProductsAsync(cancellationToken);
 
-            var grouped = products
+            // Procesar URLs de imágenes
+            var processed = products.Select(p =>
+            {
+                p.UrlImage = _imageUrlService.BuildImageUrl(p.UrlImage);
+                return p;
+            }).ToList();
+
+            var grouped = processed
                 .GroupBy(p => p.Brand ?? "Sin Categoría")
                 .OrderBy(g => g.Key)
                 .Select(g => new CategoryProductsDto
@@ -67,30 +77,8 @@ public class ProductosController : ControllerBase
     {
         try
         {
-            var pending = await _repository.LoadPendingProductsAsync(cancellationToken);
-
-            var filtered = pending.AsEnumerable();
-            if (syncStatus.HasValue)
-                filtered = filtered.Where(p => p.SyncStatus == syncStatus.Value);
-            if (!string.IsNullOrEmpty(code))
-                filtered = filtered.Where(p => p.Code.Contains(code, StringComparison.OrdinalIgnoreCase));
-            if (!string.IsNullOrEmpty(name))
-                filtered = filtered.Where(p => p.NamePt?.Contains(name, StringComparison.OrdinalIgnoreCase) == true);
-
-            var total = filtered.Count();
-            var items = filtered
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .ToList();
-
-            return Ok(new ProductListDto
-            {
-                Items = items,
-                TotalCount = total,
-                Page = page,
-                PageSize = pageSize,
-                TotalPages = (int)Math.Ceiling(total / (double)pageSize)
-            });
+            var result = await _repository.SearchProductsAsync(code, name, syncStatus, page, pageSize, cancellationToken);
+            return Ok(result);
         }
         catch (Exception ex)
         {
@@ -192,24 +180,71 @@ public class ProductosController : ControllerBase
             return StatusCode(500, new { error = ex.Message });
         }
     }
+
+    /// <summary>
+    /// Actualiza un producto (para pruebas).
+    /// PUT /api/productos/{code}
+    /// </summary>
+    [HttpPut("{code}")]
+    public async Task<ActionResult<ProductoApi>> UpdateProduct(string code, [FromBody] ProductoApi updatedProduct, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var current = await _repository.LoadProductByCodeAsync(code, cancellationToken);
+            if (current == null)
+                return NotFound(new { message = $"Producto {code} no encontrado" });
+
+            current.NamePt = updatedProduct.NamePt;
+            current.Price = updatedProduct.Price;
+            current.Stock = updatedProduct.Stock;
+            current.DescriptionPt = updatedProduct.DescriptionPt;
+            if (updatedProduct.Brand != null) current.Brand = updatedProduct.Brand;
+            if (updatedProduct.UrlImage != null) current.UrlImage = updatedProduct.UrlImage;
+
+            var payload = new
+            {
+                current.Code,
+                current.NameEs,
+                current.NamePt,
+                current.Price,
+                current.PriceIva,
+                current.Stock,
+                current.Brand,
+                current.DescriptionEs,
+                current.DescriptionPt,
+                current.UrlImage,
+                current.Link,
+                current.LinkPurchase,
+                current.ForceImageUpdate
+            };
+            string json = System.Text.Json.JsonSerializer.Serialize(payload, new System.Text.Json.JsonSerializerOptions { WriteIndented = false });
+            byte[] bytes = System.Text.Encoding.UTF8.GetBytes(json);
+            using (var sha256 = System.Security.Cryptography.SHA256.Create())
+            {
+                byte[] hashBytes = sha256.ComputeHash(bytes);
+                current.SourceHash = Convert.ToHexString(hashBytes).ToLower();
+            }
+
+            await _repository.UpsertProductsAsync(new List<ProductoApi> { current }, DateTime.UtcNow, cancellationToken);
+            return Ok(current);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error actualizando producto {Code}", code);
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
 }
 
 public class ProductDiffDto
 {
-    public string Code { get; set; }
-    public ProductoApi Current { get; set; }
+    public string Code { get; set; } = string.Empty;
+    public ProductoApi Current { get; set; } = default!;
     public ProductHistorialDto? Previous { get; set; }
     public bool HasChanges { get; set; }
 }
 
-public class ProductListDto
-{
-    public List<ProductoApi> Items { get; set; } = [];
-    public int TotalCount { get; set; }
-    public int Page { get; set; }
-    public int PageSize { get; set; }
-    public int TotalPages { get; set; }
-}
+
 
 public class CategoryProductsDto
 {

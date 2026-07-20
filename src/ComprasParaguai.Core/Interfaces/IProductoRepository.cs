@@ -59,6 +59,11 @@ public interface IProductoRepository
     /// Obtiene el último registro del historial de un producto (para comparación diff).
     /// </summary>
     Task<ProductHistorialDto?> GetLastHistorialAsync(string code, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Busca y pagina productos en la BD.
+    /// </summary>
+    Task<ProductListDto> SearchProductsAsync(string? code, string? name, int? syncStatus, int page, int pageSize, CancellationToken cancellationToken = default);
 }
 
 public class ProductHistorialDto
@@ -71,4 +76,13 @@ public class ProductHistorialDto
     public int? Stock { get; set; }
     public string? Brand { get; set; }
     public string? UrlImage { get; set; }
+}
+
+public class ProductListDto
+{
+    public List<ProductoApi> Items { get; set; } = [];
+    public int TotalCount { get; set; }
+    public int Page { get; set; }
+    public int PageSize { get; set; }
+    public int TotalPages { get; set; }
 }
