@@ -41,7 +41,8 @@ catch (Exception ex)
 builder.Services.AddTransient<IProductoRepository>(sp =>
 {
     var logger = sp.GetRequiredService<ILogger<PostgreSqlProductoRepository>>();
-    return new PostgreSqlProductoRepository(postgresConnStr, logger);
+    var imageService = sp.GetRequiredService<ImageUrlService>();
+    return new PostgreSqlProductoRepository(postgresConnStr, imageService, logger);
 });
 
 builder.Services.AddTransient<ISyncRunRepository>(sp =>

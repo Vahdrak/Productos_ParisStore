@@ -129,4 +129,17 @@ export class ProductoService {
   importCPProducts(token: string, payload: any): Observable<any> {
     return this.http.post<any>(`/comprasparaguai/import?token=${encodeURIComponent(token)}`, payload);
   }
+
+  verifyImageExists(imageUrl: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      if (!imageUrl) {
+        resolve(false);
+        return;
+      }
+      const img = new Image();
+      img.onload = () => resolve(true);
+      img.onerror = () => resolve(false);
+      img.src = imageUrl;
+    });
+  }
 }

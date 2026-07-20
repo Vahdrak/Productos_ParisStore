@@ -1,5 +1,6 @@
 using ComprasParaguai.Core.Interfaces;
 using ComprasParaguai.Core.Models;
+using ComprasParaguai.Core.Services;
 using Dapper;
 using Microsoft.Extensions.Logging;
 using Npgsql;
@@ -15,11 +16,13 @@ namespace ComprasParaguai.Infrastructure.Repositories;
 public class PostgreSqlProductoRepository : IProductoRepository
 {
     private readonly string _connectionString;
+    private readonly ImageUrlService _imageUrlService;
     private readonly ILogger<PostgreSqlProductoRepository> _logger;
 
-    public PostgreSqlProductoRepository(string connectionString, ILogger<PostgreSqlProductoRepository> logger)
+    public PostgreSqlProductoRepository(string connectionString, ImageUrlService imageUrlService, ILogger<PostgreSqlProductoRepository> logger)
     {
         _connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
+        _imageUrlService = imageUrlService ?? throw new ArgumentNullException(nameof(imageUrlService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -88,6 +91,7 @@ public class PostgreSqlProductoRepository : IProductoRepository
                     description_es TEXT,
                     description_pt TEXT,
                     url_image VARCHAR(1000),
+                    url_image_full VARCHAR(1000),
                     link VARCHAR(1000),
                     link_purchase VARCHAR(1000),
                     force_image_update BOOLEAN,
@@ -101,7 +105,7 @@ public class PostgreSqlProductoRepository : IProductoRepository
 
             // COPY: escribir filas a staging en bulk.
             using (var writer = await connection.BeginBinaryImportAsync(
-                "COPY productos_staging (code, name_es, name_pt, price, price_iva, stock, brand, description_es, description_pt, url_image, link, link_purchase, force_image_update, source_hash, categoria_name) FROM STDIN (FORMAT BINARY)"))
+                "COPY productos_staging (code, name_es, name_pt, price, price_iva, stock, brand, description_es, description_pt, url_image, url_image_full, link, link_purchase, force_image_update, source_hash, categoria_name) FROM STDIN (FORMAT BINARY)"))
             {
                 foreach (var product in productList)
                 {
@@ -116,6 +120,8 @@ public class PostgreSqlProductoRepository : IProductoRepository
                     await writer.WriteAsync(product.DescriptionEs, NpgsqlDbType.Text);
                     await writer.WriteAsync(product.DescriptionPt, NpgsqlDbType.Text);
                     await writer.WriteAsync(product.UrlImage, NpgsqlDbType.Varchar);
+                    var fullImageUrl = _imageUrlService.BuildImageUrl(product.UrlImage);
+                    await writer.WriteAsync(fullImageUrl, NpgsqlDbType.Varchar);
                     await writer.WriteAsync(product.Link, NpgsqlDbType.Varchar);
                     await writer.WriteAsync(product.LinkPurchase, NpgsqlDbType.Varchar);
                     await writer.WriteAsync(product.ForceImageUpdate, NpgsqlDbType.Boolean);
@@ -132,13 +138,13 @@ public class PostgreSqlProductoRepository : IProductoRepository
             const string upsert = @"
                 INSERT INTO productos (
                     code, name_es, name_pt, price, price_iva, stock, brand,
-                    description_es, description_pt, url_image, link, link_purchase,
+                    description_es, description_pt, url_image, url_image_full, link, link_purchase,
                     force_image_update, source_hash, sync_status, last_changed_at, updated_at,
                     categoria_id
                 )
                 SELECT
                     ps.code, ps.name_es, ps.name_pt, ps.price, ps.price_iva, ps.stock, ps.brand,
-                    ps.description_es, ps.description_pt, ps.url_image, ps.link, ps.link_purchase,
+                    ps.description_es, ps.description_pt, ps.url_image, ps.url_image_full, ps.link, ps.link_purchase,
                     ps.force_image_update, ps.source_hash,
                     0 AS sync_status,  -- Pendiente
                     @now AS last_changed_at,
@@ -156,6 +162,7 @@ public class PostgreSqlProductoRepository : IProductoRepository
                     description_es = EXCLUDED.description_es,
                     description_pt = EXCLUDED.description_pt,
                     url_image = EXCLUDED.url_image,
+                    url_image_full = EXCLUDED.url_image_full,
                     link = EXCLUDED.link,
                     link_purchase = EXCLUDED.link_purchase,
                     force_image_update = EXCLUDED.force_image_update,
@@ -211,6 +218,7 @@ public class PostgreSqlProductoRepository : IProductoRepository
                 description_es AS DescriptionEs,
                 description_pt AS DescriptionPt,
                 url_image AS UrlImage,
+                url_image_full AS UrlImageFull,
                 link AS Link,
                 link_purchase AS LinkPurchase,
                 force_image_update AS ForceImageUpdate,
