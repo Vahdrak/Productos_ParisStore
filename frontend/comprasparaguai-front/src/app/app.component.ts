@@ -152,6 +152,8 @@ import { ProductoService, Producto, ProductDiff, ProductHistorial, Dashboard, Sy
                     </td>
                     <td>
                       <div class="action-cell">
+                        <button (click)="openProductDetails(prod.code)" class="link-btn" style="color: #8b5cf6;">👁️ Ver</button>
+                        <span class="divider">|</span>
                         <button (click)="viewProductDiff(prod.code)" class="link-btn">Ver diff</button>
                         <span class="divider">|</span>
                         <button (click)="editProduct(prod.code)" class="link-btn text-accent">Editar</button>
@@ -294,6 +296,95 @@ import { ProductoService, Producto, ProductDiff, ProductHistorial, Dashboard, Sy
                 <button type="button" (click)="showEditModal = false" class="btn btn-secondary">Cancelar</button>
               </div>
             </form>
+          </div>
+        </div>
+
+        <!-- MODAL: Product Details & Image Preview -->
+        <div *ngIf="showDetailsModal && selectedProductForDetails" class="modal-overlay" (click)="showDetailsModal = false">
+          <div class="modal-content" (click)="$event.stopPropagation()">
+            <div class="modal-header">
+              <h3>📦 Detalles del Producto: {{ selectedProductForDetails.code }}</h3>
+              <button (click)="showDetailsModal = false" class="close-modal-btn">&times;</button>
+            </div>
+
+            <div class="modal-body">
+              <div class="details-grid">
+                <!-- Información del Producto -->
+                <div class="details-section">
+                  <h4>Información</h4>
+                  <div class="detail-item">
+                    <label>Código:</label>
+                    <span>{{ selectedProductForDetails.code }}</span>
+                  </div>
+                  <div class="detail-item">
+                    <label>Nombre (PT):</label>
+                    <span>{{ selectedProductForDetails.namePt }}</span>
+                  </div>
+                  <div class="detail-item">
+                    <label>Nombre (ES):</label>
+                    <span>{{ selectedProductForDetails.nameEs || 'N/A' }}</span>
+                  </div>
+                  <div class="detail-item">
+                    <label>Marca:</label>
+                    <span>{{ selectedProductForDetails.brand || 'N/A' }}</span>
+                  </div>
+                  <div class="detail-item">
+                    <label>Precio:</label>
+                    <span>{{ selectedProductForDetails.price | currency:'PYG':'symbol':'1.0-0' }}</span>
+                  </div>
+                  <div class="detail-item">
+                    <label>Precio con IVA:</label>
+                    <span>{{ selectedProductForDetails.priceIva | currency:'PYG':'symbol':'1.0-0' }}</span>
+                  </div>
+                  <div class="detail-item">
+                    <label>Stock:</label>
+                    <span>{{ selectedProductForDetails.stock }}</span>
+                  </div>
+                  <div class="detail-item">
+                    <label>Descripción (PT):</label>
+                    <span class="desc">{{ selectedProductForDetails.descriptionPt || 'N/A' }}</span>
+                  </div>
+                </div>
+
+                <!-- Vista Previa de Imagen -->
+                <div class="image-preview-section">
+                  <h4>🖼️ Vista Previa de Imagen</h4>
+                  <div class="image-container">
+                    <div *ngIf="imageLoading" class="image-loading">
+                      Verificando imagen...
+                    </div>
+                    <div *ngIf="!imageLoading && selectedProductForDetails.urlImage">
+                      <img
+                        *ngIf="imageExists"
+                        [src]="selectedProductForDetails.urlImage"
+                        [alt]="selectedProductForDetails.code"
+                        class="product-image"
+                        (error)="imageExists = false" />
+                      <div *ngIf="!imageExists" class="image-not-found">
+                        ❌ Imagen no encontrada
+                        <p class="text-sm">URL: {{ selectedProductForDetails.urlImage }}</p>
+                      </div>
+                    </div>
+                    <div *ngIf="!selectedProductForDetails.urlImage" class="no-image">
+                      Sin imagen
+                    </div>
+                  </div>
+                  <div class="image-status">
+                    <span *ngIf="imageExists" class="status-badge status-success">✅ Imagen disponible</span>
+                    <span *ngIf="!imageExists && !imageLoading" class="status-badge status-error">❌ Imagen no disponible</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="modal-footer">
+              <button (click)="editProduct(selectedProductForDetails.code)" class="btn btn-primary">
+                ✏️ Editar
+              </button>
+              <button (click)="showDetailsModal = false" class="btn btn-secondary">
+                Cerrar
+              </button>
+            </div>
           </div>
         </div>
 
@@ -991,6 +1082,252 @@ import { ProductoService, Producto, ProductDiff, ProductHistorial, Dashboard, Sy
     }
 
     .py-8 { padding-top: 32px; padding-bottom: 32px; }
+    .mt-4 { margin-top: 16px; }
+    .mt-6 { margin-top: 24px; }
+    .text-sm { font-size: 12px; }
+    .text-dim { color: var(--text-secondary); }
+
+    /* MODAL OVERLAY */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .modal-content {
+      background: var(--surface-1);
+      border-radius: var(--radius);
+      box-shadow: 0 20px 25px rgba(0, 0, 0, 0.3);
+      max-width: 900px;
+      width: 90%;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      animation: fadeIn 0.2s ease-out;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px;
+      border-bottom: 0.5px solid var(--border);
+    }
+
+    .modal-header h3 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 500;
+    }
+
+    .close-modal-btn {
+      background: none;
+      border: none;
+      font-size: 28px;
+      cursor: pointer;
+      color: var(--text-secondary);
+      padding: 0;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: var(--radius);
+      transition: all 0.2s;
+    }
+
+    .close-modal-btn:hover {
+      background: var(--surface-2);
+      color: var(--text-primary);
+    }
+
+    .modal-body {
+      flex: 1;
+      padding: 24px;
+      overflow-y: auto;
+    }
+
+    .details-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+    }
+
+    .details-section {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .details-section h4 {
+      margin: 0 0 8px 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--fill-accent);
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .detail-item {
+      display: grid;
+      grid-template-columns: 120px 1fr;
+      gap: 8px;
+      font-size: 13px;
+      padding: 8px;
+      background: var(--surface-0);
+      border-radius: calc(var(--radius) - 2px);
+    }
+
+    .detail-item label {
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+
+    .detail-item span {
+      color: var(--text-primary);
+      word-break: break-word;
+    }
+
+    .detail-item span.desc {
+      grid-column: 2;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .image-preview-section {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .image-preview-section h4 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--fill-accent);
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .image-container {
+      background: var(--surface-0);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 300px;
+      overflow: hidden;
+    }
+
+    .product-image {
+      max-width: 100%;
+      max-height: 300px;
+      border-radius: calc(var(--radius) - 2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    .image-loading,
+    .image-not-found,
+    .no-image {
+      text-align: center;
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+
+    .image-not-found p {
+      margin: 8px 0 0 0;
+      font-size: 12px;
+      font-family: monospace;
+      color: var(--text-secondary);
+    }
+
+    .image-status {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+    }
+
+    .status-badge {
+      font-size: 12px;
+      padding: 6px 12px;
+      border-radius: calc(var(--radius) - 2px);
+      font-weight: 500;
+    }
+
+    .status-success {
+      background: rgba(74, 222, 128, 0.1);
+      color: #4ade80;
+      border: 0.5px solid #4ade80;
+    }
+
+    .status-error {
+      background: rgba(239, 68, 68, 0.1);
+      color: #ef4444;
+      border: 0.5px solid #ef4444;
+    }
+
+    .modal-footer {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+      padding: 16px 24px;
+      border-top: 0.5px solid var(--border);
+      background: var(--surface-0);
+    }
+
+    .btn {
+      padding: 8px 16px;
+      border-radius: var(--radius);
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.2s;
+      font-family: inherit;
+    }
+
+    .btn-primary {
+      background: var(--fill-accent);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      opacity: 0.9;
+    }
+
+    .btn-secondary {
+      background: var(--surface-2);
+      color: var(--text-primary);
+    }
+
+    .btn-secondary:hover {
+      background: var(--surface-3);
+    }
+
+    @media (max-width: 768px) {
+      .details-grid {
+        grid-template-columns: 1fr;
+        gap: 24px;
+      }
+
+      .detail-item {
+        grid-template-columns: 1fr;
+      }
+
+      .detail-item label {
+        font-weight: 600;
+        margin-bottom: 4px;
+      }
+    }
   `]
 })
 export class AppComponent implements OnInit {
@@ -1017,6 +1354,12 @@ export class AppComponent implements OnInit {
   // Editing State
   showEditModal = false;
   editedProduct: Partial<Producto> & { code: string } = { code: '' };
+
+  // Details Modal State (Image Preview)
+  showDetailsModal = false;
+  selectedProductForDetails: Producto | null = null;
+  imageExists = false;
+  imageLoading = false;
 
   // Compras Paraguai Proxy API State
   cpToken = '';
@@ -1148,6 +1491,27 @@ export class AppComponent implements OnInit {
         this.errorMessage = `Error al cargar detalles del producto ${code} para edición.`;
       }
     });
+  }
+
+  async openProductDetails(code: string) {
+    try {
+      const product = await this.service.getProductByCode(code).toPromise();
+      if (product) {
+        this.selectedProductForDetails = product;
+        this.imageLoading = true;
+        this.imageExists = false;
+        this.showDetailsModal = true;
+
+        // Verificar si la imagen existe
+        if (product.urlImage) {
+          this.imageExists = await this.service.verifyImageExists(product.urlImage);
+        }
+        this.imageLoading = false;
+      }
+    } catch (error) {
+      console.error('Error loading product details:', error);
+      this.errorMessage = `Error al cargar detalles del producto ${code}.`;
+    }
   }
 
   saveProduct() {
