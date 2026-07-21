@@ -43,8 +43,6 @@ try
     // Core: servicios de lógica.
     builder.Services.AddSingleton(
         new ProductoMapperService(imageBaseUrl, imagenPorDefecto, linkPattern));
-    builder.Services.AddSingleton(
-        new ImageUrlService("https://www.toku.com.py/media/"));
     builder.Services.AddTransient<ISyncService>(sp =>
         new SyncService(
             sp.GetRequiredService<IViewReader>(),
@@ -66,7 +64,6 @@ try
     builder.Services.AddTransient<IProductoRepository>(sp =>
         new PostgreSqlProductoRepository(
             postgresConnStr,
-            sp.GetRequiredService<ImageUrlService>(),
             sp.GetRequiredService<ILogger<PostgreSqlProductoRepository>>()));
     builder.Services.AddTransient<ISyncRunRepository>(sp =>
         new PostgreSqlSyncRunRepository(postgresConnStr));

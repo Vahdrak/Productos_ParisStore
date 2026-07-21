@@ -1,6 +1,5 @@
 using ComprasParaguai.Core.Interfaces;
 using ComprasParaguai.Core.Models;
-using ComprasParaguai.Core.Services;
 using Microsoft.AspNetCore.Mvc;
 using static ComprasParaguai.Core.Interfaces.IProductoRepository;
 
@@ -11,13 +10,11 @@ namespace ComprasParaguai.Api.Controllers;
 public class ProductosController : ControllerBase
 {
     private readonly IProductoRepository _repository;
-    private readonly ImageUrlService _imageUrlService;
     private readonly ILogger<ProductosController> _logger;
 
-    public ProductosController(IProductoRepository repository, ImageUrlService imageUrlService, ILogger<ProductosController> logger)
+    public ProductosController(IProductoRepository repository, ILogger<ProductosController> logger)
     {
         _repository = repository;
-        _imageUrlService = imageUrlService;
         _logger = logger;
     }
 
@@ -34,14 +31,7 @@ public class ProductosController : ControllerBase
         {
             var products = await _repository.LoadPendingProductsAsync(cancellationToken);
 
-            // Procesar URLs de imágenes
-            var processed = products.Select(p =>
-            {
-                p.UrlImage = _imageUrlService.BuildImageUrl(p.UrlImage);
-                return p;
-            }).ToList();
-
-            var grouped = processed
+            var grouped = products
                 .GroupBy(p => p.Brand ?? "Sin Categoría")
                 .OrderBy(g => g.Key)
                 .Select(g => new CategoryProductsDto

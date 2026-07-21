@@ -36,10 +36,7 @@ public class ProductoApi
     /// <summary>Nombre de la imagen (de Cangrejo). Ej: "producto123.jpg".</summary>
     public string UrlImage { get; set; } = string.Empty;
 
-    /// <summary>URL completa construida: https://www.toku.com.py/media/{UrlImage}. Vacío si no existe imagen válida.</summary>
-    public string UrlImageFull { get; set; } = string.Empty;
-
-    /// <summary>Link al producto en la tienda (patrón propio de la tienda).</summary>
+    /// <summary>URL completa de la imagen. Ej: https://www.toku.com.py/media/producto123.jpg (vacío si no existe).</summary>
     public string Link { get; set; } = string.Empty;
 
     /// <summary>Link de compra directo (opcional).</summary>

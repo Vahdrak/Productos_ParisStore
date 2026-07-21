@@ -2,7 +2,6 @@ using ComprasParaguai.Infrastructure.Repositories;
 using ComprasParaguai.Infrastructure.Readers;
 using ComprasParaguai.Infrastructure;
 using ComprasParaguai.Core.Interfaces;
-using ComprasParaguai.Core.Services;
 using Npgsql;
 using Dapper;
 
@@ -41,14 +40,11 @@ catch (Exception ex)
 builder.Services.AddTransient<IProductoRepository>(sp =>
 {
     var logger = sp.GetRequiredService<ILogger<PostgreSqlProductoRepository>>();
-    var imageService = sp.GetRequiredService<ImageUrlService>();
-    return new PostgreSqlProductoRepository(postgresConnStr, imageService, logger);
+    return new PostgreSqlProductoRepository(postgresConnStr, logger);
 });
 
 builder.Services.AddTransient<ISyncRunRepository>(sp =>
     new PostgreSqlSyncRunRepository(postgresConnStr));
-
-builder.Services.AddSingleton(new ImageUrlService("https://www.toku.com.py/media/"));
 
 var app = builder.Build();
 
