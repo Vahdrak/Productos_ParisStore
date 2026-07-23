@@ -276,6 +276,34 @@ public class PostgreSqlProductoRepository : IProductoRepository
     }
 
     /// <summary>
+    /// Carga productos con sync_status = Error (con mensaje de error).
+    /// </summary>
+    public async Task<List<ProductoWithErrorDto>> LoadErrorProductsAsync(CancellationToken cancellationToken = default)
+    {
+        const string query = @"
+            SELECT
+                code AS Code,
+                name_es AS NameEs,
+                name_pt AS NamePt,
+                last_error AS LastError,
+                updated_at AS LastErrorAt
+            FROM productos
+            WHERE sync_status = 2
+            ORDER BY updated_at DESC
+        ";
+
+        using (var connection = new NpgsqlConnection(_connectionString))
+        {
+            await connection.OpenAsync(cancellationToken);
+            var errors = await connection.QueryAsync<ProductoWithErrorDto>(query);
+            var result = errors.ToList();
+
+            _logger.LogInformation("Cargados {Count} productos con Error", result.Count);
+            return result;
+        }
+    }
+
+    /// <summary>
     /// Carga un producto por código (valores actuales).
     /// </summary>
     public async Task<ProductoApi?> LoadProductByCodeAsync(string code, CancellationToken cancellationToken = default)
@@ -436,6 +464,136 @@ public class PostgreSqlProductoRepository : IProductoRepository
             return new ProductListDto
             {
                 Items = items.ToList(),
+                TotalCount = total,
+                Page = page,
+                PageSize = pageSize,
+                TotalPages = (int)Math.Ceiling(total / (double)pageSize)
+            };
+        }
+    }
+
+    /// <summary>
+    /// Obtiene los últimos cambios de todos los productos con paginación.
+    /// </summary>
+    public async Task<ProductChangeListDto> GetRecentChangesAsync(int page = 1, int pageSize = 20, CancellationToken cancellationToken = default)
+    {
+        const string query = @"
+            WITH changes AS (
+                SELECT
+                    ph.code,
+                    p.name_pt,
+                    p.name_es,
+                    ph.changed_at,
+                    ph.price,
+                    ph.price_iva,
+                    ph.stock,
+                    ph.brand,
+                    p.price AS current_price,
+                    p.price_iva AS current_price_iva,
+                    p.stock AS current_stock,
+                    p.brand AS current_brand,
+                    p.name_es AS current_name_es,
+                    p.name_pt AS current_name_pt,
+                    ROW_NUMBER() OVER (ORDER BY ph.changed_at DESC) as rn
+                FROM productos_historial ph
+                INNER JOIN productos p ON p.code = ph.code
+            ),
+            paginated AS (
+                SELECT * FROM changes
+                WHERE rn > @offset AND rn <= @offset + @pageSize
+            )
+            SELECT * FROM paginated
+            ORDER BY changed_at DESC
+        ";
+
+        const string countQuery = @"
+            SELECT COUNT(DISTINCT code) FROM productos_historial
+        ";
+
+        using (var connection = new NpgsqlConnection(_connectionString))
+        {
+            await connection.OpenAsync(cancellationToken);
+            var offset = (page - 1) * pageSize;
+            var results = await connection.QueryAsync<dynamic>(query, new { offset, pageSize });
+            var total = await connection.ExecuteScalarAsync<int>(countQuery);
+
+            var changes = new List<ProductChangeDto>();
+            foreach (var row in results)
+            {
+                // Comparar precio
+                if (row.price != row.current_price)
+                {
+                    changes.Add(new ProductChangeDto
+                    {
+                        Code = row.code,
+                        ProductName = row.name_pt ?? row.name_es,
+                        Field = "Precio",
+                        Before = row.price?.ToString("F2"),
+                        After = row.current_price?.ToString("F2"),
+                        ChangedAt = row.changed_at
+                    });
+                }
+
+                // Comparar stock
+                if (row.stock != row.current_stock)
+                {
+                    changes.Add(new ProductChangeDto
+                    {
+                        Code = row.code,
+                        ProductName = row.name_pt ?? row.name_es,
+                        Field = "Stock",
+                        Before = row.stock?.ToString(),
+                        After = row.current_stock?.ToString(),
+                        ChangedAt = row.changed_at
+                    });
+                }
+
+                // Comparar nombre PT
+                if (row.name_pt != row.current_name_pt)
+                {
+                    changes.Add(new ProductChangeDto
+                    {
+                        Code = row.code,
+                        ProductName = row.name_pt ?? row.name_es,
+                        Field = "Nombre (PT)",
+                        Before = row.name_pt,
+                        After = row.current_name_pt,
+                        ChangedAt = row.changed_at
+                    });
+                }
+
+                // Comparar nombre ES
+                if (row.name_es != row.current_name_es)
+                {
+                    changes.Add(new ProductChangeDto
+                    {
+                        Code = row.code,
+                        ProductName = row.name_pt ?? row.name_es,
+                        Field = "Nombre (ES)",
+                        Before = row.name_es,
+                        After = row.current_name_es,
+                        ChangedAt = row.changed_at
+                    });
+                }
+
+                // Comparar marca
+                if (row.brand != row.current_brand)
+                {
+                    changes.Add(new ProductChangeDto
+                    {
+                        Code = row.code,
+                        ProductName = row.name_pt ?? row.name_es,
+                        Field = "Marca",
+                        Before = row.brand,
+                        After = row.current_brand,
+                        ChangedAt = row.changed_at
+                    });
+                }
+            }
+
+            return new ProductChangeListDto
+            {
+                Items = changes.OrderByDescending(c => c.ChangedAt).ToList(),
                 TotalCount = total,
                 Page = page,
                 PageSize = pageSize,

@@ -73,18 +73,16 @@ public class ProductoMapperService
             brand = view.ValorAtributo1;
         }
 
-        // URL de imagen: anteponer base URL. Si "sinimagen.jpg" → usar imagen por defecto.
-        string urlImage = _imagenPorDefecto;
-        if (!string.IsNullOrWhiteSpace(view.Imagenes))
+        // URL de imagen: solo el nombre del archivo (sin URL base).
+        string urlImage = "sinimagen.jpg";
+        if (!string.IsNullOrWhiteSpace(view.Imagenes) &&
+            !view.Imagenes.Equals("sinimagen.jpg", StringComparison.OrdinalIgnoreCase))
         {
-            if (!view.Imagenes.Equals("sinimagen.jpg", StringComparison.OrdinalIgnoreCase))
-            {
-                urlImage = $"{_imageBaseUrl.TrimEnd('/')}/{view.Imagenes}";
-            }
+            urlImage = view.Imagenes;
         }
 
-        // Link: patrón de tienda + code.
-        string link = _linkPattern.Replace("{code}", view.Code);
+        // Link: URL de Toku + nombre de imagen.
+        string link = $"https://www.toku.com.py/media/{urlImage}";
 
         // Armar ProductoApi.
         var api = new ProductoApi

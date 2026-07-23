@@ -114,10 +114,12 @@ public class PostgreSqlSyncRunRepository : ISyncRunRepository
             SELECT
                 started_at AS StartedAt,
                 finished_at AS FinishedAt,
+                rows_in_view AS RowsInView,
                 new_count AS NewCount,
                 updated_count AS UpdatedCount,
                 sent AS SentCount,
-                failed AS ErrorCount
+                failed AS ErrorCount,
+                notes AS Notes
             FROM sync_runs
             WHERE finished_at IS NOT NULL
             ORDER BY finished_at DESC
@@ -132,6 +134,38 @@ public class PostgreSqlSyncRunRepository : ISyncRunRepository
                 commandTimeout: 30);
 
             return result;
+        }
+    }
+
+    /// <summary>
+    /// Obtiene el historial de todas las corridas de sync (últimas N).
+    /// </summary>
+    public async Task<List<SyncRunDto>> GetAllSyncRunsAsync(int limit = 50, CancellationToken cancellationToken = default)
+    {
+        var query = $@"
+            SELECT
+                started_at AS StartedAt,
+                finished_at AS FinishedAt,
+                rows_in_view AS RowsInView,
+                new_count AS NewCount,
+                updated_count AS UpdatedCount,
+                sent AS SentCount,
+                failed AS ErrorCount,
+                notes AS Notes
+            FROM sync_runs
+            ORDER BY started_at DESC
+            LIMIT @limit
+        ";
+
+        using (var connection = new NpgsqlConnection(_connectionString))
+        {
+            await connection.OpenAsync(cancellationToken);
+            var result = await connection.QueryAsync<SyncRunDto>(
+                query,
+                new { limit },
+                commandTimeout: 30);
+
+            return result.ToList();
         }
     }
 }

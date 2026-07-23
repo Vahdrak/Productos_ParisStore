@@ -32,14 +32,21 @@ public interface ISyncRunRepository
     /// Obtiene la información completa de la última corrida de sync.
     /// </summary>
     Task<SyncRunDto?> GetLastSyncRunAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Obtiene el historial de todas las corridas de sync (últimas 50).
+    /// </summary>
+    Task<List<SyncRunDto>> GetAllSyncRunsAsync(int limit = 50, CancellationToken cancellationToken = default);
 }
 
 public class SyncRunDto
 {
     public DateTime? StartedAt { get; set; }
     public DateTime? FinishedAt { get; set; }
+    public int? RowsInView { get; set; }
     public int NewCount { get; set; }
     public int UpdatedCount { get; set; }
     public int SentCount { get; set; }
     public int ErrorCount { get; set; }
+    public string? Notes { get; set; }
 }

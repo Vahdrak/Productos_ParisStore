@@ -68,6 +68,49 @@ export interface ProductList {
   totalPages: number;
 }
 
+export interface ChangeLog {
+  code: string;
+  productName?: string;
+  field: string;
+  before?: string;
+  after?: string;
+  changedAt?: string;
+}
+
+export interface ChangeLogList {
+  items: ChangeLog[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface CycleSummary {
+  timestamp?: string;
+  rowsRead: number;
+  newCount: number;
+  updatedCount: number;
+  sentCount: number;
+  errorCount: number;
+  notes?: string;
+}
+
+export interface TrendStatistics {
+  totalNew: number;
+  totalUpdated: number;
+  totalSent: number;
+  totalErrors: number;
+  averageRowsPerCycle: number;
+  successRate: number;
+}
+
+export interface SyncTrends {
+  hours: number;
+  totalCycles: number;
+  cycles: CycleSummary[];
+  statistics: TrendStatistics;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -76,6 +119,10 @@ export class ProductoService {
 
   getPendingProducts(): Observable<Producto[]> {
     return this.http.get<Producto[]>('/productos/pending');
+  }
+
+  getErrorProducts(): Observable<any[]> {
+    return this.http.get<any[]>('/productos/errors');
   }
 
   getProductByCode(code: string): Observable<Producto> {
@@ -95,7 +142,15 @@ export class ProductoService {
   }
 
   getSyncRuns(): Observable<SyncRun[]> {
-    return this.http.get<SyncRun[]>('/sync-runs');
+    return this.http.get<SyncRun[]>('/dashboard/sync-runs');
+  }
+
+  getSyncTrends(hours: number = 24): Observable<SyncTrends> {
+    return this.http.get<SyncTrends>(`/dashboard/trends?hours=${hours}`);
+  }
+
+  getRecentChanges(page: number = 1, pageSize: number = 20): Observable<ChangeLogList> {
+    return this.http.get<ChangeLogList>(`/productos/cambios/recientes?page=${page}&pageSize=${pageSize}`);
   }
 
   getProductos(filters?: any, page: number = 1, pageSize: number = 50): Observable<ProductList> {
@@ -137,8 +192,17 @@ export class ProductoService {
         return;
       }
       const img = new Image();
-      img.onload = () => resolve(true);
-      img.onerror = () => resolve(false);
+      const timeout = setTimeout(() => {
+        resolve(true);
+      }, 3000);
+      img.onload = () => {
+        clearTimeout(timeout);
+        resolve(true);
+      };
+      img.onerror = () => {
+        clearTimeout(timeout);
+        resolve(true);
+      };
       img.src = imageUrl;
     });
   }

@@ -2,7 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpClientModule } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
-import { ProductoService, Producto, ProductDiff, ProductHistorial, Dashboard, SyncRun } from './shared/services/producto.service';
+import { ProductoService, Producto, ProductDiff, ProductHistorial, Dashboard, SyncRun, SyncTrends, CycleSummary } from './shared/services/producto.service';
 
 @Component({
   selector: 'app-root',
@@ -27,8 +27,14 @@ import { ProductoService, Producto, ProductDiff, ProductHistorial, Dashboard, Sy
         <button [class.active]="page === 'productos'" (click)="setPage('productos')" class="tab-btn">
           Productos
         </button>
+        <button [class.active]="page === 'monitor'" (click)="setPage('monitor')" class="tab-btn">
+          Monitor
+        </button>
         <button [class.active]="page === 'historial'" (click)="setPage('historial')" class="tab-btn">
           Historial
+        </button>
+        <button [class.active]="page === 'problemas'" (click)="setPage('problemas')" class="tab-btn">
+          Problemas
         </button>
         <button [class.active]="page === 'comprasparaguai'" (click)="setPage('comprasparaguai')" class="tab-btn font-accent">
           API ComprasParaguai
@@ -46,23 +52,45 @@ import { ProductoService, Producto, ProductDiff, ProductHistorial, Dashboard, Sy
 
         <!-- 1. DASHBOARD PAGE -->
         <div *ngIf="page === 'dashboard'" class="fade-in">
+          <!-- Time Range Selector -->
+          <div style="display: flex; gap: 8px; margin-bottom: 20px;">
+            <button (click)="changeDashboardTimeRange('last')" [class.active]="dashboardTimeRange === 'last'" class="trend-btn">Última</button>
+            <button (click)="changeDashboardTimeRange('12h')" [class.active]="dashboardTimeRange === '12h'" class="trend-btn">12h</button>
+            <button (click)="changeDashboardTimeRange('24h')" [class.active]="dashboardTimeRange === '24h'" class="trend-btn">24h</button>
+            <button (click)="changeDashboardTimeRange('48h')" [class.active]="dashboardTimeRange === '48h'" class="trend-btn">48h</button>
+          </div>
+
           <!-- Summary Cards -->
           <div class="dashboard-grid">
             <div class="stat-card">
-              <span class="stat-title">Pendientes</span>
+              <span class="stat-title">⏳ Pendientes</span>
               <span class="stat-val">{{ dashboard?.pendingCount ?? 0 }}</span>
+              <span class="stat-subtitle">Esperando envío</span>
             </div>
             <div class="stat-card">
-              <span class="stat-title">Enviados hoy</span>
-              <span class="stat-val">{{ dashboard?.sentCount ?? 0 }}</span>
+              <span class="stat-title">✅ Enviados</span>
+              <span class="stat-val" style="color: #4ade80;">{{ getDashboardSentCount() }}</span>
+              <span class="stat-subtitle">En rango seleccionado</span>
             </div>
             <div class="stat-card">
-              <span class="stat-title">Errores</span>
-              <span class="stat-val text-red">{{ dashboard?.errorCount ?? 0 }}</span>
+              <span class="stat-title">❌ Errores</span>
+              <span class="stat-val text-red">{{ getTodayErrorCount() }}</span>
+              <span class="stat-subtitle">En rango seleccionado</span>
             </div>
             <div class="stat-card">
-              <span class="stat-title">Ú. corrida</span>
+              <span class="stat-title">🆕 Nuevos</span>
+              <span class="stat-val" style="color: #60a5fa;">{{ getDashboardNewCount() }}</span>
+              <span class="stat-subtitle">En rango seleccionado</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-title">🔄 Actualizados</span>
+              <span class="stat-val" style="color: #f59e0b;">{{ getDashboardUpdatedCount() }}</span>
+              <span class="stat-subtitle">En rango seleccionado</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-title">⏱️ Última corrida</span>
               <span class="stat-val val-small">{{ lastRunTimeAgo }}</span>
+              <span class="stat-subtitle">{{ dashboard?.lastSyncAt | date:'HH:mm:ss' }}</span>
             </div>
           </div>
 
@@ -120,6 +148,29 @@ import { ProductoService, Producto, ProductDiff, ProductHistorial, Dashboard, Sy
                 (ngModelChange)="onSearchChange()"
                 class="form-input search-input" />
             </div>
+            <button (click)="showFilters = !showFilters" class="btn btn-secondary" style="margin-left: 8px;">
+              {{ showFilters ? '✕ Ocultar Filtros' : '⚙️ Filtros' }}
+            </button>
+          </div>
+
+          <!-- Filtros Avanzados (Desplegable) -->
+          <div *ngIf="showFilters" class="filters-panel fade-in">
+            <div class="filters-grid">
+              <div class="filter-group">
+                <label>Estado de Sincronización</label>
+                <select [(ngModel)]="filterStatus" (ngModelChange)="onSearchChange()" class="form-input">
+                  <option [value]="null">Todos</option>
+                  <option [value]="0">⏳ Pendiente</option>
+                  <option [value]="1">✅ Enviado</option>
+                  <option [value]="2">❌ Error</option>
+                </select>
+              </div>
+              <div class="filter-group" style="align-self: flex-end;">
+                <button (click)="clearFilters()" class="btn btn-secondary" style="width: 100%;">
+                  🔄 Limpiar Filtros
+                </button>
+              </div>
+            </div>
           </div>
 
           <!-- Products Table -->
@@ -128,10 +179,22 @@ import { ProductoService, Producto, ProductDiff, ProductHistorial, Dashboard, Sy
               <table class="data-table">
                 <thead>
                   <tr>
-                    <th>Código</th>
-                    <th>Nombre</th>
-                    <th>Precio</th>
-                    <th>Stock</th>
+                    <th (click)="sortBy('code')" style="cursor: pointer; user-select: none;">
+                      Código
+                      <span *ngIf="sortColumn === 'code'">{{ sortDirection === 'asc' ? ' ▲' : ' ▼' }}</span>
+                    </th>
+                    <th (click)="sortBy('namePt')" style="cursor: pointer; user-select: none;">
+                      Nombre
+                      <span *ngIf="sortColumn === 'namePt'">{{ sortDirection === 'asc' ? ' ▲' : ' ▼' }}</span>
+                    </th>
+                    <th (click)="sortBy('price')" style="cursor: pointer; user-select: none;">
+                      Precio
+                      <span *ngIf="sortColumn === 'price'">{{ sortDirection === 'asc' ? ' ▲' : ' ▼' }}</span>
+                    </th>
+                    <th (click)="sortBy('stock')" style="cursor: pointer; user-select: none;">
+                      Stock
+                      <span *ngIf="sortColumn === 'stock'">{{ sortDirection === 'asc' ? ' ▲' : ' ▼' }}</span>
+                    </th>
                     <th>Estado</th>
                     <th>Acción</th>
                   </tr>
@@ -176,6 +239,136 @@ import { ProductoService, Producto, ProductDiff, ProductHistorial, Dashboard, Sy
                 <button [disabled]="pageIndex === 1" (click)="loadPage(pageIndex - 1)" class="btn-icon">◀</button>
                 <span class="page-num">Pág. {{ pageIndex }} / {{ totalPages }}</span>
                 <button [disabled]="pageIndex === totalPages" (click)="loadPage(pageIndex + 1)" class="btn-icon">▶</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- REGISTRO DE CAMBIOS - 3 VISTAS -->
+          <div class="section-card mt-6">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+              <h3 class="section-title">📋 Registro de Cambios ({{ changeLogTotalCount }} cambios)</h3>
+              <div style="display: flex; gap: 8px;">
+                <button (click)="toggleChangeLog()" class="btn btn-secondary" style="width: auto;">
+                  {{ showChangeLog ? '✕ Ocultar' : '👁️ Ver Cambios' }}
+                </button>
+                <div *ngIf="showChangeLog" class="view-selector">
+                  <button
+                    (click)="changeViewMode = 'timeline'"
+                    [class.active]="changeViewMode === 'timeline'"
+                    class="view-btn">📅 Timeline</button>
+                  <button
+                    (click)="changeViewMode = 'comparison'"
+                    [class.active]="changeViewMode === 'comparison'"
+                    class="view-btn">⚖️ Comparación</button>
+                  <button
+                    (click)="changeViewMode = 'audit'"
+                    [class.active]="changeViewMode === 'audit'"
+                    class="view-btn">📊 Auditoría</button>
+                </div>
+              </div>
+            </div>
+
+            <div *ngIf="!showChangeLog" class="text-center py-8 text-dim">
+              Haz clic en "Ver Cambios" para mostrar el registro de cambios
+            </div>
+
+            <!-- VISTA 1: TIMELINE -->
+            <div *ngIf="showChangeLog && changeViewMode === 'timeline'" class="fade-in">
+              <div class="timeline-container">
+                <div *ngFor="let change of changeLog" class="timeline-item">
+                  <div class="timeline-dot"></div>
+                  <div class="timeline-content">
+                    <div class="timeline-time">{{ change.changedAt | date:'HH:mm:ss' }}</div>
+                    <div class="timeline-product" style="color: #60a5fa;">{{ change.code }} - {{ change.productName }}</div>
+                    <div class="timeline-change">
+                      <span class="field-name">{{ change.field }}:</span>
+                      <span class="value-before">{{ change.before }}</span>
+                      <span class="arrow">→</span>
+                      <span class="value-after">{{ change.after }}</span>
+                    </div>
+                    <div class="timeline-date">{{ change.changedAt | date:'dd/MM/yyyy' }}</div>
+                  </div>
+                </div>
+                <div *ngIf="changeLog.length === 0" class="text-center py-8 text-dim">
+                  No hay cambios en esta página
+                </div>
+              </div>
+              <!-- Paginación -->
+              <div *ngIf="changeLogTotalPages > 0" style="display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 16px;">
+                <button [disabled]="changeLogPage === 1" (click)="loadRecentChanges(changeLogPage - 1)" class="btn-icon">◀</button>
+                <span class="text-dim">Pág. {{ changeLogPage }} / {{ changeLogTotalPages }}</span>
+                <button [disabled]="changeLogPage === changeLogTotalPages" (click)="loadRecentChanges(changeLogPage + 1)" class="btn-icon">▶</button>
+              </div>
+            </div>
+
+            <!-- VISTA 2: COMPARACIÓN LADO A LADO -->
+            <div *ngIf="showChangeLog && changeViewMode === 'comparison'" class="fade-in">
+              <div class="comparison-container">
+                <div *ngFor="let change of changeLog" class="comparison-item">
+                  <div class="comparison-header">
+                    <span class="comp-code">{{ change.code }} - {{ change.productName }}</span>
+                    <span class="comp-field">{{ change.field }}</span>
+                    <span class="comp-date">{{ change.changedAt | date:'short' }}</span>
+                  </div>
+                  <div class="comparison-boxes">
+                    <div class="comp-box box-before">
+                      <div class="comp-label">ANTES</div>
+                      <div class="comp-value">{{ change.before }}</div>
+                    </div>
+                    <div class="comp-arrow">→</div>
+                    <div class="comp-box box-after">
+                      <div class="comp-label">AHORA</div>
+                      <div class="comp-value">{{ change.after }}</div>
+                    </div>
+                  </div>
+                </div>
+                <div *ngIf="changeLog.length === 0" class="text-center py-8 text-dim">
+                  No hay cambios en esta página
+                </div>
+              </div>
+              <!-- Paginación -->
+              <div *ngIf="changeLogTotalPages > 0" style="display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 16px;">
+                <button [disabled]="changeLogPage === 1" (click)="loadRecentChanges(changeLogPage - 1)" class="btn-icon">◀</button>
+                <span class="text-dim">Pág. {{ changeLogPage }} / {{ changeLogTotalPages }}</span>
+                <button [disabled]="changeLogPage === changeLogTotalPages" (click)="loadRecentChanges(changeLogPage + 1)" class="btn-icon">▶</button>
+              </div>
+            </div>
+
+            <!-- VISTA 3: AUDITORÍA -->
+            <div *ngIf="showChangeLog && changeViewMode === 'audit'" class="fade-in">
+              <div class="audit-container">
+                <div class="audit-summary">
+                  <div class="audit-stat">
+                    <span class="audit-label">Total de Cambios</span>
+                    <span class="audit-value">{{ changeLogTotalCount }}</span>
+                  </div>
+                  <div class="audit-stat">
+                    <span class="audit-label">En esta página</span>
+                    <span class="audit-value">{{ changeLog.length }}</span>
+                  </div>
+                </div>
+
+                <div class="audit-list">
+                  <div *ngFor="let change of changeLog" class="audit-entry">
+                    <div class="audit-icon">📝</div>
+                    <div class="audit-details">
+                      <div class="audit-title">{{ change.field }} modificado</div>
+                      <div class="audit-subtitle">{{ change.productName }} ({{ change.code }})</div>
+                      <div class="audit-change">{{ change.before }} <span class="change-arrow">→</span> {{ change.after }}</div>
+                      <div class="audit-time">{{ change.changedAt | date:'medium' }}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div *ngIf="changeLog.length === 0" class="text-center py-8 text-dim">
+                  No hay cambios en esta página
+                </div>
+              </div>
+              <!-- Paginación -->
+              <div *ngIf="changeLogTotalPages > 0" style="display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 16px;">
+                <button [disabled]="changeLogPage === 1" (click)="loadRecentChanges(changeLogPage - 1)" class="btn-icon">◀</button>
+                <span class="text-dim">Pág. {{ changeLogPage }} / {{ changeLogTotalPages }}</span>
+                <button [disabled]="changeLogPage === changeLogTotalPages" (click)="loadRecentChanges(changeLogPage + 1)" class="btn-icon">▶</button>
               </div>
             </div>
           </div>
@@ -353,19 +546,19 @@ import { ProductoService, Producto, ProductDiff, ProductHistorial, Dashboard, Sy
                     <div *ngIf="imageLoading" class="image-loading">
                       Verificando imagen...
                     </div>
-                    <div *ngIf="!imageLoading && selectedProductForDetails.urlImage">
+                    <div *ngIf="!imageLoading && selectedProductForDetails.link">
                       <img
                         *ngIf="imageExists"
-                        [src]="selectedProductForDetails.urlImage"
+                        [src]="selectedProductForDetails.link"
                         [alt]="selectedProductForDetails.code"
                         class="product-image"
                         (error)="imageExists = false" />
                       <div *ngIf="!imageExists" class="image-not-found">
                         ❌ Imagen no encontrada
-                        <p class="text-sm">URL: {{ selectedProductForDetails.urlImage }}</p>
+                        <p class="text-sm">URL: {{ selectedProductForDetails.link }}</p>
                       </div>
                     </div>
-                    <div *ngIf="!selectedProductForDetails.urlImage" class="no-image">
+                    <div *ngIf="!selectedProductForDetails.link" class="no-image">
                       Sin imagen
                     </div>
                   </div>
@@ -423,6 +616,134 @@ import { ProductoService, Producto, ProductDiff, ProductHistorial, Dashboard, Sy
                   </tr>
                   <tr *ngIf="syncRuns.length === 0">
                     <td colspan="10" class="text-center py-8 text-dim">No hay corridas registradas.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- PROBLEMAS PAGE -->
+        <div *ngIf="page === 'problemas'" class="fade-in">
+          <div class="section-card">
+            <h3 class="section-title">❌ Productos con Error</h3>
+            <div *ngIf="errorProducts.length === 0" class="text-center py-8 text-dim">
+              No hay productos con errores. ¡Excelente! 🎉
+            </div>
+            <div class="table-container" *ngIf="errorProducts.length > 0">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Código</th>
+                    <th>Nombre (ES)</th>
+                    <th>Nombre (PT)</th>
+                    <th>Mensaje de Error</th>
+                    <th>Última Actualización</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let error of errorProducts" style="color: #ef4444;">
+                    <td class="text-bold">{{ error.code }}</td>
+                    <td>{{ error.nameEs || '—' }}</td>
+                    <td>{{ error.namePt || '—' }}</td>
+                    <td class="text-small">{{ error.lastError || '—' }}</td>
+                    <td class="text-small text-dim">{{ error.lastErrorAt | date:'yyyy-MM-dd HH:mm:ss' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="section-card mt-6">
+            <h3 class="section-title">⏳ Productos Pendientes de Envío</h3>
+            <div *ngIf="pendingProducts.length === 0" class="text-center py-8 text-dim">
+              No hay productos pendientes. ¡Todos están sincronizados! 🚀
+            </div>
+            <div class="table-container" *ngIf="pendingProducts.length > 0">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Código</th>
+                    <th>Nombre (ES)</th>
+                    <th>Nombre (PT)</th>
+                    <th>Precio</th>
+                    <th>Stock</th>
+                    <th>Acción</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let prod of pendingProducts">
+                    <td class="text-bold">{{ prod.code }}</td>
+                    <td>{{ prod.nameEs || '—' }}</td>
+                    <td>{{ prod.namePt || '—' }}</td>
+                    <td>{{ prod.price | currency }}</td>
+                    <td>{{ prod.stock }}</td>
+                    <td>
+                      <button (click)="openProductDetails(prod.code)" class="action-btn-small" title="Ver detalles">
+                        👁️
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- MONITOR - SYNC TRENDS PAGE -->
+        <div *ngIf="page === 'monitor'" class="fade-in">
+          <div class="section-card">
+            <h3 class="section-title">📈 Monitor de Tendencias (últimas {{ trendsHours }}h)</h3>
+
+            <!-- Selector de horas -->
+            <div style="display: flex; gap: 8px; margin-bottom: 20px;">
+              <button (click)="changeTrendsHours(24)" [class.active]="trendsHours === 24" class="trend-btn">24h</button>
+              <button (click)="changeTrendsHours(48)" [class.active]="trendsHours === 48" class="trend-btn">48h</button>
+              <button (click)="changeTrendsHours(72)" [class.active]="trendsHours === 72" class="trend-btn">72h</button>
+            </div>
+
+            <!-- Estadísticas -->
+            <div *ngIf="syncTrends" class="trend-stats">
+              <div class="stat-box">
+                <div class="stat-label">Total Nuevos</div>
+                <div class="stat-value" style="color: #4ade80;">{{ syncTrends.statistics.totalNew }}</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">Total Actualizados</div>
+                <div class="stat-value" style="color: #60a5fa;">{{ syncTrends.statistics.totalUpdated }}</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">Total Enviados</div>
+                <div class="stat-value" style="color: #34d399;">{{ syncTrends.statistics.totalSent }}</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">Tasa de Éxito</div>
+                <div class="stat-value" style="color: #fbbf24;">{{ (syncTrends.statistics.successRate || 0).toFixed(1) }}%</div>
+              </div>
+            </div>
+
+            <!-- Tabla de ciclos -->
+            <div class="table-container" *ngIf="syncTrends">
+              <h4 style="margin-bottom: 12px; color: #ccc;">Detalle de Ciclos</h4>
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Hora</th>
+                    <th>Filas Leídas</th>
+                    <th>Nuevos</th>
+                    <th>Actualizados</th>
+                    <th>Enviados</th>
+                    <th>Errores</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let cycle of syncTrends.cycles" [class.has-errors]="cycle.errorCount > 0">
+                    <td>{{ cycle.timestamp | date:'HH:mm:ss' }}</td>
+                    <td>{{ cycle.rowsRead }}</td>
+                    <td style="color: #4ade80;">{{ cycle.newCount }}</td>
+                    <td style="color: #60a5fa;">{{ cycle.updatedCount }}</td>
+                    <td style="color: #34d399;">{{ cycle.sentCount }}</td>
+                    <td [ngClass]="{'error-col': cycle.errorCount > 0}">{{ cycle.errorCount }}</td>
                   </tr>
                 </tbody>
               </table>
@@ -630,6 +951,12 @@ import { ProductoService, Producto, ProductDiff, ProductHistorial, Dashboard, Sy
       padding-top: 8px;
     }
 
+    .stat-subtitle {
+      font-size: 11px;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+
     .text-red { color: #fca5a5; }
 
     /* SECTION CARD */
@@ -683,6 +1010,308 @@ import { ProductoService, Producto, ProductDiff, ProductHistorial, Dashboard, Sy
       border-color: rgba(255, 255, 255, 0.3);
       background: #1c1c1c;
       box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.05);
+    }
+
+    /* FILTROS */
+    .filters-panel {
+      background: #141414;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .filters-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+    }
+
+    .filter-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .filter-group label {
+      font-size: 12px;
+      color: #8f8f8f;
+      font-weight: 500;
+    }
+
+    .filter-group input[type="date"],
+    .filter-group select {
+      padding: 8px 12px;
+      background: #181818;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 6px;
+      color: #ffffff;
+      font-size: 13px;
+    }
+
+    .filter-group input[type="date"]:focus,
+    .filter-group select:focus {
+      outline: none;
+      border-color: rgba(255, 255, 255, 0.3);
+      background: #1c1c1c;
+    }
+
+    /* VISTAS DE CAMBIOS */
+    .view-selector {
+      display: flex;
+      gap: 8px;
+    }
+
+    .view-btn {
+      padding: 6px 12px;
+      background: #1c1c1c;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+      color: #8f8f8f;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.2s;
+    }
+
+    .view-btn.active {
+      background: #2d2d2d;
+      border-color: #60a5fa;
+      color: #60a5fa;
+    }
+
+    /* TIMELINE VIEW */
+    .timeline-container {
+      position: relative;
+      padding: 20px 0;
+    }
+
+    .timeline-item {
+      display: flex;
+      margin-bottom: 20px;
+      position: relative;
+    }
+
+    .timeline-dot {
+      width: 12px;
+      height: 12px;
+      background: #60a5fa;
+      border-radius: 50%;
+      margin-top: 4px;
+      margin-right: 16px;
+      flex-shrink: 0;
+    }
+
+    .timeline-content {
+      background: #141414;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 12px;
+      flex: 1;
+    }
+
+    .timeline-time {
+      font-size: 12px;
+      color: #60a5fa;
+      font-weight: 600;
+    }
+
+    .timeline-product {
+      font-size: 13px;
+      font-weight: 600;
+      margin-top: 4px;
+    }
+
+    .timeline-change {
+      margin-top: 8px;
+      font-size: 13px;
+      color: #eaeaea;
+    }
+
+    .field-name {
+      color: #8f8f8f;
+      margin-right: 8px;
+    }
+
+    .value-before {
+      color: #fca5a5;
+    }
+
+    .arrow {
+      margin: 0 6px;
+      color: #6b7280;
+    }
+
+    .value-after {
+      color: #4ade80;
+      font-weight: 600;
+    }
+
+    .timeline-date {
+      font-size: 11px;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+
+    /* COMPARISON VIEW */
+    .comparison-container {
+      display: grid;
+      gap: 16px;
+    }
+
+    .comparison-item {
+      background: #141414;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .comparison-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      font-size: 12px;
+      color: #8f8f8f;
+    }
+
+    .comp-code {
+      color: #60a5fa;
+      font-weight: 600;
+    }
+
+    .comp-field {
+      color: #f59e0b;
+    }
+
+    .comp-date {
+      color: #6b7280;
+    }
+
+    .comparison-boxes {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .comp-box {
+      flex: 1;
+      background: #1c1c1c;
+      border-radius: 6px;
+      padding: 12px;
+      text-align: center;
+    }
+
+    .box-before {
+      border-left: 3px solid #fca5a5;
+    }
+
+    .box-after {
+      border-left: 3px solid #4ade80;
+    }
+
+    .comp-label {
+      font-size: 11px;
+      color: #8f8f8f;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .comp-value {
+      font-size: 14px;
+      font-weight: 600;
+      color: #eaeaea;
+    }
+
+    .comp-arrow {
+      color: #6b7280;
+      font-size: 18px;
+    }
+
+    /* AUDIT VIEW */
+    .audit-container {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .audit-summary {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+
+    .audit-stat {
+      background: #141414;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+    }
+
+    .audit-label {
+      display: block;
+      font-size: 11px;
+      color: #8f8f8f;
+      margin-bottom: 4px;
+    }
+
+    .audit-value {
+      display: block;
+      font-size: 24px;
+      font-weight: 600;
+      color: #60a5fa;
+    }
+
+    .audit-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .audit-entry {
+      display: flex;
+      gap: 12px;
+      background: #141414;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 12px;
+    }
+
+    .audit-icon {
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+
+    .audit-details {
+      flex: 1;
+      font-size: 13px;
+    }
+
+    .audit-title {
+      color: #eaeaea;
+      font-weight: 600;
+    }
+
+    .audit-subtitle {
+      color: #60a5fa;
+      font-size: 12px;
+      margin-top: 2px;
+    }
+
+    .audit-change {
+      color: #8f8f8f;
+      font-size: 12px;
+      margin-top: 4px;
+    }
+
+    .change-arrow {
+      color: #6b7280;
+      margin: 0 4px;
+    }
+
+    .audit-time {
+      color: #6b7280;
+      font-size: 11px;
+      margin-top: 4px;
     }
 
     /* DATA TABLE */
@@ -1313,6 +1942,63 @@ import { ProductoService, Producto, ProductDiff, ProductHistorial, Dashboard, Sy
       background: var(--surface-3);
     }
 
+    /* MONITOR PAGE STYLES */
+    .trend-btn {
+      padding: 6px 12px;
+      border: 1px solid #555;
+      border-radius: 4px;
+      cursor: pointer;
+      background: transparent;
+      color: inherit;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+
+    .trend-btn:hover {
+      border-color: #888;
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .trend-btn.active {
+      background: #60a5fa;
+      border-color: #60a5fa;
+      color: white;
+    }
+
+    .trend-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .stat-box {
+      background: #1a1a1a;
+      padding: 12px;
+      border-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: #999;
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    .has-errors {
+      opacity: 0.6;
+    }
+
+    .error-col {
+      color: #ef4444;
+      font-weight: 600;
+    }
+
     @media (max-width: 768px) {
       .details-grid {
         grid-template-columns: 1fr;
@@ -1331,12 +2017,15 @@ import { ProductoService, Producto, ProductDiff, ProductHistorial, Dashboard, Sy
   `]
 })
 export class AppComponent implements OnInit {
-  page: 'dashboard' | 'productos' | 'historial' | 'comprasparaguai' = 'dashboard';
+  page: 'dashboard' | 'productos' | 'monitor' | 'historial' | 'problemas' | 'comprasparaguai' = 'dashboard';
   Math = Math;
 
   // Real-time states
   dashboard: Dashboard | null = null;
   syncRuns: SyncRun[] = [];
+  syncTrends: SyncTrends | null = null;
+  trendsHours = 24;
+  dashboardTimeRange: 'last' | '12h' | '24h' | '48h' = '24h';
   lastRunTimeAgo = 'N/A';
 
   // Products state (Search / Pagination)
@@ -1346,6 +2035,23 @@ export class AppComponent implements OnInit {
   pageSize = 15;
   searchText = '';
   totalPages = 1;
+
+  // Filtros avanzados
+  filterStatus: number | null = null;
+  showFilters = false;
+  sortColumn = '';
+  sortDirection: 'asc' | 'desc' = 'asc';
+
+  // Registro de Cambios
+  changeLog: any[] = [];
+  changeLogPage = 1;
+  changeLogPageSize = 20;
+  changeLogTotalPages = 1;
+  changeLogTotalCount = 0;
+  showChangeLog = false;
+
+  // Vistas de cambios
+  changeViewMode: 'timeline' | 'comparison' | 'audit' = 'timeline';
 
   // Comparison State (Diff View)
   showDiffModal = false;
@@ -1369,6 +2075,10 @@ export class AppComponent implements OnInit {
   cpPostPayload = '';
   loadingCP = false;
 
+  // Problemas State (Errores y Pendientes)
+  errorProducts: any[] = [];
+  pendingProducts: Producto[] = [];
+
   // UI state variables
   loading = false;
   errorMessage = '';
@@ -1387,7 +2097,7 @@ export class AppComponent implements OnInit {
     }, 30000);
   }
 
-  setPage(targetPage: 'dashboard' | 'productos' | 'historial' | 'comprasparaguai') {
+  setPage(targetPage: 'dashboard' | 'productos' | 'monitor' | 'historial' | 'problemas' | 'comprasparaguai') {
     this.page = targetPage;
     this.showDiffModal = false;
     this.showEditModal = false;
@@ -1396,8 +2106,12 @@ export class AppComponent implements OnInit {
       this.loadSyncRuns();
     } else if (targetPage === 'productos') {
       this.loadProducts();
+    } else if (targetPage === 'monitor') {
+      this.loadSyncTrends();
     } else if (targetPage === 'historial') {
       this.loadSyncRuns();
+    } else if (targetPage === 'problemas') {
+      this.loadProblems();
     }
   }
 
@@ -1425,9 +2139,67 @@ export class AppComponent implements OnInit {
     });
   }
 
+  loadSyncTrends() {
+    this.service.getSyncTrends(this.trendsHours).subscribe({
+      next: (trends) => {
+        this.syncTrends = trends;
+      },
+      error: (err) => {
+        console.error('Error fetching trends', err);
+      }
+    });
+  }
+
+  changeTrendsHours(hours: number): void {
+    this.trendsHours = hours;
+    this.loadSyncTrends();
+  }
+
+  toggleChangeLog() {
+    if (!this.showChangeLog) {
+      this.showChangeLog = true;
+      this.loadRecentChanges(1);
+    } else {
+      this.showChangeLog = false;
+    }
+  }
+
+  loadRecentChanges(page: number = 1) {
+    this.changeLogPage = page;
+    this.service.getRecentChanges(page, this.changeLogPageSize).subscribe({
+      next: (result) => {
+        this.changeLog = result.items.map(c => ({
+          code: c.code,
+          productName: c.productName,
+          field: c.field,
+          before: c.before,
+          after: c.after,
+          changedAt: c.changedAt
+        }));
+        this.changeLogTotalPages = result.totalPages;
+        this.changeLogTotalCount = result.totalCount;
+      },
+      error: (err) => {
+        console.error('Error fetching recent changes', err);
+      }
+    });
+  }
+
   loadProducts() {
     this.loading = true;
-    this.service.getProductos({ name: this.searchText, code: this.searchText }, this.pageIndex, this.pageSize).subscribe({
+    const filters: any = {
+      syncStatus: this.filterStatus
+    };
+
+    // Buscar en código si el término parece un código (números)
+    // Si no, buscar en nombre
+    if (this.searchText && /^\d+$/.test(this.searchText)) {
+      filters.code = this.searchText;
+    } else if (this.searchText) {
+      filters.name = this.searchText;
+    }
+
+    this.service.getProductos(filters, this.pageIndex, this.pageSize).subscribe({
       next: (res) => {
         this.products = res.items;
         this.totalCount = res.totalCount;
@@ -1447,6 +2219,86 @@ export class AppComponent implements OnInit {
   onSearchChange() {
     this.pageIndex = 1;
     this.loadProducts();
+  }
+
+  clearFilters() {
+    this.searchText = '';
+    this.filterStatus = null;
+    this.pageIndex = 1;
+    this.loadProducts();
+  }
+
+  sortBy(column: string) {
+    if (this.sortColumn === column) {
+      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.sortColumn = column;
+      this.sortDirection = 'asc';
+    }
+    this.sortProducts();
+  }
+
+  sortProducts() {
+    if (!this.sortColumn) return;
+
+    this.products.sort((a: any, b: any) => {
+      let aVal = a[this.sortColumn];
+      let bVal = b[this.sortColumn];
+
+      if (aVal == null) aVal = '';
+      if (bVal == null) bVal = '';
+
+      if (typeof aVal === 'string') {
+        aVal = aVal.toLowerCase();
+        bVal = bVal.toLowerCase();
+      }
+
+      let result = 0;
+      if (aVal > bVal) result = 1;
+      else if (aVal < bVal) result = -1;
+
+      return this.sortDirection === 'asc' ? result : -result;
+    });
+  }
+
+  getFilteredRuns(): SyncRun[] {
+    if (!this.syncRuns.length) return [];
+
+    if (this.dashboardTimeRange === 'last') {
+      return this.syncRuns.slice(0, 1);
+    }
+
+    const now = new Date();
+    let hours = 24;
+    if (this.dashboardTimeRange === '12h') hours = 12;
+    else if (this.dashboardTimeRange === '48h') hours = 48;
+
+    const cutoff = new Date(now.getTime() - hours * 60 * 60 * 1000);
+    return this.syncRuns.filter(run => run.startedAt && new Date(run.startedAt) >= cutoff);
+  }
+
+  getDashboardPendingCount(): number {
+    return this.dashboard?.pendingCount ?? 0;
+  }
+
+  getDashboardNewCount(): number {
+    return this.getFilteredRuns().reduce((sum, run) => sum + (run.newCount || 0), 0);
+  }
+
+  getDashboardUpdatedCount(): number {
+    return this.getFilteredRuns().reduce((sum, run) => sum + (run.updatedCount || 0), 0);
+  }
+
+  getDashboardSentCount(): number {
+    return this.getFilteredRuns().reduce((sum, run) => sum + (run.sentCount || 0), 0);
+  }
+
+  getTodayErrorCount(): number {
+    return this.getFilteredRuns().reduce((sum, run) => sum + (run.errorCount || 0), 0);
+  }
+
+  changeDashboardTimeRange(range: 'last' | '12h' | '24h' | '48h'): void {
+    this.dashboardTimeRange = range;
   }
 
   loadPage(page: number) {
@@ -1502,9 +2354,9 @@ export class AppComponent implements OnInit {
         this.imageExists = false;
         this.showDetailsModal = true;
 
-        // Verificar si la imagen existe
-        if (product.urlImage) {
-          this.imageExists = await this.service.verifyImageExists(product.urlImage);
+        // Verificar si la imagen existe usando la URL completa (link)
+        if (product.link) {
+          this.imageExists = await this.service.verifyImageExists(product.link);
         }
         this.imageLoading = false;
       }
@@ -1673,5 +2525,33 @@ export class AppComponent implements OnInit {
     } catch {
       this.lastRunTimeAgo = 'N/A';
     }
+  }
+
+  loadProblems() {
+    this.loading = true;
+    this.service.getErrorProducts().subscribe({
+      next: (errors: any[]) => {
+        this.errorProducts = errors;
+        this.loadPendingForProblems();
+      },
+      error: (err: any) => {
+        console.error('Error fetching error products', err);
+        this.loading = false;
+        this.errorMessage = 'Error al cargar productos con errores.';
+      }
+    });
+  }
+
+  loadPendingForProblems() {
+    this.service.getPendingProducts().subscribe({
+      next: (pending: Producto[]) => {
+        this.pendingProducts = pending;
+        this.loading = false;
+      },
+      error: (err: any) => {
+        console.error('Error fetching pending products', err);
+        this.loading = false;
+      }
+    });
   }
 }

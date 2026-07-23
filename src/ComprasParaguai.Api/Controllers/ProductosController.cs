@@ -105,8 +105,7 @@ public class ProductosController : ControllerBase
     {
         try
         {
-            var products = await _repository.LoadPendingProductsAsync(cancellationToken);
-            var product = products.FirstOrDefault(p => p.Code == code);
+            var product = await _repository.LoadProductByCodeAsync(code, cancellationToken);
 
             if (product == null)
                 return NotFound(new { message = $"Producto {code} no encontrado" });
@@ -224,6 +223,64 @@ public class ProductosController : ControllerBase
             return StatusCode(500, new { error = ex.Message });
         }
     }
+
+    /// <summary>
+    /// Obtiene los cambios recientes de todos los productos con paginación.
+    /// GET /api/productos/cambios/recientes?page=1&pageSize=20
+    /// </summary>
+    [HttpGet("cambios/recientes")]
+    public async Task<ActionResult<dynamic>> GetRecentChanges(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var result = await _repository.GetRecentChangesAsync(page, pageSize, cancellationToken);
+            var dto = new
+            {
+                items = result.Items.Select(c => new ChangeLogDto
+                {
+                    Code = c.Code,
+                    ProductName = c.ProductName,
+                    Field = c.Field,
+                    Before = c.Before ?? "—",
+                    After = c.After ?? "—",
+                    ChangedAt = c.ChangedAt
+                }).ToList(),
+                totalCount = result.TotalCount,
+                page = result.Page,
+                pageSize = result.PageSize,
+                totalPages = result.TotalPages
+            };
+
+            return Ok(dto);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error cargando cambios recientes");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Obtiene productos con errores (sync_status = 2).
+    /// GET /api/productos/errors
+    /// </summary>
+    [HttpGet("errors")]
+    public async Task<ActionResult<List<ProductoWithErrorDto>>> GetErrors(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var errors = await _repository.LoadErrorProductsAsync(cancellationToken);
+            return Ok(errors);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error cargando productos con error");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
 }
 
 public class ProductDiffDto
@@ -242,4 +299,14 @@ public class CategoryProductsDto
     public int TotalCount { get; set; }
     public List<ProductoApi> Products { get; set; } = [];
     public int PageSize { get; set; }
+}
+
+public class ChangeLogDto
+{
+    public string Code { get; set; } = string.Empty;
+    public string? ProductName { get; set; }
+    public string Field { get; set; } = string.Empty;
+    public string Before { get; set; } = string.Empty;
+    public string After { get; set; } = string.Empty;
+    public DateTime? ChangedAt { get; set; }
 }
