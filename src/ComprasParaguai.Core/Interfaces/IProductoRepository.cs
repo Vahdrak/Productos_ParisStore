@@ -30,6 +30,12 @@ public interface IProductoRepository
     Task MarkAsUnavailableAsync(IEnumerable<string> codes, DateTime now, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Carga TODOS los productos de la BD (sin filtrar por sync_status).
+    /// Usado para envío inicial bulk a Compras Paraguai.
+    /// </summary>
+    Task<List<ProductoApi>> LoadAllProductsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Carga productos con sync_status = Pendiente (listos para enviar a la API).
     /// </summary>
     Task<List<ProductoApi>> LoadPendingProductsAsync(CancellationToken cancellationToken = default);

@@ -167,6 +167,189 @@ public class SendServiceTests
     }
 
     [Fact]
+    public async Task SendAllAsync_With40000Products_Sends80Batches()
+    {
+        // Arrange
+        var mockRepository = new Mock<IProductoRepository>();
+        var mockClient = new Mock<IComprasParaguaiClient>();
+
+        // Crear 40000 productos (requiere 80 lotes de 500).
+        var allProducts = Enumerable.Range(1, 40000)
+            .Select(i => new ProductoApi
+            {
+                Code = $"PROD-{i:D5}",
+                NameEs = $"Producto {i}",
+                NamePt = $"Produto {i}",
+                Price = 50 + (i % 100),
+                Stock = 10,
+                UrlImage = "https://img.test/img.png",
+                Link = $"https://shop.test/{i}"
+            })
+            .ToList();
+
+        mockRepository
+            .Setup(r => r.LoadAllProductsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(allProducts);
+
+        var successResponse = new ImportResponse { Success = true, ProductsProcessed = 1 };
+
+        mockClient
+            .Setup(c => c.ImportProductsAsync(It.IsAny<IEnumerable<ProductoApi>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(successResponse);
+
+        var service = new SendService(mockRepository.Object, mockClient.Object);
+
+        // Act
+        var result = await service.SendAllAsync(CancellationToken.None);
+
+        // Assert
+        Assert.Equal(40000, result.Sent);
+        Assert.Equal(0, result.Failed);
+        Assert.Equal(40000, result.Total);
+
+        // Verificar que ImportProductsAsync fue llamada 80 veces.
+        mockClient.Verify(
+            c => c.ImportProductsAsync(It.IsAny<IEnumerable<ProductoApi>>(), It.IsAny<CancellationToken>()),
+            Times.Exactly(80)
+        );
+    }
+
+    [Fact]
+    public async Task SendAllAsync_SendsAllProducts_InBatches()
+    {
+        // Arrange
+        var mockRepository = new Mock<IProductoRepository>();
+        var mockClient = new Mock<IComprasParaguaiClient>();
+
+        // Crear 2000 productos (requiere 4 lotes de 500).
+        var allProducts = Enumerable.Range(1, 2000)
+            .Select(i => new ProductoApi
+            {
+                Code = $"PROD-{i:D5}",
+                NameEs = $"Producto {i}",
+                NamePt = $"Produto {i}",
+                Price = 50 + (i % 100),
+                Stock = 10,
+                UrlImage = "https://img.test/img.png",
+                Link = $"https://shop.test/{i}"
+            })
+            .ToList();
+
+        mockRepository
+            .Setup(r => r.LoadAllProductsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(allProducts);
+
+        var successResponse = new ImportResponse { Success = true, ProductsProcessed = 1 };
+
+        mockClient
+            .Setup(c => c.ImportProductsAsync(It.IsAny<IEnumerable<ProductoApi>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(successResponse);
+
+        var service = new SendService(mockRepository.Object, mockClient.Object);
+
+        // Act
+        var result = await service.SendAllAsync(CancellationToken.None);
+
+        // Assert
+        Assert.Equal(2000, result.Sent);
+        Assert.Equal(0, result.Failed);
+        Assert.Equal(2000, result.Total);
+
+        // Verificar que ImportProductsAsync fue llamada 4 veces (4 lotes).
+        mockClient.Verify(
+            c => c.ImportProductsAsync(It.IsAny<IEnumerable<ProductoApi>>(), It.IsAny<CancellationToken>()),
+            Times.Exactly(4)
+        );
+
+        // Verificar que MarkAsSentAsync fue llamada 4 veces (una por cada lote).
+        mockRepository.Verify(
+            r => r.MarkAsSentAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()),
+            Times.Exactly(4)
+        );
+    }
+
+    [Fact]
+    public async Task SendAllAsync_EmptyAll_ReturnsZero()
+    {
+        // Arrange
+        var mockRepository = new Mock<IProductoRepository>();
+        var mockClient = new Mock<IComprasParaguaiClient>();
+
+        mockRepository
+            .Setup(r => r.LoadAllProductsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<ProductoApi>());
+
+        var service = new SendService(mockRepository.Object, mockClient.Object);
+
+        // Act
+        var result = await service.SendAllAsync(CancellationToken.None);
+
+        // Assert
+        Assert.Equal(0, result.Sent);
+        Assert.Equal(0, result.Failed);
+        Assert.Equal(0, result.Total);
+
+        mockClient.Verify(
+            c => c.ImportProductsAsync(It.IsAny<IEnumerable<ProductoApi>>(), It.IsAny<CancellationToken>()),
+            Times.Never
+        );
+    }
+
+    [Fact]
+    public async Task SendPendingAsync_AfterSendAll_OnlyFetchesChanges()
+    {
+        // Arrange
+        var mockRepository = new Mock<IProductoRepository>();
+        var mockClient = new Mock<IComprasParaguaiClient>();
+
+        // Simular que después de SendAll, solo hay algunos cambios pendientes.
+        var pendingProducts = Enumerable.Range(1, 150)
+            .Select(i => new ProductoApi
+            {
+                Code = $"PROD-CHANGED-{i:D3}",
+                NameEs = $"Producto Modificado {i}",
+                NamePt = $"Produto Modificado {i}",
+                Price = 99.99m,
+                Stock = 5,
+                UrlImage = "https://img.test/changed.png",
+                Link = $"https://shop.test/changed/{i}"
+            })
+            .ToList();
+
+        mockRepository
+            .Setup(r => r.LoadPendingProductsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(pendingProducts);
+
+        var successResponse = new ImportResponse { Success = true, ProductsProcessed = 1 };
+
+        mockClient
+            .Setup(c => c.ImportProductsAsync(It.IsAny<IEnumerable<ProductoApi>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(successResponse);
+
+        var service = new SendService(mockRepository.Object, mockClient.Object);
+
+        // Act
+        var result = await service.SendPendingAsync(CancellationToken.None);
+
+        // Assert
+        Assert.Equal(150, result.Sent);
+        Assert.Equal(0, result.Failed);
+        Assert.Equal(150, result.Total);
+
+        // Verificar que ImportProductsAsync fue llamada 1 vez (150 caben en 1 lote de 500).
+        mockClient.Verify(
+            c => c.ImportProductsAsync(It.IsAny<IEnumerable<ProductoApi>>(), It.IsAny<CancellationToken>()),
+            Times.Once
+        );
+
+        // Verificar que MarkAsSentAsync fue llamada 1 vez.
+        mockRepository.Verify(
+            r => r.MarkAsSentAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()),
+            Times.Once
+        );
+    }
+
+    [Fact]
     public async Task SendPendingAsync_EmptyPending_ReturnsZero()
     {
         // Arrange

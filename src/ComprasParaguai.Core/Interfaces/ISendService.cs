@@ -17,6 +17,12 @@ public record SendResult(
 public interface ISendService
 {
     /// <summary>
+    /// Envía TODOS los productos a Compras Paraguai (envío full inicial).
+    /// Batches de 500, marca todos como Enviado en BD.
+    /// </summary>
+    Task<SendResult> SendAllAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Envía todos los productos Pendiente a Compras Paraguai.
     /// Batches de 500, reintentos automáticos, actualiza BD.
     /// </summary>

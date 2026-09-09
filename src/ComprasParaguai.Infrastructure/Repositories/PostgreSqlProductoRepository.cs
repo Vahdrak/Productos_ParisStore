@@ -196,6 +196,44 @@ public class PostgreSqlProductoRepository : IProductoRepository
     }
 
     /// <summary>
+    /// Carga TODOS los productos de la BD (sin filtrar por sync_status).
+    /// Usado para envío inicial bulk a Compras Paraguai.
+    /// </summary>
+    public async Task<List<ProductoApi>> LoadAllProductsAsync(CancellationToken cancellationToken = default)
+    {
+        const string query = @"
+            SELECT
+                code AS Code,
+                name_es AS NameEs,
+                name_pt AS NamePt,
+                price AS Price,
+                price_iva AS PriceIva,
+                stock AS Stock,
+                brand AS Brand,
+                description_es AS DescriptionEs,
+                description_pt AS DescriptionPt,
+                url_image AS UrlImage,
+                link AS Link,
+                link_purchase AS LinkPurchase,
+                force_image_update AS ForceImageUpdate,
+                source_hash AS SourceHash,
+                sync_status AS SyncStatus
+            FROM productos
+            ORDER BY code
+        ";
+
+        using (var connection = new NpgsqlConnection(_connectionString))
+        {
+            await connection.OpenAsync(cancellationToken);
+            var products = await connection.QueryAsync<ProductoApi>(query);
+            var result = products.ToList();
+
+            _logger.LogInformation("Cargados {Count} productos totales", result.Count);
+            return result;
+        }
+    }
+
+    /// <summary>
     /// Carga productos con sync_status = Pendiente para enviar a la API.
     /// </summary>
     public async Task<List<ProductoApi>> LoadPendingProductsAsync(CancellationToken cancellationToken = default)
