@@ -1,0 +1,38 @@
+﻿  Determining projects to restore...
+  All projects are up-to-date for restore.
+  ComprasParaguai.Core -> C:\Users\MARIO\Documents\ComprasParaguai\src\ComprasParaguai.Core\bin\Debug\net8.0\ComprasParaguai.Core.dll
+  ComprasParaguai.UnitTests -> C:\Users\MARIO\Documents\ComprasParaguai\tests\ComprasParaguai.UnitTests\bin\Debug\net8.0\ComprasParaguai.UnitTests.dll
+Test run for C:\Users\MARIO\Documents\ComprasParaguai\tests\ComprasParaguai.UnitTests\bin\Debug\net8.0\ComprasParaguai.UnitTests.dll (.NETCoreApp,Version=v8.0)
+A total of 1 test files matched the specified pattern.
+dotnet : [xUnit.net 00:00:00.16]     
+ComprasParaguai.UnitTests.ProductoMapperServiceTests.MapAndValidate_DefaultImage_UsesDefault [FAIL]
+At line:1 char:350
++ ... Paraguai" ; dotnet test tests/ComprasParaguai.UnitTests/ComprasParagu ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([xUnit.net 00:0...sDefault [FAIL]:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+[xUnit.net 00:00:00.16]     
+ComprasParaguai.UnitTests.ProductoMapperServiceTests.MapAndValidate_ValidProduct_ReturnsMapped [FAIL]
+  Failed ComprasParaguai.UnitTests.ProductoMapperServiceTests.MapAndValidate_DefaultImage_UsesDefault [31 ms]
+  Error Message:
+   Assert.Equal() Failure: Strings differ
+           ↓ (pos 0)
+Expected: "https://images.example.com/default.png"
+Actual:   "sinimagen.jpg"
+           ↑ (pos 0)
+  Stack Trace:
+     at ComprasParaguai.UnitTests.ProductoMapperServiceTests.MapAndValidate_DefaultImage_UsesDefault() in C:\Users\MARIO\Documents\ComprasParaguai\tests\ComprasParaguai.UnitTests\ProductoMapperServiceTests.cs:line 90
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+  Failed ComprasParaguai.UnitTests.ProductoMapperServiceTests.MapAndValidate_ValidProduct_ReturnsMapped [1 ms]
+  Error Message:
+   Assert.StartsWith() Failure: String start does not match
+String:         "prod_976990101.webp"
+Expected start: "https://images.example.com/"
+  Stack Trace:
+     at ComprasParaguai.UnitTests.ProductoMapperServiceTests.MapAndValidate_ValidProduct_ReturnsMapped() in C:\Users\MARIO\Documents\ComprasParaguai\tests\ComprasParaguai.UnitTests\ProductoMapperServiceTests.cs:line 38
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+
+Failed!  - Failed:     2, Passed:    17, Skipped:     0, Total:    19, Duration: 106 ms - ComprasParaguai.UnitTests.dll (net8.0)
