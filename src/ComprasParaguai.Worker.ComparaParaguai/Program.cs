@@ -37,11 +37,12 @@ services.AddSingleton<IProductoRepository>(sp =>
     return new PostgreSqlProductoRepository(connectionString, logger);
 });
 
+// Registrar ComparaParaguaiHttpClient (que implementa IComprasParaguaiClient para SendService)
 services.AddSingleton<IComprasParaguaiClient>(sp =>
 {
     var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
-    var logger = sp.GetRequiredService<ILogger<ComprasParaguaiHttpClient>>();
-    return new ComprasParaguaiHttpClient(httpClient, apiToken, logger);
+    var logger = sp.GetRequiredService<ILogger<ComparaParaguaiHttpClient>>();
+    return new ComparaParaguaiHttpClient(httpClient, apiToken, logger);
 });
 
 // Registrar SendService (envío con lotes)
