@@ -34,7 +34,7 @@ public class ComprasParaguaiHttpClient : IComprasParaguaiClient
 
         // Configurar cliente base.
         _httpClient.BaseAddress = new Uri(BaseUrl);
-        _httpClient.DefaultRequestHeaders.Add("token", _token);
+        _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {_token}");
         _httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
         _httpClient.Timeout = TimeSpan.FromSeconds(TimeoutSeconds);
 
