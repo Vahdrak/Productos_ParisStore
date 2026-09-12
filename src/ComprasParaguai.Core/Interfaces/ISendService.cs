@@ -1,30 +1,30 @@
 namespace ComprasParaguai.Core.Interfaces;
 
 /// <summary>
-/// Resultado del envío de productos a Compras Paraguai.
+/// Resultado de un envío de productos.
 /// </summary>
 public record SendResult(
     int Sent,          // Enviados exitosamente
     int Failed,        // Fallaron (error de validación o API)
     int Total,         // Total intentado
     List<string> ErrorCodes  // Códigos que fallaron
-);
+)
+{
+    public static SendResult Empty => new(0, 0, 0, new());
+}
 
 /// <summary>
-/// Servicio de envío: toma productos Pendiente, los batca (500), reintenta.
-/// Actualiza BD con sync_status según resultado.
+/// Servicio de envío a un destino (ver SendOptions.Target): batcha, envía, actualiza la
+/// columna de estado de ese destino.
 /// </summary>
 public interface ISendService
 {
-    /// <summary>
-    /// Envía TODOS los productos a Compras Paraguai (envío full inicial).
-    /// Batches de 500, marca todos como Enviado en BD.
-    /// </summary>
+    /// <summary>Envía TODOS los productos (envío inicial completo).</summary>
     Task<SendResult> SendAllAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Envía todos los productos Pendiente a Compras Paraguai.
-    /// Batches de 500, reintentos automáticos, actualiza BD.
-    /// </summary>
+    /// <summary>Envía solo los productos Pendiente del destino.</summary>
     Task<SendResult> SendPendingAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Envía N productos al azar (prueba real contra la API).</summary>
+    Task<SendResult> SendSampleAsync(int count, CancellationToken cancellationToken = default);
 }

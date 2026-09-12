@@ -27,7 +27,7 @@ public class SendServiceTests
         };
 
         mockRepository
-            .Setup(r => r.LoadPendingProductsAsync(It.IsAny<CancellationToken>()))
+            .Setup(r => r.LoadPendingProductsAsync(It.IsAny<SyncTarget>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<ProductoApi> { product });
 
         var successResponse = new ImportResponse
@@ -42,7 +42,7 @@ public class SendServiceTests
             .Setup(c => c.ImportProductsAsync(It.IsAny<IEnumerable<ProductoApi>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(successResponse);
 
-        var service = new SendService(mockRepository.Object, mockClient.Object);
+        var service = new SendService(mockRepository.Object, mockClient.Object, SendOptions.ComprasParaguai);
 
         // Act
         var result = await service.SendPendingAsync(CancellationToken.None);
@@ -56,6 +56,7 @@ public class SendServiceTests
             r => r.MarkAsSentAsync(
                 It.Is<IEnumerable<string>>(c => c.Contains("TEST-001")),
                 It.IsAny<DateTime>(),
+                It.IsAny<SyncTarget>(),
                 It.IsAny<CancellationToken>()),
             Times.Once
         );
@@ -80,7 +81,7 @@ public class SendServiceTests
         };
 
         mockRepository
-            .Setup(r => r.LoadPendingProductsAsync(It.IsAny<CancellationToken>()))
+            .Setup(r => r.LoadPendingProductsAsync(It.IsAny<SyncTarget>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<ProductoApi> { product });
 
         var failureResponse = new ImportResponse
@@ -99,7 +100,7 @@ public class SendServiceTests
             .Setup(c => c.ImportProductsAsync(It.IsAny<IEnumerable<ProductoApi>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(failureResponse);
 
-        var service = new SendService(mockRepository.Object, mockClient.Object);
+        var service = new SendService(mockRepository.Object, mockClient.Object, SendOptions.ComprasParaguai);
 
         // Act
         var result = await service.SendPendingAsync(CancellationToken.None);
@@ -114,6 +115,7 @@ public class SendServiceTests
             r => r.MarkAsErrorAsync(
                 "INVALID-001",
                 It.IsAny<string>(),
+                It.IsAny<SyncTarget>(),
                 It.IsAny<CancellationToken>()),
             Times.Once
         );
@@ -141,7 +143,7 @@ public class SendServiceTests
             .ToList();
 
         mockRepository
-            .Setup(r => r.LoadPendingProductsAsync(It.IsAny<CancellationToken>()))
+            .Setup(r => r.LoadPendingProductsAsync(It.IsAny<SyncTarget>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(products);
 
         var successResponse = new ImportResponse { Success = true, ProductsProcessed = 1 };
@@ -150,7 +152,7 @@ public class SendServiceTests
             .Setup(c => c.ImportProductsAsync(It.IsAny<IEnumerable<ProductoApi>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(successResponse);
 
-        var service = new SendService(mockRepository.Object, mockClient.Object);
+        var service = new SendService(mockRepository.Object, mockClient.Object, SendOptions.ComprasParaguai);
 
         // Act
         var result = await service.SendPendingAsync(CancellationToken.None);
@@ -197,7 +199,7 @@ public class SendServiceTests
             .Setup(c => c.ImportProductsAsync(It.IsAny<IEnumerable<ProductoApi>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(successResponse);
 
-        var service = new SendService(mockRepository.Object, mockClient.Object);
+        var service = new SendService(mockRepository.Object, mockClient.Object, SendOptions.ComprasParaguai);
 
         // Act
         var result = await service.SendAllAsync(CancellationToken.None);
@@ -245,7 +247,7 @@ public class SendServiceTests
             .Setup(c => c.ImportProductsAsync(It.IsAny<IEnumerable<ProductoApi>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(successResponse);
 
-        var service = new SendService(mockRepository.Object, mockClient.Object);
+        var service = new SendService(mockRepository.Object, mockClient.Object, SendOptions.ComprasParaguai);
 
         // Act
         var result = await service.SendAllAsync(CancellationToken.None);
@@ -263,7 +265,7 @@ public class SendServiceTests
 
         // Verificar que MarkAsSentAsync fue llamada 4 veces (una por cada lote).
         mockRepository.Verify(
-            r => r.MarkAsSentAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()),
+            r => r.MarkAsSentAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<DateTime>(), It.IsAny<SyncTarget>(), It.IsAny<CancellationToken>()),
             Times.Exactly(4)
         );
     }
@@ -279,7 +281,7 @@ public class SendServiceTests
             .Setup(r => r.LoadAllProductsAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<ProductoApi>());
 
-        var service = new SendService(mockRepository.Object, mockClient.Object);
+        var service = new SendService(mockRepository.Object, mockClient.Object, SendOptions.ComprasParaguai);
 
         // Act
         var result = await service.SendAllAsync(CancellationToken.None);
@@ -317,7 +319,7 @@ public class SendServiceTests
             .ToList();
 
         mockRepository
-            .Setup(r => r.LoadPendingProductsAsync(It.IsAny<CancellationToken>()))
+            .Setup(r => r.LoadPendingProductsAsync(It.IsAny<SyncTarget>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(pendingProducts);
 
         var successResponse = new ImportResponse { Success = true, ProductsProcessed = 1 };
@@ -326,7 +328,7 @@ public class SendServiceTests
             .Setup(c => c.ImportProductsAsync(It.IsAny<IEnumerable<ProductoApi>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(successResponse);
 
-        var service = new SendService(mockRepository.Object, mockClient.Object);
+        var service = new SendService(mockRepository.Object, mockClient.Object, SendOptions.ComprasParaguai);
 
         // Act
         var result = await service.SendPendingAsync(CancellationToken.None);
@@ -344,7 +346,7 @@ public class SendServiceTests
 
         // Verificar que MarkAsSentAsync fue llamada 1 vez.
         mockRepository.Verify(
-            r => r.MarkAsSentAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()),
+            r => r.MarkAsSentAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<DateTime>(), It.IsAny<SyncTarget>(), It.IsAny<CancellationToken>()),
             Times.Once
         );
     }
@@ -357,10 +359,10 @@ public class SendServiceTests
         var mockClient = new Mock<IComprasParaguaiClient>();
 
         mockRepository
-            .Setup(r => r.LoadPendingProductsAsync(It.IsAny<CancellationToken>()))
+            .Setup(r => r.LoadPendingProductsAsync(It.IsAny<SyncTarget>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<ProductoApi>());
 
-        var service = new SendService(mockRepository.Object, mockClient.Object);
+        var service = new SendService(mockRepository.Object, mockClient.Object, SendOptions.ComprasParaguai);
 
         // Act
         var result = await service.SendPendingAsync(CancellationToken.None);
@@ -374,5 +376,84 @@ public class SendServiceTests
             c => c.ImportProductsAsync(It.IsAny<IEnumerable<ProductoApi>>(), It.IsAny<CancellationToken>()),
             Times.Never
         );
+    }
+
+    [Fact]
+    public async Task SendPendingAsync_ComparaTarget_ReadsAndWritesOnlyComparaColumns()
+    {
+        var mockRepository = new Mock<IProductoRepository>();
+        var mockClient = new Mock<IComprasParaguaiClient>();
+
+        var ok = new ProductoApi { Code = "OK-1", NamePt = "x", UrlImage = "u", Link = "l", Price = 10, Stock = 1 };
+        var bad = new ProductoApi { Code = "BAD-1", NamePt = "x", UrlImage = "u", Link = "l", Price = 10, Stock = 1 };
+
+        mockRepository
+            .Setup(r => r.LoadPendingProductsAsync(SyncTarget.ComparaParaguai, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<ProductoApi> { ok, bad });
+
+        mockClient
+            .SetupSequence(c => c.ImportProductsAsync(It.IsAny<IEnumerable<ProductoApi>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ImportResponse { Success = true })
+            .ReturnsAsync(new ImportResponse { Success = false, Message = "boom" });
+
+        // BatchSize 1 para que cada producto sea su propio lote.
+        var service = new SendService(mockRepository.Object, mockClient.Object,
+            new SendOptions(SyncTarget.ComparaParaguai, BatchSize: 1, DelayMs: 0));
+
+        var result = await service.SendPendingAsync(CancellationToken.None);
+
+        Assert.Equal(1, result.Sent);
+        Assert.Equal(1, result.Failed);
+
+        mockRepository.Verify(r => r.MarkAsSentAsync(
+            It.Is<IEnumerable<string>>(c => c.Contains("OK-1")), It.IsAny<DateTime>(),
+            SyncTarget.ComparaParaguai, It.IsAny<CancellationToken>()), Times.Once);
+        mockRepository.Verify(r => r.MarkAsErrorAsync(
+            "BAD-1", "boom", SyncTarget.ComparaParaguai, It.IsAny<CancellationToken>()), Times.Once);
+
+        // Nunca toca la columna de Compras.
+        mockRepository.Verify(r => r.LoadPendingProductsAsync(SyncTarget.ComprasParaguai, It.IsAny<CancellationToken>()), Times.Never);
+        mockRepository.Verify(r => r.MarkAsSentAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<DateTime>(),
+            SyncTarget.ComprasParaguai, It.IsAny<CancellationToken>()), Times.Never);
+        mockRepository.Verify(r => r.MarkAsErrorAsync(It.IsAny<string>(), It.IsAny<string>(),
+            SyncTarget.ComprasParaguai, It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SendSampleAsync_LoadsRandomAndSends()
+    {
+        var mockRepository = new Mock<IProductoRepository>();
+        var mockClient = new Mock<IComprasParaguaiClient>();
+
+        var sample = Enumerable.Range(1, 500)
+            .Select(i => new ProductoApi { Code = $"R-{i}", NamePt = "x", UrlImage = "u", Link = "l", Price = 10, Stock = 1 })
+            .ToList();
+
+        mockRepository
+            .Setup(r => r.LoadRandomProductsAsync(500, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(sample);
+        mockClient
+            .Setup(c => c.ImportProductsAsync(It.IsAny<IEnumerable<ProductoApi>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ImportResponse { Success = true });
+
+        var service = new SendService(mockRepository.Object, mockClient.Object, SendOptions.ComparaParaguai);
+
+        var result = await service.SendSampleAsync(500, CancellationToken.None);
+
+        Assert.Equal(500, result.Sent);
+        Assert.Equal(500, result.Total);
+        mockRepository.Verify(r => r.LoadAllProductsAsync(It.IsAny<CancellationToken>()), Times.Never);
+        mockRepository.Verify(r => r.LoadPendingProductsAsync(It.IsAny<SyncTarget>(), It.IsAny<CancellationToken>()), Times.Never);
+        mockClient.Verify(c => c.ImportProductsAsync(It.IsAny<IEnumerable<ProductoApi>>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public void SendOptions_Defaults_MatchClientLimits()
+    {
+        Assert.Equal(500, SendOptions.ComprasParaguai.BatchSize);
+        Assert.Equal(SyncTarget.ComprasParaguai, SendOptions.ComprasParaguai.Target);
+        Assert.Equal(1000, SendOptions.ComparaParaguai.BatchSize);
+        Assert.Equal(SyncTarget.ComparaParaguai, SendOptions.ComparaParaguai.Target);
+        Assert.True(SendOptions.ComparaParaguai.DelayMs > 0);
     }
 }

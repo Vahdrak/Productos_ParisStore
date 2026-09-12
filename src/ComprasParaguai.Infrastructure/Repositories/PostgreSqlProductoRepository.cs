@@ -45,7 +45,7 @@ public class PostgreSqlProductoRepository : IProductoRepository
     /// <summary>
     /// Upsert de ProductoApi usando COPY a staging + INSERT ... ON CONFLICT.
     /// Más rápido que fila por fila.
-    /// Marca todos como sync_status = 0 (Pendiente).
+    /// Marca todos como Pendiente (0) en sync_status y sync_compara_status.
     /// </summary>
     public async Task UpsertProductsAsync(IEnumerable<ProductoApi> products, DateTime now, CancellationToken cancellationToken = default)
     {
@@ -134,14 +134,15 @@ public class PostgreSqlProductoRepository : IProductoRepository
                 INSERT INTO productos (
                     code, name_es, name_pt, price, price_iva, stock, brand,
                     description_es, description_pt, url_image, link, link_purchase,
-                    force_image_update, source_hash, sync_status, last_changed_at, updated_at,
+                    force_image_update, source_hash, sync_status, sync_compara_status, last_changed_at, updated_at,
                     categoria_id
                 )
                 SELECT
                     ps.code, ps.name_es, ps.name_pt, ps.price, ps.price_iva, ps.stock, ps.brand,
                     ps.description_es, ps.description_pt, ps.url_image, ps.link, ps.link_purchase,
                     ps.force_image_update, ps.source_hash,
-                    0 AS sync_status,  -- Pendiente
+                    0 AS sync_status,  -- Pendiente (Compras)
+                    0 AS sync_compara_status,  -- Pendiente (Compara)
                     @now AS last_changed_at,
                     @now AS updated_at,
                     c.id AS categoria_id
@@ -161,7 +162,8 @@ public class PostgreSqlProductoRepository : IProductoRepository
                     link_purchase = EXCLUDED.link_purchase,
                     force_image_update = EXCLUDED.force_image_update,
                     source_hash = EXCLUDED.source_hash,
-                    sync_status = 0,  -- Resetear a Pendiente
+                    sync_status = 0,  -- Resetear a Pendiente (Compras)
+                    sync_compara_status = 0,  -- Resetear a Pendiente (Compara)
                     last_changed_at = @now,
                     updated_at = @now,
                     categoria_id = EXCLUDED.categoria_id;
@@ -183,7 +185,7 @@ public class PostgreSqlProductoRepository : IProductoRepository
 
         const string query = @"
             UPDATE productos
-            SET stock = 0, sync_status = 0, last_changed_at = @now, updated_at = @now
+            SET stock = 0, sync_status = 0, sync_compara_status = 0, last_changed_at = @now, updated_at = @now
             WHERE code = ANY(@codes)
         ";
 
@@ -195,14 +197,7 @@ public class PostgreSqlProductoRepository : IProductoRepository
         }
     }
 
-    /// <summary>
-    /// Carga TODOS los productos de la BD (sin filtrar por sync_status).
-    /// Usado para envío inicial bulk a Compras Paraguai.
-    /// </summary>
-    public async Task<List<ProductoApi>> LoadAllProductsAsync(CancellationToken cancellationToken = default)
-    {
-        const string query = @"
-            SELECT
+    private const string ProductoApiColumns = @"
                 code AS Code,
                 name_es AS NameEs,
                 name_pt AS NamePt,
@@ -217,16 +212,27 @@ public class PostgreSqlProductoRepository : IProductoRepository
                 link_purchase AS LinkPurchase,
                 force_image_update AS ForceImageUpdate,
                 source_hash AS SourceHash,
-                sync_status AS SyncStatus
-            FROM productos
-            ORDER BY code
-        ";
+                sync_status AS SyncStatus";
+
+    // Columnas de estado por destino. Switch cerrado: los nombres nunca vienen de input externo.
+    private static (string Status, string SentAt, string Error) Cols(SyncTarget target) => target switch
+    {
+        SyncTarget.ComprasParaguai => ("sync_status", "last_sent_at", "last_error"),
+        SyncTarget.ComparaParaguai => ("sync_compara_status", "last_sent_compara_at", "last_error_compara"),
+        _ => throw new ArgumentOutOfRangeException(nameof(target), target, null)
+    };
+
+    /// <summary>
+    /// Carga TODOS los productos de la BD (sin filtrar por estado).
+    /// </summary>
+    public async Task<List<ProductoApi>> LoadAllProductsAsync(CancellationToken cancellationToken = default)
+    {
+        string query = $"SELECT {ProductoApiColumns} FROM productos ORDER BY code";
 
         using (var connection = new NpgsqlConnection(_connectionString))
         {
             await connection.OpenAsync(cancellationToken);
-            var products = await connection.QueryAsync<ProductoApi>(query);
-            var result = products.ToList();
+            var result = (await connection.QueryAsync<ProductoApi>(query)).ToList();
 
             _logger.LogInformation("Cargados {Count} productos totales", result.Count);
             return result;
@@ -234,55 +240,68 @@ public class PostgreSqlProductoRepository : IProductoRepository
     }
 
     /// <summary>
-    /// Carga productos con sync_status = Pendiente para enviar a la API.
+    /// Carga N productos al azar (envíos de prueba).
     /// </summary>
-    public async Task<List<ProductoApi>> LoadPendingProductsAsync(CancellationToken cancellationToken = default)
+    public async Task<List<ProductoApi>> LoadRandomProductsAsync(int count, CancellationToken cancellationToken = default)
     {
-        const string query = @"
-            SELECT
-                code AS Code,
-                name_es AS NameEs,
-                name_pt AS NamePt,
-                price AS Price,
-                price_iva AS PriceIva,
-                stock AS Stock,
-                brand AS Brand,
-                description_es AS DescriptionEs,
-                description_pt AS DescriptionPt,
-                url_image AS UrlImage,
-                link AS Link,
-                link_purchase AS LinkPurchase,
-                force_image_update AS ForceImageUpdate,
-                source_hash AS SourceHash,
-                sync_status AS SyncStatus
-            FROM productos
-            WHERE sync_status = 0
-            ORDER BY code
-        ";
+        string query = $"SELECT {ProductoApiColumns} FROM productos ORDER BY random() LIMIT @count";
 
         using (var connection = new NpgsqlConnection(_connectionString))
         {
             await connection.OpenAsync(cancellationToken);
-            var products = await connection.QueryAsync<ProductoApi>(query);
-            var result = products.ToList();
+            var result = (await connection.QueryAsync<ProductoApi>(query, new { count })).ToList();
 
-            _logger.LogInformation("Cargados {Count} productos Pendiente", result.Count);
+            _logger.LogInformation("Cargados {Count} productos al azar", result.Count);
             return result;
         }
     }
 
     /// <summary>
-    /// Marca productos como Enviado (sync_status = 1).
+    /// Carga productos Pendiente (status = 0) del destino.
     /// </summary>
-    public async Task MarkAsSentAsync(IEnumerable<string> codes, DateTime now, CancellationToken cancellationToken = default)
+    public async Task<List<ProductoApi>> LoadPendingProductsAsync(SyncTarget target = SyncTarget.ComprasParaguai, CancellationToken cancellationToken = default)
+    {
+        var c = Cols(target);
+        string query = $"SELECT {ProductoApiColumns} FROM productos WHERE {c.Status} = 0 ORDER BY code";
+
+        using (var connection = new NpgsqlConnection(_connectionString))
+        {
+            await connection.OpenAsync(cancellationToken);
+            var result = (await connection.QueryAsync<ProductoApi>(query)).ToList();
+
+            _logger.LogInformation("Cargados {Count} productos Pendiente para {Target}", result.Count, target);
+            return result;
+        }
+    }
+
+    /// <summary>
+    /// Cuenta productos Pendiente (status = 0) del destino.
+    /// </summary>
+    public async Task<int> CountPendingProductsAsync(SyncTarget target = SyncTarget.ComprasParaguai, CancellationToken cancellationToken = default)
+    {
+        var c = Cols(target);
+        string query = $"SELECT COUNT(*) FROM productos WHERE {c.Status} = 0";
+
+        using (var connection = new NpgsqlConnection(_connectionString))
+        {
+            await connection.OpenAsync(cancellationToken);
+            return await connection.ExecuteScalarAsync<int>(query);
+        }
+    }
+
+    /// <summary>
+    /// Marca productos como Enviado (status = 1) en la columna del destino.
+    /// </summary>
+    public async Task MarkAsSentAsync(IEnumerable<string> codes, DateTime now, SyncTarget target = SyncTarget.ComprasParaguai, CancellationToken cancellationToken = default)
     {
         var codeList = codes.ToList();
         if (!codeList.Any())
             return;
 
-        const string query = @"
+        var c = Cols(target);
+        string query = $@"
             UPDATE productos
-            SET sync_status = 1, last_sent_at = @now, updated_at = @now
+            SET {c.Status} = 1, {c.SentAt} = @now, updated_at = @now
             WHERE code = ANY(@codes)
         ";
 
@@ -290,18 +309,19 @@ public class PostgreSqlProductoRepository : IProductoRepository
         {
             await connection.OpenAsync(cancellationToken);
             int affected = await connection.ExecuteAsync(query, new { codes = codeList.ToArray(), now });
-            _logger.LogInformation("Marcados {Count} productos como Enviado", affected);
+            _logger.LogInformation("Marcados {Count} productos como Enviado a {Target}", affected, target);
         }
     }
 
     /// <summary>
-    /// Marca un producto como Error.
+    /// Marca un producto como Error (status = 2) en la columna del destino.
     /// </summary>
-    public async Task MarkAsErrorAsync(string code, string errorMessage, CancellationToken cancellationToken = default)
+    public async Task MarkAsErrorAsync(string code, string errorMessage, SyncTarget target = SyncTarget.ComprasParaguai, CancellationToken cancellationToken = default)
     {
-        const string query = @"
+        var c = Cols(target);
+        string query = $@"
             UPDATE productos
-            SET sync_status = 2, last_error = @error, updated_at = now()
+            SET {c.Status} = 2, {c.Error} = @error, updated_at = now()
             WHERE code = @code
         ";
 
@@ -309,34 +329,34 @@ public class PostgreSqlProductoRepository : IProductoRepository
         {
             await connection.OpenAsync(cancellationToken);
             await connection.ExecuteAsync(query, new { code, error = errorMessage });
-            _logger.LogWarning("Producto {Code} marcado como Error: {Error}", code, errorMessage);
+            _logger.LogWarning("Producto {Code} marcado como Error en {Target}: {Error}", code, target, errorMessage);
         }
     }
 
     /// <summary>
-    /// Carga productos con sync_status = Error (con mensaje de error).
+    /// Carga productos en Error (status = 2) del destino, con mensaje de error.
     /// </summary>
-    public async Task<List<ProductoWithErrorDto>> LoadErrorProductsAsync(CancellationToken cancellationToken = default)
+    public async Task<List<ProductoWithErrorDto>> LoadErrorProductsAsync(SyncTarget target = SyncTarget.ComprasParaguai, CancellationToken cancellationToken = default)
     {
-        const string query = @"
+        var c = Cols(target);
+        string query = $@"
             SELECT
                 code AS Code,
                 name_es AS NameEs,
                 name_pt AS NamePt,
-                last_error AS LastError,
+                {c.Error} AS LastError,
                 updated_at AS LastErrorAt
             FROM productos
-            WHERE sync_status = 2
+            WHERE {c.Status} = 2
             ORDER BY updated_at DESC
         ";
 
         using (var connection = new NpgsqlConnection(_connectionString))
         {
             await connection.OpenAsync(cancellationToken);
-            var errors = await connection.QueryAsync<ProductoWithErrorDto>(query);
-            var result = errors.ToList();
+            var result = (await connection.QueryAsync<ProductoWithErrorDto>(query)).ToList();
 
-            _logger.LogInformation("Cargados {Count} productos con Error", result.Count);
+            _logger.LogInformation("Cargados {Count} productos con Error en {Target}", result.Count, target);
             return result;
         }
     }

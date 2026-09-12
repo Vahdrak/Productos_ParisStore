@@ -16,7 +16,7 @@ public interface IProductoRepository
     /// <summary>
     /// Guarda/actualiza un lote de ProductoApi en la BD (upsert).
     /// Usa COPY a staging + INSERT ... ON CONFLICT para rendimiento masivo.
-    /// Marca todos como sync_status = Pendiente.
+    /// Marca todos como Pendiente en ambas columnas de estado (sync_status y sync_compara_status).
     /// Dispara el trigger de auditoría en los UPDATE.
     /// </summary>
     /// <param name="products">Productos a insertar/actualizar.</param>
@@ -24,36 +24,46 @@ public interface IProductoRepository
     Task UpsertProductsAsync(IEnumerable<ProductoApi> products, DateTime now, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Marca productos como no disponibles (baja): stock=0, sync_status=Pendiente.
+    /// Marca productos como no disponibles (baja): stock=0, Pendiente en ambas columnas de estado.
     /// Usado en reconciliación diaria para bajas detectadas.
     /// </summary>
     Task MarkAsUnavailableAsync(IEnumerable<string> codes, DateTime now, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Carga TODOS los productos de la BD (sin filtrar por sync_status).
-    /// Usado para envío inicial bulk a Compras Paraguai.
+    /// Carga TODOS los productos de la BD (sin filtrar por estado).
+    /// Usado para el envío inicial completo a un destino.
     /// </summary>
     Task<List<ProductoApi>> LoadAllProductsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Carga productos con sync_status = Pendiente (listos para enviar a la API).
+    /// Carga N productos al azar (para envíos de prueba).
     /// </summary>
-    Task<List<ProductoApi>> LoadPendingProductsAsync(CancellationToken cancellationToken = default);
+    Task<List<ProductoApi>> LoadRandomProductsAsync(int count, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Carga productos con sync_status = Error (con mensaje de error).
+    /// Carga productos Pendiente (status = 0) para el destino indicado.
     /// </summary>
-    Task<List<ProductoWithErrorDto>> LoadErrorProductsAsync(CancellationToken cancellationToken = default);
+    Task<List<ProductoApi>> LoadPendingProductsAsync(SyncTarget target = SyncTarget.ComprasParaguai, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Marca un lote de productos como Enviado (sync_status = 1, last_sent_at = now).
+    /// Cuenta productos Pendiente (status = 0) para el destino indicado.
     /// </summary>
-    Task MarkAsSentAsync(IEnumerable<string> codes, DateTime now, CancellationToken cancellationToken = default);
+    Task<int> CountPendingProductsAsync(SyncTarget target = SyncTarget.ComprasParaguai, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Marca un producto como Error (sync_status = 2, last_error = mensaje).
+    /// Carga productos en Error (status = 2) para el destino indicado, con mensaje de error.
     /// </summary>
-    Task MarkAsErrorAsync(string code, string errorMessage, CancellationToken cancellationToken = default);
+    Task<List<ProductoWithErrorDto>> LoadErrorProductsAsync(SyncTarget target = SyncTarget.ComprasParaguai, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Marca un lote como Enviado (status = 1, sent_at = now) en la columna del destino.
+    /// </summary>
+    Task MarkAsSentAsync(IEnumerable<string> codes, DateTime now, SyncTarget target = SyncTarget.ComprasParaguai, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Marca un producto como Error (status = 2, error = mensaje) en la columna del destino.
+    /// </summary>
+    Task MarkAsErrorAsync(string code, string errorMessage, SyncTarget target = SyncTarget.ComprasParaguai, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Carga un producto por código (valores actuales).

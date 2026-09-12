@@ -29,7 +29,7 @@ public class ProductosController : ControllerBase
     {
         try
         {
-            var products = await _repository.LoadPendingProductsAsync(cancellationToken);
+            var products = await _repository.LoadPendingProductsAsync(SyncTarget.ComprasParaguai, cancellationToken);
 
             var grouped = products
                 .GroupBy(p => p.Brand ?? "Sin Categoría")
@@ -86,7 +86,7 @@ public class ProductosController : ControllerBase
     {
         try
         {
-            var products = await _repository.LoadPendingProductsAsync(cancellationToken);
+            var products = await _repository.LoadPendingProductsAsync(SyncTarget.ComprasParaguai, cancellationToken);
             return Ok(products);
         }
         catch (Exception ex)
@@ -272,7 +272,7 @@ public class ProductosController : ControllerBase
     {
         try
         {
-            var errors = await _repository.LoadErrorProductsAsync(cancellationToken);
+            var errors = await _repository.LoadErrorProductsAsync(SyncTarget.ComprasParaguai, cancellationToken);
             return Ok(errors);
         }
         catch (Exception ex)

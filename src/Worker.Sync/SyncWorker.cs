@@ -1,10 +1,10 @@
 using ComprasParaguai.Core.Interfaces;
 using Microsoft.Extensions.Hosting;
 
-namespace ComprasParaguai.Worker;
+namespace Worker.Sync;
 
 /// <summary>
-/// Worker hosted service: ejecuta sync cada N minutos (por defecto 15).
+/// Worker hosted service: ejecuta sync cada N minutos (Sync:IntervalMinutes, por defecto 120).
 /// Ejecuta reconciliación diaria una vez al día.
 /// </summary>
 public class SyncWorker : IHostedService

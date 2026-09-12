@@ -19,12 +19,12 @@ public class ComprasParaguaiHttpClient : IComprasParaguaiClient
     private readonly ILogger<ComprasParaguaiHttpClient> _logger;
     private readonly IAsyncPolicy<HttpResponseMessage> _retryPolicy;
 
-    private const string BaseUrl = "https://products.comprasparaguai.com.br";
     private const int MaxProductsPerBatch = 500;
     private const int TimeoutSeconds = 30;
 
     public ComprasParaguaiHttpClient(
         HttpClient httpClient,
+        string baseUrl,
         string token,
         ILogger<ComprasParaguaiHttpClient> logger)
     {
@@ -33,7 +33,7 @@ public class ComprasParaguaiHttpClient : IComprasParaguaiClient
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         // Configurar cliente base.
-        _httpClient.BaseAddress = new Uri(BaseUrl);
+        _httpClient.BaseAddress = new Uri(baseUrl ?? throw new ArgumentNullException(nameof(baseUrl)));
         _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {_token}");
         _httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
         _httpClient.Timeout = TimeSpan.FromSeconds(TimeoutSeconds);

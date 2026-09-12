@@ -1,3 +1,4 @@
+using ComprasParaguai.Core.Models;
 using ComprasParaguai.Core.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using static ComprasParaguai.Core.Interfaces.ISyncRunRepository;
@@ -31,7 +32,7 @@ public class DashboardController : ControllerBase
     {
         try
         {
-            var pending = await _productoRepository.LoadPendingProductsAsync(cancellationToken);
+            var pending = await _productoRepository.LoadPendingProductsAsync(SyncTarget.ComprasParaguai, cancellationToken);
             var lastSync = await _syncRunRepository.GetLastSuccessfulSyncAsync(cancellationToken);
             var lastSyncRun = await _syncRunRepository.GetLastSyncRunAsync(cancellationToken);
 

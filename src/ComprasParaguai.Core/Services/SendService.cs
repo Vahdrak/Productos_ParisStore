@@ -4,54 +4,48 @@ using ComprasParaguai.Core.Models;
 namespace ComprasParaguai.Core.Services;
 
 /// <summary>
-/// Orquesta el envío de productos a Compras Paraguai.
-/// Batca (500 por lote), reintenta, actualiza BD.
+/// Orquesta el envío de productos a un destino (SendOptions.Target).
+/// Batcha, envía por el cliente, y marca Enviado/Error en la columna de estado de ese destino.
 /// </summary>
 public class SendService : ISendService
 {
     private readonly IProductoRepository _repository;
     private readonly IComprasParaguaiClient _client;
-    private const int BatchSize = 1000;
+    private readonly SendOptions _options;
 
-    public SendService(IProductoRepository repository, IComprasParaguaiClient client)
+    public SendService(IProductoRepository repository, IComprasParaguaiClient client, SendOptions options)
     {
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _client = client ?? throw new ArgumentNullException(nameof(client));
+        _options = options ?? throw new ArgumentNullException(nameof(options));
     }
 
-    /// <summary>
-    /// Carga TODOS los productos, los batca, envía cada lote, marca como Enviado en BD.
-    /// Usado para envío full inicial a Compara Paraguai (delay 900ms para respetar rate limit).
-    /// </summary>
     public async Task<SendResult> SendAllAsync(CancellationToken cancellationToken = default)
     {
         var all = await _repository.LoadAllProductsAsync(cancellationToken);
-        if (!all.Any())
-            return new SendResult(0, 0, 0, new());
-
-        return await SendBatchesAsync(all, delayMs: 900, cancellationToken);
+        return await SendBatchesAsync(all, cancellationToken);
     }
 
-    /// <summary>
-    /// Carga productos Pendiente, los batca, envía cada lote, actualiza BD.
-    /// Delay 100ms ya que típicamente son pocos productos (cambios).
-    /// </summary>
     public async Task<SendResult> SendPendingAsync(CancellationToken cancellationToken = default)
     {
-        var pending = await _repository.LoadPendingProductsAsync(cancellationToken);
-        if (!pending.Any())
-            return new SendResult(0, 0, 0, new());
-
-        return await SendBatchesAsync(pending, delayMs: 100, cancellationToken);
+        var pending = await _repository.LoadPendingProductsAsync(_options.Target, cancellationToken);
+        return await SendBatchesAsync(pending, cancellationToken);
     }
 
-    private async Task<SendResult> SendBatchesAsync(IEnumerable<ProductoApi> products, int delayMs, CancellationToken cancellationToken)
+    public async Task<SendResult> SendSampleAsync(int count, CancellationToken cancellationToken = default)
     {
+        var sample = await _repository.LoadRandomProductsAsync(count, cancellationToken);
+        return await SendBatchesAsync(sample, cancellationToken);
+    }
+
+    private async Task<SendResult> SendBatchesAsync(List<ProductoApi> products, CancellationToken cancellationToken)
+    {
+        if (products.Count == 0)
+            return SendResult.Empty;
+
         int sent = 0, failed = 0;
         var failedCodes = new List<string>();
-        var all = products.ToList();
-
-        var batches = all.Chunk(BatchSize).ToList();
+        var batches = products.Chunk(_options.BatchSize).ToList();
 
         for (int i = 0; i < batches.Count; i++)
         {
@@ -63,7 +57,7 @@ public class SendService : ISendService
                 if (response.Success)
                 {
                     var codes = batch.Select(p => p.Code).ToList();
-                    await _repository.MarkAsSentAsync(codes, DateTime.UtcNow, cancellationToken);
+                    await _repository.MarkAsSentAsync(codes, DateTime.UtcNow, _options.Target, cancellationToken);
                     sent += batch.Length;
                 }
                 else
@@ -75,7 +69,7 @@ public class SendService : ISendService
                         if (validationError != null)
                             errorMsg = $"{validationError.Field}: {validationError.Error}";
 
-                        await _repository.MarkAsErrorAsync(product.Code, errorMsg, cancellationToken);
+                        await _repository.MarkAsErrorAsync(product.Code, errorMsg, _options.Target, cancellationToken);
                         failedCodes.Add(product.Code);
                     }
                     failed += batch.Length;
@@ -85,16 +79,16 @@ public class SendService : ISendService
             {
                 foreach (var product in batch)
                 {
-                    await _repository.MarkAsErrorAsync(product.Code, ex.Message, cancellationToken);
+                    await _repository.MarkAsErrorAsync(product.Code, ex.Message, _options.Target, cancellationToken);
                     failedCodes.Add(product.Code);
                 }
                 failed += batch.Length;
             }
 
-            if (i < batches.Count - 1)
-                await Task.Delay(delayMs, cancellationToken);
+            if (_options.DelayMs > 0 && i < batches.Count - 1)
+                await Task.Delay(_options.DelayMs, cancellationToken);
         }
 
-        return new SendResult(sent, failed, all.Count, failedCodes);
+        return new SendResult(sent, failed, products.Count, failedCodes);
     }
 }

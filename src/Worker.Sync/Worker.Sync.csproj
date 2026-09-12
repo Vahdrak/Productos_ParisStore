@@ -5,6 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>dotnet-ComprasParaguai.Worker-466ffb5b-7930-40e6-be36-27d72e8f28af</UserSecretsId>
+    <RootNamespace>Worker.Sync</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>

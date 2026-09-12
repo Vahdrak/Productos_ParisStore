@@ -1,16 +1,15 @@
 namespace ComprasParaguai.Core.Interfaces;
 
 /// <summary>
-/// Servicio principal del Worker: orquesta sync + send + reconciliación.
-/// Ejecutado cada 15 minutos (o según temporizador).
+/// Servicio principal del Worker.Sync: orquesta sync + reconciliación (sin envíos).
+/// Ejecutado según Sync:IntervalMinutes.
 /// </summary>
 public interface IWorkerService
 {
     /// <summary>
     /// Ejecuta una corrida completa de sincronización:
     /// 1. Sync: leer vista → mapear → comparar → guardar en BD
-    /// 2. Send: cargar Pendientes → batcar → enviar → actualizar BD
-    /// 3. Registra bitácora en sync_runs
+    /// 2. Registra bitácora en sync_runs
     /// </summary>
     Task ExecuteSyncAsync(CancellationToken cancellationToken = default);
 

@@ -1,196 +1,111 @@
-# Guía de Envío de Productos a Compras Paraguai
+# Guía de operación: los 3 workers
 
-## Estrategia
+```
+Oracle (vista) ──► Worker.Sync (cada 2 h) ──► PostgreSQL productos
+                                                 sync_status = 0          ──► Worker.Compras ──► API Compras Paraguai
+                                                 sync_compara_status = 0  ──► Worker.Compara ──► API Compara Paraguai
+```
 
-El envío de productos a Compras Paraguai sigue un modelo **two-phase**:
+| Worker | Qué hace | Columnas que escribe | Config |
+|---|---|---|---|
+| `Worker.Sync` | Lee la vista Oracle, compara hash por SKU, inserta nuevos / actualiza modificados. Una vez al día marca bajas. **No envía a ninguna API.** | datos del producto + `sync_status = 0` + `sync_compara_status = 0` | `ConnectionStrings:Oracle`, `ConnectionStrings:PostgreSQL`, `Sync:IntervalMinutes` (120) |
+| `Worker.Compras` | Envía pendientes a Compras Paraguai en lotes de 500. | `sync_status`, `last_sent_at`, `last_error` | `ConnectionStrings:PostgreSQL`, `Compras:ApiUrl`, `Compras:Token`, `Compras:IntervalHours` (2) |
+| `Worker.Compara` | Envía pendientes a Compara Paraguai en lotes de 1000 con 900 ms de pausa (límite 80 req/h). | `sync_compara_status`, `last_sent_compara_at`, `last_error_compara` | `ConnectionStrings:PostgreSQL`, `Compara:ApiUrl`, `Compara:Token`, `Compara:IntervalHours` (2) |
 
-1. **Fase 1: Envío Full Inicial** (`SendAllAsync`)
-   - Ejecutar **una sola vez** al inicio
-   - Envía TODOS los productos (sin filtro)
-   - Divide en lotes de 500
-   - Marca todos como "Enviado" en BD
+Los tres se comportan igual: **sin argumentos quedan corriendo como servicio** (timer interno); **con un comando ejecutan eso una vez y salen**.
 
-2. **Fase 2: Sincronización Incremental** (`SendPendingAsync`)
-   - Ejecutar **cada 8 horas** (configurar scheduler)
-   - Envía solo productos con cambios desde el último envío
-   - Divide en lotes de 500
-   - Marca como "Enviado" o "Error" según resultado
+## Comandos
 
-## Comandos disponibles
-
-### Envío Full Inicial (una sola vez)
+### Worker.Sync
 
 ```bash
-dotnet run --send-all
+dotnet run --project src/Worker.Sync -- --once   # un ciclo (carga inicial o forzar sync) y sale
+dotnet run --project src/Worker.Sync             # servicio: sync al arrancar y cada 2 h
 ```
 
-**Output esperado:**
-```
-✓ Envío completado: 40000 enviados, 0 fallidos, 40000 total
-```
+La "carga inicial" no es un modo aparte: con la BD vacía, el primer ciclo inserta todo; los siguientes solo tocan nuevos y modificados (por `source_hash`).
 
-Si hay 40.000 productos, se ejecutarán 80 lotes de 500.
+### Worker.Compras / Worker.Compara
 
-### Envío Incremental (cada 8 horas)
+Mismos comandos, cada uno contra su API y su columna:
 
 ```bash
-dotnet run --send-pending
+dotnet run --project src/Worker.Compras -- --check-pending   # cuántos pendientes hay (no envía)
+dotnet run --project src/Worker.Compras -- --test-batch      # 500 al azar, envío real de prueba
+dotnet run --project src/Worker.Compras -- --send-all        # TODOS los productos (primera vez)
+dotnet run --project src/Worker.Compras -- --send-pending    # solo pendientes, una vez
+dotnet run --project src/Worker.Compras                      # servicio: pendientes cada 2 h
 ```
 
-**Output esperado:**
-```
-✓ Envío completado: 150 enviados, 0 fallidos, 150 total
-```
+Reemplazar `Worker.Compras` por `Worker.Compara` para el otro destino.
 
-Envía solo cambios detectados desde el último envío.
-
-### Verificar pendientes
+## Puesta en marcha (orden recomendado)
 
 ```bash
-dotnet run --check-pending
+# 1. Cargar la BD desde Oracle
+dotnet run --project src/Worker.Sync -- --once
+
+# 2. Probar cada API con 500 productos
+dotnet run --project src/Worker.Compras -- --test-batch
+dotnet run --project src/Worker.Compara -- --test-batch
+
+# 3. Envío completo inicial a cada destino
+dotnet run --project src/Worker.Compras -- --send-all
+dotnet run --project src/Worker.Compara -- --send-all      # ~108 lotes × 0.9 s ≈ 2 min
+
+# 4. Dejar los tres corriendo (tres consolas, o tres servicios de Windows)
+dotnet run --project src/Worker.Sync
+dotnet run --project src/Worker.Compras
+dotnet run --project src/Worker.Compara
 ```
 
-Muestra cuántos productos están listos para enviar.
+## Credenciales
 
-## Configurar Scheduler (Windows Task Scheduler)
+Nunca en `appsettings.json`. Opciones, en orden de preferencia:
 
-Para ejecutar `--send-pending` cada 8 horas:
+```bash
+# User Secrets (dev)
+dotnet user-secrets set "Compras:Token" "..." --project src/Worker.Compras
+dotnet user-secrets set "Compara:Token" "..." --project src/Worker.Compara
 
-### Opción 1: PowerShell Script
-
-Crear archivo `sync-every-8h.ps1`:
-
-```powershell
-# Script para ejecutar cada 8 horas
-cd "C:\Users\MARIO\Documents\ComprasParaguai\src\ComprasParaguai.Worker.ComparaParaguai"
-dotnet run --send-pending
+# Variables de entorno (prod)
+Compras__Token=...   Compara__Token=...   ConnectionStrings__PostgreSQL=...
 ```
 
-### Opción 2: Windows Task Scheduler
+`appsettings.Development.json` también se lee en dev (`DOTNET_ENVIRONMENT=Development`).
 
-1. Abrir **Task Scheduler** (`taskschd.msc`)
-2. Crear nueva tarea
-3. **General**: Nombre = "ComprasParaguai - Sync Every 8h"
-4. **Trigger**: 
-   - Ejecutar al inicio del sistema
-   - Repetir cada 8 horas
-5. **Action**: 
-   - Program: `C:\Program Files\dotnet\dotnet.exe`
-   - Arguments: `run --send-pending`
-   - Start in: `C:\Users\MARIO\Documents\ComprasParaguai\src\ComprasParaguai.Worker.ComparaParaguai`
+## Flujo de estado
 
-## Flujo de Estado de Productos
+Cada columna de estado vale `0 = Pendiente`, `1 = Enviado`, `2 = Error`.
 
-```
-[Pendiente (0)] → SendAll/SendPending → [Enviado (1)]
-                                    └→ [Error (2)]
-```
+1. `Worker.Sync` detecta cambio en un SKU → `sync_status = 0` **y** `sync_compara_status = 0`.
+2. `Worker.Compras` lee `sync_status = 0`, envía, marca `sync_status = 1` (o `2` + `last_error`).
+3. `Worker.Compara` lee `sync_compara_status = 0`, envía, marca `sync_compara_status = 1` (o `2` + `last_error_compara`).
 
-- **sync_status = 0**: Pendiente de envío
-- **sync_status = 1**: Enviado a Compras Paraguai (último envío exitoso)
-- **sync_status = 2**: Error en el último envío (ver `last_error`)
-
-## Campos que se sincronizan
-
-```
-Code, NameEs, NamePt, Price, PriceIva, Stock, 
-Brand, DescriptionEs, DescriptionPt, UrlImage, Link, LinkPurchase
-```
-
-⚠️ El token va siempre en el **header HTTP**, nunca en la URL.
-
-## Reintentos y Errores
-
-- Reintentos automáticos: 3 intentos con backoff exponencial
-- Timeout: 30 segundos por lote
-- Errores de validación: se registran en `last_error` con detalles del campo
+Los dos workers de envío no se pisan: cada uno solo toca su columna.
 
 ## Monitoreo
 
-Revisar en BD:
-
 ```sql
--- Productos con error
-SELECT code, last_error FROM productos WHERE sync_status = 2 ORDER BY updated_at DESC;
+-- Estado por destino
+SELECT sync_status, sync_compara_status, COUNT(*) FROM productos GROUP BY 1, 2 ORDER BY 1, 2;
 
--- Historial de cambios
-SELECT code, changed_at FROM product_changes ORDER BY changed_at DESC LIMIT 50;
+-- Errores recientes de Compara
+SELECT code, last_error_compara, updated_at FROM productos
+WHERE sync_compara_status = 2 ORDER BY updated_at DESC LIMIT 20;
 
--- Resumen
-SELECT sync_status, COUNT(*) FROM productos GROUP BY sync_status;
+-- Corridas del Sync
+SELECT * FROM sync_runs ORDER BY started_at DESC LIMIT 10;
 ```
 
-## Casos de Uso
-
-### Caso A: Primer envío completo
-```bash
-# 1. Enviar todos
-dotnet run --send-all
-
-# 2. Monitorear
-dotnet run --check-pending  # Debería ser 0
-
-# 3. Configurar scheduler para --send-pending
-```
-
-### Caso B: Agregar nuevos productos
-```bash
-# 1. Se crean en BD con sync_status = 0 (Pendiente)
-# 2. Siguiente ejecución de --send-pending los detecta y envía
-# 3. Se marcan como Enviado (sync_status = 1)
-```
-
-### Caso C: Modificar productos existentes
-```bash
-# 1. Cambio en BD dispara trigger que marca sync_status = 0
-# 2. Siguiente ejecución de --send-pending envía solo este
-# 3. Se marca como Enviado (sync_status = 1)
-```
-
-## Tests
-
-Ejecutar tests de SendService:
-
-```bash
-dotnet test --filter "SendService"
-```
-
-Tests incluyen:
-- ✅ Envío de 2000 productos en 4 lotes
-- ✅ Envío de 40.000 productos en 80 lotes
-- ✅ Manejo de cambios después de SendAll
-- ✅ Errores y reintentos
-- ✅ BD vacía
+El front Angular / `ComprasParaguai.Api` muestran el estado de **Compras** (`sync_status`).
 
 ## Troubleshooting
 
-### Problema: Todos los productos marcados como Error
+**`HTTP TooManyRequests` en Compara** — límite de 80 req/h. `SendOptions.ComparaParaguai` ya usa 1000 por lote + 900 ms. Si aparece, esperar una hora y correr `--send-pending`: los que quedaron en `2` no se reintentan solos (hay que ponerlos en `0` a mano: `UPDATE productos SET sync_compara_status = 0 WHERE sync_compara_status = 2;`).
 
-```sql
-SELECT DISTINCT last_error FROM productos WHERE sync_status = 2;
-```
+**`HTTP Unauthorized`** — token incorrecto o ausente. Ver sección Credenciales. El header es `Authorization: Bearer {token}`.
 
-Causas comunes:
-- Token inválido o expirado
-- API de Compras Paraguai no disponible
-- Validación de campos (precio < mínimo, stock negativo, etc.)
+**`--send-pending` no envía nada** — `--check-pending` da 0. Si esperabas cambios, verificar que `Worker.Sync` corrió (`sync_runs`) y que la vista tiene datos distintos.
 
-### Problema: SendPending no envía nada
-
-```bash
-dotnet run --check-pending  # Ver si hay pendientes
-```
-
-Si es 0, significa:
-- Todo fue enviado en SendAll
-- No hay cambios desde el último envío
-- (Es correcto comportamiento)
-
-### Problema: SendAll se detiene a mitad
-
-Revisar logs para ver en qué lote falló. Resumir desde ese punto:
-
-```bash
-# Reintentar (solo enviará los que siguen siendo Pendiente)
-dotnet run --send-pending
-```
+**Datos del 2026-09-11** — el primer `--send-all` a Compara marcó la columna de Compras por error. Corrección one-shot en `db/scripts/2026-09-11_fix_send_all_compara.sql` (requiere migración 005, que `DbMigrator` aplica solo al arrancar cualquier worker).

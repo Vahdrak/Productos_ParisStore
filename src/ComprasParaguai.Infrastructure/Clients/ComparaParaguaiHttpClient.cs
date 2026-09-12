@@ -9,27 +9,29 @@ namespace ComprasParaguai.Infrastructure.Clients;
 
 /// <summary>
 /// Cliente HTTP para Compara Paraguai API (servicio diferente de Compras Paraguai).
-/// Usa la misma estructura que SyncComparaParaguaiService (que funciona en --test-batch).
+/// Payload { produtos: [...] } con campos snake_case; POST a la URL configurada (Compara:ApiUrl).
 /// Token va en header Authorization: Bearer {token}.
 /// Implementa IComprasParaguaiClient para integración con SendService.
 /// </summary>
 public class ComparaParaguaiHttpClient : IComprasParaguaiClient
 {
     private readonly HttpClient _httpClient;
+    private readonly string _apiUrl;
     private readonly string _token;
     private readonly ILogger<ComparaParaguaiHttpClient> _logger;
     private readonly IAsyncPolicy<HttpResponseMessage> _retryPolicy;
 
-    private const string ApiUrl = "https://comparaparaguai.com/api/integracao/produtos";
     private const int MaxProductsPerBatch = 1000;
     private const int TimeoutSeconds = 30;
 
     public ComparaParaguaiHttpClient(
         HttpClient httpClient,
+        string apiUrl,
         string token,
         ILogger<ComparaParaguaiHttpClient> logger)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        _apiUrl = apiUrl ?? throw new ArgumentNullException(nameof(apiUrl));
         _token = token ?? throw new ArgumentNullException(nameof(token));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
@@ -56,7 +58,7 @@ public class ComparaParaguaiHttpClient : IComprasParaguaiClient
 
     /// <summary>
     /// Implementa IComprasParaguaiClient.ImportProductsAsync para Compara Paraguai.
-    /// Envía un lote de productos (≤ 500) con POST /produtos.
+    /// Envía un lote de productos (≤ 1000).
     /// </summary>
     public async Task<ImportResponse> ImportProductsAsync(
         IEnumerable<ProductoApi> products,
@@ -79,7 +81,7 @@ public class ComparaParaguaiHttpClient : IComprasParaguaiClient
 
         try
         {
-            // Convertir a DTO con snake_case (como en SyncComparaParaguaiService).
+            // Convertir a DTO con snake_case.
             var dtos = productList.Select(p => new ProductoComparaParaguaiDto
             {
                 Code = p.Code,
@@ -100,7 +102,7 @@ public class ComparaParaguaiHttpClient : IComprasParaguaiClient
             var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
             var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
 
-            var request = new HttpRequestMessage(HttpMethod.Post, ApiUrl)
+            var request = new HttpRequestMessage(HttpMethod.Post, _apiUrl)
             {
                 Content = content
             };
@@ -138,13 +140,13 @@ public class ComparaParaguaiHttpClient : IComprasParaguaiClient
     }
 
     /// <summary>
-    /// Health check: GET /productos endpoint con token.
+    /// Health check: GET a la URL de la API con token.
     /// </summary>
     public async Task<bool> HealthCheckAsync(CancellationToken cancellationToken = default)
     {
         try
         {
-            var request = new HttpRequestMessage(HttpMethod.Get, ApiUrl);
+            var request = new HttpRequestMessage(HttpMethod.Get, _apiUrl);
             request.Headers.Add("Authorization", $"Bearer {_token}");
 
             var response = await _retryPolicy.ExecuteAsync(async ct =>

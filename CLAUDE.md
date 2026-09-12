@@ -27,7 +27,8 @@ de decisiones, mapeo de campos, esquema de BD y fases. Consultarlo antes de impl
 - **Campos "de Cangrejo" vs "propios":** los de Cangrejo se refrescan en cada sync; los propios
   (traducciones, descripciones, links) se **preservan y nunca se pisan**. Ver Sección 2.5 del plan.
 - **BD:** convención `snake_case`. El `token` de la API va SIEMPRE en el **header**, nunca en la URL.
-- **Nombres de proyecto:** prefijo `ComprasParaguai.*` para los proyectos .NET.
+- **Nombres de proyecto:** prefijo `ComprasParaguai.*` para las librerías compartidas y la API (`Core`, `Infrastructure`, `Api`). Los workers se llaman `Worker.<Rol>` (`Worker.Sync`, `Worker.Compras`, `Worker.Compara`) para que el nombre diga qué hacen.
+- **Dos destinos, dos columnas de estado:** `sync_status`/`last_sent_at`/`last_error` son de **Compras** Paraguai; `sync_compara_status`/`last_sent_compara_at`/`last_error_compara` son de **Compara** Paraguai. `Worker.Sync` pone ambas en 0 al detectar cambio; cada worker de envío solo lee y escribe la suya (`SyncTarget`).
 
 ## Convenciones de código
 
@@ -40,7 +41,9 @@ de decisiones, mapeo de campos, esquema de BD y fases. Consultarlo antes de impl
 
 - `src/ComprasParaguai.Core` — dominio puro, sin infraestructura.
 - `src/ComprasParaguai.Infrastructure` — Oracle, PostgreSQL, cliente HTTP.
-- `src/ComprasParaguai.Worker` — orquestación y temporizador.
+- `src/Worker.Sync` — Oracle → PostgreSQL: carga inicial + detección de cambios por hash cada 2 h. No envía a APIs.
+- `src/Worker.Compras` — envía pendientes a Compras Paraguai (credenciales `Compras:*`).
+- `src/Worker.Compara` — envía pendientes a Compara Paraguai (credenciales `Compara:*`).
 - `src/ComprasParaguai.Api` — endpoints de solo lectura para el front.
 - `frontend/comprasparaguai-front` — Angular.
 - `tests/` — unitarias e integración.
