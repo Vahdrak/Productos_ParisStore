@@ -20,8 +20,8 @@ public class ComparaParaguaiHttpClient : IComprasParaguaiClient
     private readonly ILogger<ComparaParaguaiHttpClient> _logger;
     private readonly IAsyncPolicy<HttpResponseMessage> _retryPolicy;
 
-    private const string BaseUrl = "https://comparaparaguai.com/api/integracao";
-    private const int MaxProductsPerBatch = 500;
+    private const string ApiUrl = "https://comparaparaguai.com/api/integracao/produtos";
+    private const int MaxProductsPerBatch = 1000;
     private const int TimeoutSeconds = 30;
 
     public ComparaParaguaiHttpClient(
@@ -33,8 +33,6 @@ public class ComparaParaguaiHttpClient : IComprasParaguaiClient
         _token = token ?? throw new ArgumentNullException(nameof(token));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-        // Configurar cliente base.
-        _httpClient.BaseAddress = new Uri(BaseUrl);
         _httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
         _httpClient.Timeout = TimeSpan.FromSeconds(TimeoutSeconds);
 
@@ -102,7 +100,7 @@ public class ComparaParaguaiHttpClient : IComprasParaguaiClient
             var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
             var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
 
-            var request = new HttpRequestMessage(HttpMethod.Post, "/produtos")
+            var request = new HttpRequestMessage(HttpMethod.Post, ApiUrl)
             {
                 Content = content
             };
@@ -140,13 +138,13 @@ public class ComparaParaguaiHttpClient : IComprasParaguaiClient
     }
 
     /// <summary>
-    /// Health check: GET /produtos con token.
+    /// Health check: GET /productos endpoint con token.
     /// </summary>
     public async Task<bool> HealthCheckAsync(CancellationToken cancellationToken = default)
     {
         try
         {
-            var request = new HttpRequestMessage(HttpMethod.Get, "/produtos");
+            var request = new HttpRequestMessage(HttpMethod.Get, ApiUrl);
             request.Headers.Add("Authorization", $"Bearer {_token}");
 
             var response = await _retryPolicy.ExecuteAsync(async ct =>

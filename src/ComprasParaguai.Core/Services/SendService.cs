@@ -11,7 +11,7 @@ public class SendService : ISendService
 {
     private readonly IProductoRepository _repository;
     private readonly IComprasParaguaiClient _client;
-    private const int BatchSize = 500;
+    private const int BatchSize = 1000;
 
     public SendService(IProductoRepository repository, IComprasParaguaiClient client)
     {
@@ -21,7 +21,7 @@ public class SendService : ISendService
 
     /// <summary>
     /// Carga TODOS los productos, los batca, envía cada lote, marca como Enviado en BD.
-    /// Usado para envío full inicial a Compras Paraguai.
+    /// Usado para envío full inicial a Compara Paraguai (delay 900ms para respetar rate limit).
     /// </summary>
     public async Task<SendResult> SendAllAsync(CancellationToken cancellationToken = default)
     {
@@ -29,123 +29,72 @@ public class SendService : ISendService
         if (!all.Any())
             return new SendResult(0, 0, 0, new());
 
-        int sent = 0, failed = 0;
-        var failedCodes = new List<string>();
-
-        var batches = all
-            .Chunk(BatchSize)
-            .ToList();
-
-        foreach (var batch in batches)
-        {
-            try
-            {
-                var response = await _client.ImportProductsAsync(batch, cancellationToken);
-
-                if (response.Success)
-                {
-                    var codes = batch.Select(p => p.Code).ToList();
-                    await _repository.MarkAsSentAsync(codes, DateTime.UtcNow, cancellationToken);
-                    sent += batch.Length;
-                }
-                else
-                {
-                    foreach (var product in batch)
-                    {
-                        string errorMsg = response.Message ?? "Error desconocido";
-
-                        var validationError = response.ValidationErrors
-                            .FirstOrDefault(e => e.Code == product.Code);
-                        if (validationError != null)
-                            errorMsg = $"{validationError.Field}: {validationError.Error}";
-
-                        await _repository.MarkAsErrorAsync(product.Code, errorMsg, cancellationToken);
-                        failedCodes.Add(product.Code);
-                    }
-
-                    failed += batch.Length;
-                }
-            }
-            catch (Exception ex)
-            {
-                foreach (var product in batch)
-                {
-                    await _repository.MarkAsErrorAsync(product.Code, ex.Message, cancellationToken);
-                    failedCodes.Add(product.Code);
-                }
-
-                failed += batch.Length;
-            }
-        }
-
-        return new SendResult(sent, failed, all.Count, failedCodes);
+        return await SendBatchesAsync(all, delayMs: 900, cancellationToken);
     }
 
     /// <summary>
     /// Carga productos Pendiente, los batca, envía cada lote, actualiza BD.
+    /// Delay 100ms ya que típicamente son pocos productos (cambios).
     /// </summary>
     public async Task<SendResult> SendPendingAsync(CancellationToken cancellationToken = default)
     {
-        // 1. Cargar Pendientes.
         var pending = await _repository.LoadPendingProductsAsync(cancellationToken);
         if (!pending.Any())
             return new SendResult(0, 0, 0, new());
 
+        return await SendBatchesAsync(pending, delayMs: 100, cancellationToken);
+    }
+
+    private async Task<SendResult> SendBatchesAsync(IEnumerable<ProductoApi> products, int delayMs, CancellationToken cancellationToken)
+    {
         int sent = 0, failed = 0;
         var failedCodes = new List<string>();
+        var all = products.ToList();
 
-        // 2. Partir en lotes de 500.
-        var batches = pending
-            .Chunk(BatchSize)
-            .ToList();
+        var batches = all.Chunk(BatchSize).ToList();
 
-        foreach (var batch in batches)
+        for (int i = 0; i < batches.Count; i++)
         {
+            var batch = batches[i];
             try
             {
-                // 3. Enviar lote.
                 var response = await _client.ImportProductsAsync(batch, cancellationToken);
 
                 if (response.Success)
                 {
-                    // OK: marcar como Enviado.
                     var codes = batch.Select(p => p.Code).ToList();
                     await _repository.MarkAsSentAsync(codes, DateTime.UtcNow, cancellationToken);
                     sent += batch.Length;
                 }
                 else
                 {
-                    // Falló: marcar como Error.
                     foreach (var product in batch)
                     {
                         string errorMsg = response.Message ?? "Error desconocido";
-
-                        // Si hay errores de validación específicos, incluir el primero.
-                        var validationError = response.ValidationErrors
-                            .FirstOrDefault(e => e.Code == product.Code);
+                        var validationError = response.ValidationErrors.FirstOrDefault(e => e.Code == product.Code);
                         if (validationError != null)
                             errorMsg = $"{validationError.Field}: {validationError.Error}";
 
                         await _repository.MarkAsErrorAsync(product.Code, errorMsg, cancellationToken);
                         failedCodes.Add(product.Code);
                     }
-
                     failed += batch.Length;
                 }
             }
             catch (Exception ex)
             {
-                // Excepción: marcar todos como Error con el mensaje de excepción.
                 foreach (var product in batch)
                 {
                     await _repository.MarkAsErrorAsync(product.Code, ex.Message, cancellationToken);
                     failedCodes.Add(product.Code);
                 }
-
                 failed += batch.Length;
             }
+
+            if (i < batches.Count - 1)
+                await Task.Delay(delayMs, cancellationToken);
         }
 
-        return new SendResult(sent, failed, pending.Count, failedCodes);
+        return new SendResult(sent, failed, all.Count, failedCodes);
     }
 }
