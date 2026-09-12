@@ -20,4 +20,9 @@
     <ProjectReference Include="..\ComprasParaguai.Core\ComprasParaguai.Core.csproj" />
     <ProjectReference Include="..\ComprasParaguai.Infrastructure\ComprasParaguai.Infrastructure.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include=".env" Condition="Exists('.env')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 </Project>

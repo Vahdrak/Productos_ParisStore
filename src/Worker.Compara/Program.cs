@@ -10,6 +10,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
+// .env junto al ejecutable (ignorado por git); ver .env.example.
+DotEnv.Load(Path.Combine(AppContext.BaseDirectory, ".env"));
+
 const string TargetName = "Compara Paraguai";
 var options = SendOptions.ComparaParaguai;
 
@@ -23,7 +26,7 @@ var connectionString = config.GetConnectionString("PostgreSQL")
 var apiUrl = config["Compara:ApiUrl"]
     ?? throw new InvalidOperationException("Compara:ApiUrl no configurada");
 var token = config["Compara:Token"]
-    ?? throw new InvalidOperationException("Compara:Token no configurado (User Secrets / appsettings.Development.json / env)");
+    ?? throw new InvalidOperationException("Compara:Token no configurado (.env o variable de entorno)");
 var intervalHours = config.GetValue<double>("Compara:IntervalHours", 2);
 
 DbMigrator.Migrate(connectionString);

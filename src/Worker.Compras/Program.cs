@@ -10,6 +10,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
+// .env junto al ejecutable (ignorado por git); ver .env.example.
+DotEnv.Load(Path.Combine(AppContext.BaseDirectory, ".env"));
+
 const string TargetName = "Compras Paraguai";
 var options = SendOptions.ComprasParaguai;
 
@@ -23,7 +26,7 @@ var connectionString = config.GetConnectionString("PostgreSQL")
 var apiUrl = config["Compras:ApiUrl"]
     ?? throw new InvalidOperationException("Compras:ApiUrl no configurada");
 var token = config["Compras:Token"]
-    ?? throw new InvalidOperationException("Compras:Token no configurado (User Secrets / appsettings.Development.json / env)");
+    ?? throw new InvalidOperationException("Compras:Token no configurado (.env o variable de entorno)");
 var intervalHours = config.GetValue<double>("Compras:IntervalHours", 2);
 
 DbMigrator.Migrate(connectionString);

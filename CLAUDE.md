@@ -22,8 +22,9 @@ de decisiones, mapeo de campos, esquema de BD y fases. Consultarlo antes de impl
 
 ## Reglas del proyecto
 
-- **Secretos:** NUNCA hardcodear el token de Compras Paraguai ni cadenas de conexión. Usar User
-  Secrets (dev) / variables de entorno (prod). Ya están ignorados en `.gitignore`.
+- **Secretos:** NUNCA hardcodear tokens ni cadenas de conexión. Cada worker los lee de su propio
+  `.env` (junto al proyecto, ignorado por git; ver `.env.example`) o de variables de entorno.
+  Claves con `__` como separador: `Compras__Token`, `ConnectionStrings__PostgreSQL`.
 - **Campos "de Cangrejo" vs "propios":** los de Cangrejo se refrescan en cada sync; los propios
   (traducciones, descripciones, links) se **preservan y nunca se pisan**. Ver Sección 2.5 del plan.
 - **BD:** convención `snake_case`. El `token` de la API va SIEMPRE en el **header**, nunca en la URL.

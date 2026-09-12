@@ -6,6 +6,9 @@ using ComprasParaguai.Infrastructure.Repositories;
 using Serilog;
 using Worker.Sync;
 
+// .env junto al ejecutable (ignorado por git); ver .env.example.
+DotEnv.Load(Path.Combine(AppContext.BaseDirectory, ".env"));
+
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Information()
     .WriteTo.Console(outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss} {Level}] {Message:lj}{NewLine}{Exception}")

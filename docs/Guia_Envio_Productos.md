@@ -59,20 +59,23 @@ dotnet run --project src/Worker.Compras
 dotnet run --project src/Worker.Compara
 ```
 
-## Credenciales
+## Credenciales: un `.env` por worker
 
-Nunca en `appsettings.json`. Opciones, en orden de preferencia:
+Cada worker lee un archivo `.env` que está al lado del ejecutable (se copia desde la carpeta del proyecto al compilar). **`.env` está en `.gitignore`**; lo que se commitea es `.env.example`.
 
-```bash
-# User Secrets (dev)
-dotnet user-secrets set "Compras:Token" "..." --project src/Worker.Compras
-dotnet user-secrets set "Compara:Token" "..." --project src/Worker.Compara
-
-# Variables de entorno (prod)
-Compras__Token=...   Compara__Token=...   ConnectionStrings__PostgreSQL=...
+```
+src/Worker.Sync/.env       ConnectionStrings__Oracle, ConnectionStrings__PostgreSQL
+src/Worker.Compras/.env    ConnectionStrings__PostgreSQL, Compras__Token
+src/Worker.Compara/.env    ConnectionStrings__PostgreSQL, Compara__Token
 ```
 
-`appsettings.Development.json` también se lee en dev (`DOTNET_ENVIRONMENT=Development`).
+Formato `KEY=VALUE`, una por línea, `#` para comentarios. Las secciones se separan con `__` (`Compras__Token` = `Compras:Token`). Para empezar en otra máquina:
+
+```bash
+cp src/Worker.Compras/.env.example src/Worker.Compras/.env   # y completar
+```
+
+Una variable de entorno real del sistema tiene prioridad sobre el `.env` (útil en prod). `appsettings.json` solo tiene lo no secreto (URLs, intervalos).
 
 ## Flujo de estado
 
