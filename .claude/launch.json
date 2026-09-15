@@ -10,13 +10,13 @@
     {
       "name": "api-dev",
       "runtimeExecutable": "dotnet",
-      "runtimeArgs": ["run", "--project", "src/ComprasParaguai.Api/ComprasParaguai.Api.csproj"],
+      "runtimeArgs": ["run", "--project", "backend/ComprasParaguai.Api/ComprasParaguai.Api.csproj"],
       "port": 5000
     },
     {
-      "name": "worker",
+      "name": "worker-sync",
       "runtimeExecutable": "dotnet",
-      "runtimeArgs": ["run", "--project", "src/ComprasParaguai.Worker/ComprasParaguai.Worker.csproj"],
+      "runtimeArgs": ["run", "--project", "workers/Worker.Sync/Worker.Sync.csproj"],
       "port": 5001
     }
   ]

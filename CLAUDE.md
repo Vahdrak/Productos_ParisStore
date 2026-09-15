@@ -40,14 +40,19 @@ de decisiones, mapeo de campos, esquema de BD y fases. Consultarlo antes de impl
 
 ## Organización de carpetas
 
-- `src/ComprasParaguai.Core` — dominio puro, sin infraestructura.
-- `src/ComprasParaguai.Infrastructure` — Oracle, PostgreSQL, cliente HTTP.
-- `src/Worker.Sync` — Oracle → PostgreSQL: carga inicial + detección de cambios por hash cada 2 h. No envía a APIs.
-- `src/Worker.Compras` — envía pendientes a Compras Paraguai (credenciales `Compras:*`).
-- `src/Worker.Compara` — envía pendientes a Compara Paraguai (credenciales `Compara:*`).
-- `src/ComprasParaguai.Api` — endpoints de solo lectura para el front.
+- `backend/` — librerías compartidas y API:
+  - `ComprasParaguai.Core` — dominio puro, sin infraestructura.
+  - `ComprasParaguai.Infrastructure` — Oracle, PostgreSQL, clientes HTTP, hosting compartido.
+  - `ComprasParaguai.Api` — endpoints de solo lectura para el front.
+- `workers/` — un ejecutable por rol, cada uno con su `.env`:
+  - `Worker.Sync` — Oracle → PostgreSQL: carga inicial + detección de cambios por hash cada 2 h. No envía a APIs.
+  - `Worker.Compras` — envía pendientes a Compras Paraguai (credenciales `Compras:*`).
+  - `Worker.Compara` — envía pendientes a Compara Paraguai (credenciales `Compara:*`).
 - `frontend/comprasparaguai-front` — Angular.
 - `tests/` — unitarias e integración.
+- `db/` — migraciones (`migrations/`) y scripts one-shot (`scripts/`).
+- `docs/` — plan maestro, guías de operación, spec de la API (`api/`).
+- `scripts/` — `.bat`/`.ps1` para levantar servicios en local.
 
 ## `.claude/` — agentes, skills y comandos
 

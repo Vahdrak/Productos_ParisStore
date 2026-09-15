@@ -10,6 +10,6 @@ Cada ciclo: leer vista → mapear/validar → hash → comparar con BD → upser
 Config: `ConnectionStrings:Oracle`, `ConnectionStrings:PostgreSQL` (User Secrets / env), `Sync:*`.
 
 ```bash
-dotnet run --project src/Worker.Sync -- --once   # carga inicial / corrida manual
-dotnet run --project src/Worker.Sync             # servicio cada 2 h
+dotnet run --project workers/Worker.Sync -- --once   # carga inicial / corrida manual
+dotnet run --project workers/Worker.Sync             # servicio cada 2 h
 ```

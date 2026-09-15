@@ -21,8 +21,8 @@ Start-Sleep -Seconds 5
 Write-Host "Iniciando Worker en ventana separada..." -ForegroundColor Green
 Start-Process powershell -ArgumentList @"
     Set-Location 'C:\Users\MARIO\Documents\ComprasParaguai\src\ComprasParaguai.Worker'
-    Write-Host 'Compras Paraguai - Worker Service' -ForegroundColor Cyan
-    Write-Host 'Sincronizando cada 15 minutos' -ForegroundColor Yellow
+    Write-Host 'Worker.Sync (Oracle -> PostgreSQL)' -ForegroundColor Cyan
+    Write-Host 'Sincronizando cada 2 horas' -ForegroundColor Yellow
     Write-Host '---' -ForegroundColor Gray
     dotnet run -c Release
 "@

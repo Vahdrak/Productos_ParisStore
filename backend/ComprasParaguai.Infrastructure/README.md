@@ -12,5 +12,5 @@ Contendrá:
 
 Scaffold:
 ```bash
-dotnet new classlib -n ComprasParaguai.Infrastructure -o src/ComprasParaguai.Infrastructure
+dotnet new classlib -n ComprasParaguai.Infrastructure -o backend/ComprasParaguai.Infrastructure
 ```

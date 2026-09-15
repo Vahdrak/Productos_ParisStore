@@ -14,8 +14,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\ComprasParaguai.Core\ComprasParaguai.Core.csproj" />
-    <ProjectReference Include="..\ComprasParaguai.Infrastructure\ComprasParaguai.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\backend\ComprasParaguai.Core\ComprasParaguai.Core.csproj" />
+    <ProjectReference Include="..\..\backend\ComprasParaguai.Infrastructure\ComprasParaguai.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -12,18 +12,18 @@
 
 #### Backend (API .NET)
 ```bash
-double-click run-api.bat
+double-click scripts/run-api.bat
 ```
 O en PowerShell:
 ```powershell
-.\run-api.bat
+.\scripts/run-api.bat
 ```
 **Esperado:** La API estará disponible en `http://localhost:5000`
 
 #### Frontend (Angular)
 En otra terminal:
 ```bash
-double-click run-frontend.bat
+double-click scripts/run-frontend.bat
 ```
 **Esperado:** El frontend estará disponible en `http://localhost:4200`
 
@@ -31,7 +31,7 @@ double-click run-frontend.bat
 
 #### Backend
 ```bash
-cd src/ComprasParaguai.Api
+cd backend/ComprasParaguai.Api
 dotnet run -c Release
 ```
 
@@ -113,18 +113,20 @@ Get-ChildItem -Path "src\ComprasParaguai.Api\bin" -Recurse -File | Unblock-File 
 
 ```
 ComprasParaguai/
-├── src/
-│   ├── ComprasParaguai.Api/          ← Backend (ASP.NET Core)
+├── backend/
+│   ├── ComprasParaguai.Api/          ← Web API (ASP.NET Core)
 │   ├── ComprasParaguai.Core/         ← Lógica de negocio
-│   ├── ComprasParaguai.Infrastructure/  ← Acceso a datos
-│   └── ComprasParaguai.Worker/       ← Servicio de sincronización
+│   └── ComprasParaguai.Infrastructure/  ← Acceso a datos
+├── workers/
+│   ├── Worker.Sync/                  ← Oracle → PostgreSQL
+│   ├── Worker.Compras/               ← Envío a Compras Paraguai
+│   └── Worker.Compara/               ← Envío a Compara Paraguai
 ├── frontend/
 │   └── comprasparaguai-front/        ← Frontend (Angular 18)
 ├── db/
 │   └── migrations/                   ← Migraciones SQL
-├── run-api.bat                       ← Script para iniciar API
-├── run-frontend.bat                  ← Script para iniciar Frontend
-└── SETUP.md                          ← Este archivo
+├── scripts/                          ← scripts/run-api.bat, scripts/run-frontend.bat, start-*.ps1
+└── docs/SETUP.md                     ← Este archivo
 ```
 
 ---

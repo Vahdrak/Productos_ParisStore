@@ -24,15 +24,18 @@ Cangrejo (Oracle)          BD propia (PostgreSQL)              Compras Paraguai
 
 | Carpeta | Contenido |
 |---|---|
-| `src/ComprasParaguai.Core` | Modelos de dominio, contratos/interfaces, lógica de mapeo y hash. Sin dependencias de infraestructura. |
-| `src/ComprasParaguai.Infrastructure` | Acceso a datos: lector Oracle (Cangrejo), repositorios PostgreSQL (Npgsql), cliente HTTP de la API. |
-| `src/ComprasParaguai.Worker` | Worker Service .NET 8: temporizador cada 15 min, carga inicial, reconciliación diaria. |
-| `src/ComprasParaguai.Api` | Web API ASP.NET Core de **solo lectura** que alimenta el front. |
+| `backend/ComprasParaguai.Core` | Modelos de dominio, contratos/interfaces, lógica de mapeo y hash. Sin dependencias de infraestructura. |
+| `backend/ComprasParaguai.Infrastructure` | Acceso a datos: lector Oracle (Cangrejo), repositorios PostgreSQL (Npgsql), cliente HTTP de la API. |
+| `workers/Worker.Sync` | Oracle → PostgreSQL: carga inicial + detección de cambios por hash cada 2 h, reconciliación diaria. No envía a APIs. |
+| `workers/Worker.Compras` | Envía pendientes a **Compras** Paraguai (lotes de 500). Credenciales propias en `.env`. |
+| `workers/Worker.Compara` | Envía pendientes a **Compara** Paraguai (lotes de 1000, rate limit). Credenciales propias en `.env`. |
+| `backend/ComprasParaguai.Api` | Web API ASP.NET Core de **solo lectura** que alimenta el front. |
 | `frontend/comprasparaguai-front` | App **Angular** de monitoreo (dashboard, productos, diff antes/después). |
 | `db/migrations` | Scripts SQL versionados (tablas, índices, trigger de auditoría). |
 | `db/seed` | Datos de ejemplo para pruebas locales. |
 | `tests/` | Pruebas unitarias e de integración. |
-| `docs/` | Plan del proyecto y registros de decisiones (`adr/`). |
+| `docs/` | Plan del proyecto, guías (`Guia_Envio_Productos.md`, `SETUP.md`, `PUESTA_EN_MARCHA.md`), spec de la API (`api/`). |
+| `scripts/` | `.bat`/`.ps1` para levantar API, front y workers en local. |
 | `.claude/` | Configuración de Claude Code: agentes, skills y comandos del proyecto. |
 
 ## Prerequisitos
@@ -54,11 +57,14 @@ Cangrejo (Oracle)          BD propia (PostgreSQL)              Compras Paraguai
 dotnet restore
 dotnet build
 
-# 3. Worker de sincronización
-dotnet run --project src/ComprasParaguai.Worker
+# 3. Workers (cada uno lee su .env; ver docs/Guia_Envio_Productos.md)
+dotnet run --project workers/Worker.Sync -- --once   # carga inicial Oracle → BD
+dotnet run --project workers/Worker.Sync             # servicio cada 2 h
+dotnet run --project workers/Worker.Compras          # envía a Compras cada 2 h
+dotnet run --project workers/Worker.Compara          # envía a Compara cada 2 h
 
 # 4. Web API (para el front)
-dotnet run --project src/ComprasParaguai.Api
+dotnet run --project backend/ComprasParaguai.Api
 
 # 5. Front Angular
 cd frontend/comprasparaguai-front

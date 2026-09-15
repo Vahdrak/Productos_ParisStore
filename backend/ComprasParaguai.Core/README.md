@@ -11,5 +11,5 @@ Contendrá:
 
 Scaffold (cuando arranque la implementación):
 ```bash
-dotnet new classlib -n ComprasParaguai.Core -o src/ComprasParaguai.Core
+dotnet new classlib -n ComprasParaguai.Core -o backend/ComprasParaguai.Core
 ```

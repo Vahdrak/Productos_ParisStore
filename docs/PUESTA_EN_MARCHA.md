@@ -43,7 +43,7 @@ Password: (la que configuraste)
 ### Abrir terminal en la carpeta del Worker
 
 ```bash
-cd src/ComprasParaguai.Worker
+cd workers/Worker.Sync
 ```
 
 ### Configurar User Secrets (primera vez)
@@ -65,7 +65,7 @@ dotnet run
 ### Qué verás en los logs
 
 ```
-=== Iniciando ComprasParaguai Worker ===
+=== Worker.Sync: Oracle → PostgreSQL ===
 Iniciando Worker. Intervalo: 15 minutos
 === Iniciando ciclo de sync ===
 Cargados 109248 productos de la BD (hash map)
@@ -86,7 +86,7 @@ Guardados en BD (COPY + upsert)
 ### En otra terminal, ir a la carpeta API
 
 ```bash
-cd src/ComprasParaguai.Api
+cd backend/ComprasParaguai.Api
 ```
 
 ### Levantar la API
@@ -189,7 +189,7 @@ Click "Cargar Historial" para ver timeline de cambios
 
 ### Ver logs en tiempo real
 
-**Worker** (cada 15 minutos automáticamente):
+**Worker.Sync** (cada 2 horas automáticamente):
 ```
 === Iniciando ciclo de sync ===
 ...
@@ -286,7 +286,7 @@ Si está vacío, re-configúralos.
 3. **Guardar cambios** - Debe aparecer en BD
 4. **Ver Diff** - Compara antes/después
 5. **Ver Historial** - Timeline de cambios
-6. **Logs del Worker** - Debe mostrar "LECTURA COMPLETA" cada 15 min
+6. **Logs del Worker** - Debe mostrar "LECTURA COMPLETA" cada 2 h
 
 Si todo funciona, ¡estamos listos! 🚀
 

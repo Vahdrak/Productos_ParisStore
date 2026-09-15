@@ -19,8 +19,8 @@ Los tres se comportan igual: **sin argumentos quedan corriendo como servicio** (
 ### Worker.Sync
 
 ```bash
-dotnet run --project src/Worker.Sync -- --once   # un ciclo (carga inicial o forzar sync) y sale
-dotnet run --project src/Worker.Sync             # servicio: sync al arrancar y cada 2 h
+dotnet run --project workers/Worker.Sync -- --once   # un ciclo (carga inicial o forzar sync) y sale
+dotnet run --project workers/Worker.Sync             # servicio: sync al arrancar y cada 2 h
 ```
 
 La "carga inicial" no es un modo aparte: con la BD vacía, el primer ciclo inserta todo; los siguientes solo tocan nuevos y modificados (por `source_hash`).
@@ -30,11 +30,11 @@ La "carga inicial" no es un modo aparte: con la BD vacía, el primer ciclo inser
 Mismos comandos, cada uno contra su API y su columna:
 
 ```bash
-dotnet run --project src/Worker.Compras -- --check-pending   # cuántos pendientes hay (no envía)
-dotnet run --project src/Worker.Compras -- --test-batch      # 500 al azar, envío real de prueba
-dotnet run --project src/Worker.Compras -- --send-all        # TODOS los productos (primera vez)
-dotnet run --project src/Worker.Compras -- --send-pending    # solo pendientes, una vez
-dotnet run --project src/Worker.Compras                      # servicio: pendientes cada 2 h
+dotnet run --project workers/Worker.Compras -- --check-pending   # cuántos pendientes hay (no envía)
+dotnet run --project workers/Worker.Compras -- --test-batch      # 500 al azar, envío real de prueba
+dotnet run --project workers/Worker.Compras -- --send-all        # TODOS los productos (primera vez)
+dotnet run --project workers/Worker.Compras -- --send-pending    # solo pendientes, una vez
+dotnet run --project workers/Worker.Compras                      # servicio: pendientes cada 2 h
 ```
 
 Reemplazar `Worker.Compras` por `Worker.Compara` para el otro destino.
@@ -43,20 +43,20 @@ Reemplazar `Worker.Compras` por `Worker.Compara` para el otro destino.
 
 ```bash
 # 1. Cargar la BD desde Oracle
-dotnet run --project src/Worker.Sync -- --once
+dotnet run --project workers/Worker.Sync -- --once
 
 # 2. Probar cada API con 500 productos
-dotnet run --project src/Worker.Compras -- --test-batch
-dotnet run --project src/Worker.Compara -- --test-batch
+dotnet run --project workers/Worker.Compras -- --test-batch
+dotnet run --project workers/Worker.Compara -- --test-batch
 
 # 3. Envío completo inicial a cada destino
-dotnet run --project src/Worker.Compras -- --send-all
-dotnet run --project src/Worker.Compara -- --send-all      # ~108 lotes × 0.9 s ≈ 2 min
+dotnet run --project workers/Worker.Compras -- --send-all
+dotnet run --project workers/Worker.Compara -- --send-all      # ~108 lotes × 0.9 s ≈ 2 min
 
 # 4. Dejar los tres corriendo (tres consolas, o tres servicios de Windows)
-dotnet run --project src/Worker.Sync
-dotnet run --project src/Worker.Compras
-dotnet run --project src/Worker.Compara
+dotnet run --project workers/Worker.Sync
+dotnet run --project workers/Worker.Compras
+dotnet run --project workers/Worker.Compara
 ```
 
 ## Credenciales: un `.env` por worker
@@ -64,15 +64,15 @@ dotnet run --project src/Worker.Compara
 Cada worker lee un archivo `.env` que está al lado del ejecutable (se copia desde la carpeta del proyecto al compilar). **`.env` está en `.gitignore`**; lo que se commitea es `.env.example`.
 
 ```
-src/Worker.Sync/.env       ConnectionStrings__Oracle, ConnectionStrings__PostgreSQL
-src/Worker.Compras/.env    ConnectionStrings__PostgreSQL, Compras__Token
-src/Worker.Compara/.env    ConnectionStrings__PostgreSQL, Compara__Token
+workers/Worker.Sync/.env       ConnectionStrings__Oracle, ConnectionStrings__PostgreSQL
+workers/Worker.Compras/.env    ConnectionStrings__PostgreSQL, Compras__Token
+workers/Worker.Compara/.env    ConnectionStrings__PostgreSQL, Compara__Token
 ```
 
 Formato `KEY=VALUE`, una por línea, `#` para comentarios. Las secciones se separan con `__` (`Compras__Token` = `Compras:Token`). Para empezar en otra máquina:
 
 ```bash
-cp src/Worker.Compras/.env.example src/Worker.Compras/.env   # y completar
+cp workers/Worker.Compras/.env.example workers/Worker.Compras/.env   # y completar
 ```
 
 Una variable de entorno real del sistema tiene prioridad sobre el `.env` (útil en prod). `appsettings.json` solo tiene lo no secreto (URLs, intervalos).

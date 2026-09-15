@@ -18,5 +18,5 @@ CORS habilitado para el origen del front.
 
 Scaffold:
 ```bash
-dotnet new webapi -n ComprasParaguai.Api -o src/ComprasParaguai.Api
+dotnet new webapi -n ComprasParaguai.Api -o backend/ComprasParaguai.Api
 ```

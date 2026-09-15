@@ -15,17 +15,17 @@ Abre PowerShell en la raíz del proyecto y ejecuta:
 
 ```powershell
 # Terminal 1 - API
-.\start-api.ps1
+.\scripts/start-api.ps1
 
 # Terminal 2 - Frontend  
-.\start-frontend.ps1
+.\scripts/start-frontend.ps1
 ```
 
 **Opción 2: Línea de comandos (Manual)**
 
 ```bash
 # Terminal 1 - API
-cd src/ComprasParaguai.Api
+cd backend/ComprasParaguai.Api
 dotnet run -c Release
 
 # Terminal 2 - Frontend
@@ -72,7 +72,7 @@ El proyecto ahora incluye un **Monitor de Tendencias** completo:
 
 ### API no inicia
 1. Verifica que PostgreSQL está corriendo
-2. Usa el script PowerShell `start-api.ps1` (limpia automáticamente)
+2. Usa el script PowerShell `scripts/start-api.ps1` (limpia automáticamente)
 
 ### Frontend no carga datos
 1. Verifica que la API está en puerto 5000
@@ -82,8 +82,8 @@ El proyecto ahora incluye un **Monitor de Tendencias** completo:
 
 ## 📝 Archivos de configuración
 
-- `start-api.ps1` - Script para iniciar API (RECOMENDADO)
-- `start-frontend.ps1` - Script para iniciar Frontend
+- `scripts/start-api.ps1` - Script para iniciar API (RECOMENDADO)
+- `scripts/start-frontend.ps1` - Script para iniciar Frontend
 - `Directory.Build.props` - Fuerza Release mode automáticamente
 - `SETUP.md` - Guía completa de instalación
 
