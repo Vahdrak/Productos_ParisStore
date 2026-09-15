@@ -41,6 +41,11 @@ public interface IProductoRepository
     Task<List<ProductoApi>> LoadRandomProductsAsync(int count, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Carga N productos al azar marcados como Enviado (status = 1) para el destino (para verificar envíos).
+    /// </summary>
+    Task<List<ProductoApi>> LoadRandomSentProductsAsync(int count, SyncTarget target, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Carga productos Pendiente (status = 0) para el destino indicado.
     /// </summary>
     Task<List<ProductoApi>> LoadPendingProductsAsync(SyncTarget target = SyncTarget.ComprasParaguai, CancellationToken cancellationToken = default);

@@ -14,6 +14,8 @@ Oracle (vista) ──► Worker.Sync (cada 2 h) ──► PostgreSQL productos
 
 Los tres se comportan igual: **sin argumentos quedan corriendo como servicio** (timer interno); **con un comando ejecutan eso una vez y salen**.
 
+Hay un cuarto ejecutable, `Worker.Verify`, que no envía nada: comprueba contra la API que lo marcado como Enviado realmente está (ver más abajo).
+
 ## Comandos
 
 ### Worker.Sync
@@ -38,6 +40,15 @@ dotnet run --project workers/Worker.Compras                      # servicio: pen
 ```
 
 Reemplazar `Worker.Compras` por `Worker.Compara` para el otro destino.
+
+### Worker.Verify (comprobar que llegaron)
+
+```bash
+dotnet run --project workers/Worker.Verify -- --compras        # 500 al azar marcados Enviado a Compras
+dotnet run --project workers/Worker.Verify -- --compras 50     # o la cantidad que quieras
+```
+
+Toma N productos con `sync_status = 1`, hace `GET /api/products/list/?code=…` por cada uno y escribe `verify-output/verify-comprasparaguai-<fecha>.csv` con: encontrado SI/NO, precio y stock local vs API, disponible, `updated_at` de la API. En consola resume `X/N encontrados`. Si un código aparece en la API, el envío llegó. Config propia: `.env` con `ConnectionStrings__PostgreSQL` y `Compras__Token`. Compara no ofrece un GET por código, así que por ahora solo verifica Compras.
 
 ## Puesta en marcha (orden recomendado)
 
@@ -67,6 +78,7 @@ Cada worker lee un archivo `.env` que está al lado del ejecutable (se copia des
 workers/Worker.Sync/.env       ConnectionStrings__Oracle, ConnectionStrings__PostgreSQL
 workers/Worker.Compras/.env    ConnectionStrings__PostgreSQL, Compras__Token
 workers/Worker.Compara/.env    ConnectionStrings__PostgreSQL, Compara__Token
+workers/Worker.Verify/.env     ConnectionStrings__PostgreSQL, Compras__Token
 ```
 
 Formato `KEY=VALUE`, una por línea, `#` para comentarios. Las secciones se separan con `__` (`Compras__Token` = `Compras:Token`). Para empezar en otra máquina:

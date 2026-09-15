@@ -48,6 +48,7 @@ de decisiones, mapeo de campos, esquema de BD y fases. Consultarlo antes de impl
   - `Worker.Sync` — Oracle → PostgreSQL: carga inicial + detección de cambios por hash cada 2 h. No envía a APIs.
   - `Worker.Compras` — envía pendientes a Compras Paraguai (credenciales `Compras:*`).
   - `Worker.Compara` — envía pendientes a Compara Paraguai (credenciales `Compara:*`).
+  - `Worker.Verify` — toma N productos marcados Enviado, los consulta en la API del destino y escribe un CSV (comprobación de que llegaron). Solo Compras por ahora (Compara no tiene GET).
 - `frontend/comprasparaguai-front` — Angular.
 - `tests/` — unitarias e integración.
 - `db/` — migraciones (`migrations/`) y scripts one-shot (`scripts/`).

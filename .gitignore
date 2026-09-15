@@ -58,3 +58,4 @@ Desktop.ini
 logs/
 *.log
 test-results.txt
+verify-output/

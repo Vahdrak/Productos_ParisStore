@@ -12,7 +12,7 @@ namespace ComprasParaguai.Infrastructure.Clients;
 /// Usa Polly para reintentos, timeout y circuit breaker.
 /// Token va en el header "token" (nunca en URL).
 /// </summary>
-public class ComprasParaguaiHttpClient : IComprasParaguaiClient
+public class ComprasParaguaiHttpClient : IComprasParaguaiClient, IProductQueryClient
 {
     private readonly HttpClient _httpClient;
     private readonly string _token;
@@ -147,6 +147,50 @@ public class ComprasParaguaiHttpClient : IComprasParaguaiClient
             _logger.LogError(ex, "Excepción enviando lote a Compras Paraguai");
             throw;
         }
+    }
+
+    /// <summary>
+    /// GET /api/products/list/?code=X. Devuelve el producto tal como lo tiene Compras, o null si no existe.
+    /// </summary>
+    public async Task<RemoteProduct?> GetByCodeAsync(string code, CancellationToken cancellationToken = default)
+    {
+        var response = await _retryPolicy.ExecuteAsync(async ct =>
+            await _httpClient.GetAsync($"/api/products/list/?code={Uri.EscapeDataString(code)}", ct),
+            cancellationToken);
+
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("GET {Code} → HTTP {Status}: {Body}", code, response.StatusCode, body.Length > 300 ? body[..300] : body);
+            return null;
+        }
+
+        using var doc = JsonDocument.Parse(body);
+        if (!doc.RootElement.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
+            return null;
+
+        // La búsqueda por code puede ser "contiene"; quedarse con la coincidencia exacta.
+        foreach (var item in data.EnumerateArray())
+        {
+            if (item.TryGetProperty("code", out var c) && c.GetString() == code)
+                return new RemoteProduct(
+                    Code: code,
+                    NamePt: Str(item, "name_pt"),
+                    Price: Dec(item, "price"),
+                    PriceIva: Dec(item, "price_iva"),
+                    Stock: Dec(item, "stock"),
+                    Available: item.TryGetProperty("available", out var a) && a.ValueKind is JsonValueKind.True or JsonValueKind.False ? a.GetBoolean() : null,
+                    Link: Str(item, "link"),
+                    UpdatedAt: DateTime.TryParse(Str(item, "updated_at"), null, System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal, out var dt) ? dt : null);
+        }
+
+        return null;
+
+        static string? Str(JsonElement e, string name) =>
+            e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+
+        static decimal? Dec(JsonElement e, string name) =>
+            e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDecimal() : null;
     }
 
     /// <summary>

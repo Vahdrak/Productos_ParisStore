@@ -257,6 +257,24 @@ public class PostgreSqlProductoRepository : IProductoRepository
     }
 
     /// <summary>
+    /// Carga N productos al azar marcados como Enviado (status = 1) para el destino.
+    /// </summary>
+    public async Task<List<ProductoApi>> LoadRandomSentProductsAsync(int count, SyncTarget target, CancellationToken cancellationToken = default)
+    {
+        var c = Cols(target);
+        string query = $"SELECT {ProductoApiColumns} FROM productos WHERE {c.Status} = 1 ORDER BY random() LIMIT @count";
+
+        using (var connection = new NpgsqlConnection(_connectionString))
+        {
+            await connection.OpenAsync(cancellationToken);
+            var result = (await connection.QueryAsync<ProductoApi>(query, new { count })).ToList();
+
+            _logger.LogInformation("Cargados {Count} productos Enviados al azar para {Target}", result.Count, target);
+            return result;
+        }
+    }
+
+    /// <summary>
     /// Carga productos Pendiente (status = 0) del destino.
     /// </summary>
     public async Task<List<ProductoApi>> LoadPendingProductsAsync(SyncTarget target = SyncTarget.ComprasParaguai, CancellationToken cancellationToken = default)
