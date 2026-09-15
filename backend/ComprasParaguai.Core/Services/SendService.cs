@@ -63,19 +63,26 @@ public class SendService : ISendService
 
                 if (response.Success)
                 {
-                    var codes = batch.Select(p => p.Code).ToList();
-                    await _repository.MarkAsSentAsync(codes, DateTime.UtcNow, _options.Target, cancellationToken);
-                    sent += batch.Length;
+                    // El lote se procesó, pero la API puede rechazar productos individuales (207 Multi-Status).
+                    var rejected = response.FailedProducts();
+                    foreach (var (code, error) in rejected)
+                    {
+                        await _repository.MarkAsErrorAsync(code, error, _options.Target, cancellationToken);
+                        failedCodes.Add(code);
+                    }
+
+                    var accepted = batch.Select(p => p.Code).Where(c => !rejected.ContainsKey(c)).ToList();
+                    if (accepted.Count > 0)
+                        await _repository.MarkAsSentAsync(accepted, DateTime.UtcNow, _options.Target, cancellationToken);
+
+                    sent += accepted.Count;
+                    failed += rejected.Count;
                 }
                 else
                 {
+                    string errorMsg = response.Message ?? "Error desconocido";
                     foreach (var product in batch)
                     {
-                        string errorMsg = response.Message ?? "Error desconocido";
-                        var validationError = response.ValidationErrors.FirstOrDefault(e => e.Code == product.Code);
-                        if (validationError != null)
-                            errorMsg = $"{validationError.Field}: {validationError.Error}";
-
                         await _repository.MarkAsErrorAsync(product.Code, errorMsg, _options.Target, cancellationToken);
                         failedCodes.Add(product.Code);
                     }

@@ -32,9 +32,9 @@ var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings {
     Log.Information("Ejecutando migraciones de base de datos...");
     DbMigrator.Migrate(postgresConnStr);
 
-    var imageBaseUrl = config["Sync:ImageBaseUrl"] ?? "https://default.image.url/";
-    var imagenPorDefecto = config["Sync:ImagenPorDefecto"] ?? "https://default.image.url/default.png";
-    var linkPattern = config["Sync:LinkPattern"] ?? "https://default.shop.com/{code}";
+    var imageBaseUrl = config["Sync:ImageBaseUrl"] ?? throw new InvalidOperationException("Sync:ImageBaseUrl no configurada");
+    var imagenPorDefecto = config["Sync:ImagenPorDefecto"] ?? throw new InvalidOperationException("Sync:ImagenPorDefecto no configurada");
+    var linkPattern = config["Sync:LinkPattern"] ?? throw new InvalidOperationException("Sync:LinkPattern no configurada");
     var syncIntervalMinutes = config.GetValue<int>("Sync:IntervalMinutes", 120);
 
     builder.Services.AddSingleton(new ProductoMapperService(imageBaseUrl, imagenPorDefecto, linkPattern));

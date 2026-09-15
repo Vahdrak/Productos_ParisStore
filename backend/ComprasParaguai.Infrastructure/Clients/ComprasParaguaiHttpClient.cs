@@ -106,29 +106,40 @@ public class ComprasParaguaiHttpClient : IComprasParaguaiClient
                 await _httpClient.PostAsJsonAsync("/api/products/import/", payload, cancellationToken: ct),
                 cancellationToken);
 
-            // Parsear respuesta (esperamos 207 Multi-Status).
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            // 207 Multi-Status: el lote se procesó; el detalle por producto viene en validation_errors.
             if (response.StatusCode == System.Net.HttpStatusCode.MultiStatus || response.IsSuccessStatusCode)
             {
-                var content = await response.Content.ReadFromJsonAsync<ImportResponse>();
+                var content = JsonSerializer.Deserialize<ImportResponse>(body);
                 if (content != null)
                 {
-                    _logger.LogInformation(
-                        "Importación OK: {Processed} procesados, {Failed} fallidos, {Errors} errores de validación",
-                        content.ProductsProcessed, content.ProductsFailed, content.ValidationErrors.Count);
+                    if (content.ProductsFailed > 0)
+                    {
+                        var sample = content.ValidationErrors
+                            .Take(3)
+                            .Select(e => $"{e.Product?.Code}: {string.Join("; ", e.Errors.Select(x => $"{x.Field} - {x.Message}"))}");
+                        _logger.LogWarning(
+                            "Lote procesado con rechazos: {Processed} OK, {Failed} rechazados. Ej.: {Sample}",
+                            content.ProductsProcessed, content.ProductsFailed, string.Join(" | ", sample));
+                    }
+                    else
+                    {
+                        _logger.LogInformation("Lote procesado: {Processed} OK", content.ProductsProcessed);
+                    }
                     return content;
                 }
             }
 
-            // Error: log y retornar fallo.
-            var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
             _logger.LogError(
                 "Error importando lote. Status: {StatusCode}. Content: {Content}",
-                response.StatusCode, errorContent);
+                response.StatusCode, body.Length > 2000 ? body[..2000] : body);
 
             return new ImportResponse
             {
                 Success = false,
-                Message = $"HTTP {response.StatusCode}: {errorContent}"
+                Message = $"HTTP {response.StatusCode}: {body}",
+                RateLimited = response.StatusCode == System.Net.HttpStatusCode.TooManyRequests
             };
         }
         catch (Exception ex)

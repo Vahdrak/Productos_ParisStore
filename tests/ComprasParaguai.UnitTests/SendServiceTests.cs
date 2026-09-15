@@ -1,3 +1,4 @@
+using System.Text.Json;
 using ComprasParaguai.Core.Interfaces;
 using ComprasParaguai.Core.Models;
 using ComprasParaguai.Core.Services;
@@ -89,11 +90,7 @@ public class SendServiceTests
             Success = false,
             Message = "Validation failed",
             ProductsProcessed = 0,
-            ProductsFailed = 1,
-            ValidationErrors = new()
-            {
-                new ValidationError { Code = "INVALID-001", Field = "price", Error = "Price below minimum" }
-            }
+            ProductsFailed = 1
         };
 
         mockClient
@@ -509,5 +506,57 @@ public class SendServiceTests
         Assert.Equal(1, result.Failed);
         mockClient.Verify(c => c.ImportProductsAsync(It.IsAny<IEnumerable<ProductoApi>>(), It.IsAny<CancellationToken>()), Times.Exactly(3)); // 1 + 2 reintentos
         mockRepository.Verify(r => r.MarkAsErrorAsync("RL-2", "HTTP 429", SyncTarget.ComparaParaguai, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task SendPendingAsync_MultiStatusWithRejections_MarksOnlyAcceptedAsSent()
+    {
+        // Caso real de Compras Paraguai: 207 con success=true pero productos rechazados en validation_errors.
+        var mockRepository = new Mock<IProductoRepository>();
+        var mockClient = new Mock<IComprasParaguaiClient>();
+
+        var ok = new ProductoApi { Code = "OK-1", NamePt = "x", UrlImage = "https://img/1.jpg", Link = "https://l/1", Price = 10, Stock = 1 };
+        var bad = new ProductoApi { Code = "BAD-1", NamePt = "x", UrlImage = "sinimagen.jpg", Link = "https://l/2", Price = 10, Stock = 1 };
+
+        mockRepository
+            .Setup(r => r.LoadPendingProductsAsync(It.IsAny<SyncTarget>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<ProductoApi> { ok, bad });
+
+        var response = JsonSerializer.Deserialize<ImportResponse>("""
+            {"success":true,"message":"Import completed.","products_processed":1,"products_failed":1,
+             "validation_errors":[{"product":{"code":"BAD-1","url_image":"sinimagen.jpg"},
+               "errors":[{"field":"url_image","message":"Input should be a valid URL, relative URL without a base"}]}]}
+            """)!;
+
+        mockClient
+            .Setup(c => c.ImportProductsAsync(It.IsAny<IEnumerable<ProductoApi>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(response);
+
+        var service = new SendService(mockRepository.Object, mockClient.Object, SendOptions.ComprasParaguai);
+
+        var result = await service.SendPendingAsync(CancellationToken.None);
+
+        Assert.Equal(1, result.Sent);
+        Assert.Equal(1, result.Failed);
+        Assert.Equal(new[] { "BAD-1" }, result.ErrorCodes);
+
+        mockRepository.Verify(r => r.MarkAsSentAsync(
+            It.Is<IEnumerable<string>>(c => c.SequenceEqual(new[] { "OK-1" })),
+            It.IsAny<DateTime>(), SyncTarget.ComprasParaguai, It.IsAny<CancellationToken>()), Times.Once);
+        mockRepository.Verify(r => r.MarkAsErrorAsync(
+            "BAD-1", "url_image: Input should be a valid URL, relative URL without a base",
+            SyncTarget.ComprasParaguai, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public void ImportResponse_DeserializesSnakeCaseFromApi()
+    {
+        var r = JsonSerializer.Deserialize<ImportResponse>(
+            """{"success":true,"message":"Import completed.","products_processed":499,"products_failed":1,"validation_errors":[]}""")!;
+
+        Assert.True(r.Success);
+        Assert.Equal(499, r.ProductsProcessed);
+        Assert.Equal(1, r.ProductsFailed);
+        Assert.Empty(r.FailedProducts());
     }
 }

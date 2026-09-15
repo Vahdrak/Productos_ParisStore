@@ -73,16 +73,16 @@ public class ProductoMapperService
             brand = view.ValorAtributo1;
         }
 
-        // URL de imagen: solo el nombre del archivo (sin URL base).
-        string urlImage = "sinimagen.jpg";
+        // URL de imagen: debe ser absoluta (Compras Paraguai la valida). base + archivo, o la imagen por defecto.
+        string urlImage = _imagenPorDefecto;
         if (!string.IsNullOrWhiteSpace(view.Imagenes) &&
             !view.Imagenes.Equals("sinimagen.jpg", StringComparison.OrdinalIgnoreCase))
         {
-            urlImage = view.Imagenes;
+            urlImage = _imageBaseUrl.TrimEnd('/') + "/" + view.Imagenes.Trim().TrimStart('/');
         }
 
-        // Link: URL de Toku + nombre de imagen.
-        string link = $"https://www.toku.com.py/media/{urlImage}";
+        // Link a la página del producto en la tienda (patrón configurable con {code}).
+        string link = _linkPattern.Replace("{code}", Uri.EscapeDataString(view.Code));
 
         // Armar ProductoApi.
         var api = new ProductoApi
