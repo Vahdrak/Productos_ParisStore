@@ -107,7 +107,7 @@ El front Angular / `ComprasParaguai.Api` muestran el estado de **Compras** (`syn
 
 **`HTTP TooManyRequests` en Compara** — límite de 80 requests por hora (no por segundo). `SendOptions.ComparaParaguai` usa 1000 por lote + 46 s de pausa, así que en condiciones normales no aparece; si otro proceso consumió la cuota, el worker espera 5 min y reintenta el lote hasta 3 veces antes de marcarlo en Error. Los que igual queden en `2` no se reintentan solos: `UPDATE productos SET sync_compara_status = 0 WHERE sync_compara_status = 2;` y volver a correr `--send-pending`.
 
-**`HTTP Unauthorized`** — token incorrecto o ausente. Ver sección Credenciales. El header es `Authorization: Bearer {token}`.
+**`HTTP Unauthorized`** — token incorrecto, ausente o en el header equivocado. Cada API autentica distinto: **Compras** usa un header propio `token: <valor>` (si se manda como `Authorization: Bearer` responde "Token is invalid or expired"); **Compara** usa `Authorization: Bearer <valor>`. Ver sección Credenciales.
 
 **`--send-pending` no envía nada** — `--check-pending` da 0. Si esperabas cambios, verificar que `Worker.Sync` corrió (`sync_runs`) y que la vista tiene datos distintos.
 

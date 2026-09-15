@@ -10,7 +10,7 @@ namespace ComprasParaguai.Infrastructure.Clients;
 /// <summary>
 /// Cliente HTTP tipado para Compras Paraguai API.
 /// Usa Polly para reintentos, timeout y circuit breaker.
-/// Token va en header (nunca en URL).
+/// Token va en el header "token" (nunca en URL).
 /// </summary>
 public class ComprasParaguaiHttpClient : IComprasParaguaiClient
 {
@@ -34,7 +34,9 @@ public class ComprasParaguaiHttpClient : IComprasParaguaiClient
 
         // Configurar cliente base.
         _httpClient.BaseAddress = new Uri(baseUrl ?? throw new ArgumentNullException(nameof(baseUrl)));
-        _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {_token}");
+        // La API de Compras autentica con un header propio "token" (ver docs/api/*.yaml).
+        // NO usar Authorization: Bearer — su backend lo interpreta como JWT y lo rechaza.
+        _httpClient.DefaultRequestHeaders.Add("token", _token);
         _httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
         _httpClient.Timeout = TimeSpan.FromSeconds(TimeoutSeconds);
 
