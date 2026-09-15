@@ -54,6 +54,13 @@ public class SendService : ISendService
             {
                 var response = await _client.ImportProductsAsync(batch, cancellationToken);
 
+                // 429: la cuota por hora se agotó. Esperar y reintentar el mismo lote en vez de marcarlo en Error.
+                for (int attempt = 0; response.RateLimited && attempt < _options.RateLimitRetries; attempt++)
+                {
+                    await Task.Delay(_options.RateLimitWaitMs, cancellationToken);
+                    response = await _client.ImportProductsAsync(batch, cancellationToken);
+                }
+
                 if (response.Success)
                 {
                     var codes = batch.Select(p => p.Code).ToList();

@@ -454,6 +454,60 @@ public class SendServiceTests
         Assert.Equal(SyncTarget.ComprasParaguai, SendOptions.ComprasParaguai.Target);
         Assert.Equal(1000, SendOptions.ComparaParaguai.BatchSize);
         Assert.Equal(SyncTarget.ComparaParaguai, SendOptions.ComparaParaguai.Target);
-        Assert.True(SendOptions.ComparaParaguai.DelayMs > 0);
+        // 80 req/h => mínimo 45 s entre lotes.
+        Assert.True(SendOptions.ComparaParaguai.DelayMs >= 45_000);
+        Assert.True(SendOptions.ComparaParaguai.RateLimitRetries > 0);
+    }
+
+    [Fact]
+    public async Task SendPendingAsync_RateLimited_WaitsAndRetriesSameBatch()
+    {
+        var mockRepository = new Mock<IProductoRepository>();
+        var mockClient = new Mock<IComprasParaguaiClient>();
+
+        var product = new ProductoApi { Code = "RL-1", NamePt = "x", UrlImage = "u", Link = "l", Price = 10, Stock = 1 };
+        mockRepository
+            .Setup(r => r.LoadPendingProductsAsync(SyncTarget.ComparaParaguai, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<ProductoApi> { product });
+
+        mockClient
+            .SetupSequence(c => c.ImportProductsAsync(It.IsAny<IEnumerable<ProductoApi>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ImportResponse { Success = false, RateLimited = true, Message = "HTTP 429" })
+            .ReturnsAsync(new ImportResponse { Success = false, RateLimited = true, Message = "HTTP 429" })
+            .ReturnsAsync(new ImportResponse { Success = true });
+
+        var service = new SendService(mockRepository.Object, mockClient.Object,
+            new SendOptions(SyncTarget.ComparaParaguai, BatchSize: 1000, DelayMs: 0, RateLimitWaitMs: 1, RateLimitRetries: 3));
+
+        var result = await service.SendPendingAsync(CancellationToken.None);
+
+        Assert.Equal(1, result.Sent);
+        Assert.Equal(0, result.Failed);
+        mockClient.Verify(c => c.ImportProductsAsync(It.IsAny<IEnumerable<ProductoApi>>(), It.IsAny<CancellationToken>()), Times.Exactly(3));
+        mockRepository.Verify(r => r.MarkAsErrorAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<SyncTarget>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SendPendingAsync_RateLimited_AfterRetriesExhausted_MarksError()
+    {
+        var mockRepository = new Mock<IProductoRepository>();
+        var mockClient = new Mock<IComprasParaguaiClient>();
+
+        var product = new ProductoApi { Code = "RL-2", NamePt = "x", UrlImage = "u", Link = "l", Price = 10, Stock = 1 };
+        mockRepository
+            .Setup(r => r.LoadPendingProductsAsync(SyncTarget.ComparaParaguai, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<ProductoApi> { product });
+        mockClient
+            .Setup(c => c.ImportProductsAsync(It.IsAny<IEnumerable<ProductoApi>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ImportResponse { Success = false, RateLimited = true, Message = "HTTP 429" });
+
+        var service = new SendService(mockRepository.Object, mockClient.Object,
+            new SendOptions(SyncTarget.ComparaParaguai, BatchSize: 1000, DelayMs: 0, RateLimitWaitMs: 1, RateLimitRetries: 2));
+
+        var result = await service.SendPendingAsync(CancellationToken.None);
+
+        Assert.Equal(1, result.Failed);
+        mockClient.Verify(c => c.ImportProductsAsync(It.IsAny<IEnumerable<ProductoApi>>(), It.IsAny<CancellationToken>()), Times.Exactly(3)); // 1 + 2 reintentos
+        mockRepository.Verify(r => r.MarkAsErrorAsync("RL-2", "HTTP 429", SyncTarget.ComparaParaguai, It.IsAny<CancellationToken>()), Times.Once);
     }
 }

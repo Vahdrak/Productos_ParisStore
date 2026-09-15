@@ -10,6 +10,9 @@ public class ImportResponse
     public int ProductsProcessed { get; set; }
     public int ProductsFailed { get; set; }
     public List<ValidationError> ValidationErrors { get; set; } = new();
+
+    /// <summary>HTTP 429: la API pidió esperar. El lote no se procesó; conviene reintentar tras una pausa.</summary>
+    public bool RateLimited { get; set; }
 }
 
 /// <summary>
