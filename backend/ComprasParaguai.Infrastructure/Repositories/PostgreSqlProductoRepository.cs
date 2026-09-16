@@ -212,7 +212,12 @@ public class PostgreSqlProductoRepository : IProductoRepository
                 link_purchase AS LinkPurchase,
                 force_image_update AS ForceImageUpdate,
                 source_hash AS SourceHash,
-                sync_status AS SyncStatus";
+                sync_status AS SyncStatus,
+                sync_compara_status AS SyncComparaStatus,
+                last_sent_at AS LastSentAt,
+                last_sent_compara_at AS LastSentComparaAt,
+                last_error AS LastError,
+                last_error_compara AS LastErrorCompara";
 
     // Columnas de estado por destino. Switch cerrado: los nombres nunca vienen de input externo.
     private static (string Status, string SentAt, string Error) Cols(SyncTarget target) => target switch
@@ -400,7 +405,12 @@ public class PostgreSqlProductoRepository : IProductoRepository
                 link_purchase AS LinkPurchase,
                 force_image_update AS ForceImageUpdate,
                 source_hash AS SourceHash,
-                sync_status AS SyncStatus
+                sync_status AS SyncStatus,
+                sync_compara_status AS SyncComparaStatus,
+                last_sent_at AS LastSentAt,
+                last_sent_compara_at AS LastSentComparaAt,
+                last_error AS LastError,
+                last_error_compara AS LastErrorCompara
             FROM productos
             WHERE code = @code
         ";
@@ -475,7 +485,7 @@ public class PostgreSqlProductoRepository : IProductoRepository
     /// Busca y pagina productos en la BD.
     /// </summary>
     public async Task<ProductListDto> SearchProductsAsync(
-        string? code, string? name, int? syncStatus, int page, int pageSize, CancellationToken cancellationToken = default)
+        string? code, string? name, int? syncStatus, int page, int pageSize, SyncTarget target = SyncTarget.ComprasParaguai, CancellationToken cancellationToken = default)
     {
         var conditions = new List<string>();
         var parameters = new DynamicParameters();
@@ -494,7 +504,7 @@ public class PostgreSqlProductoRepository : IProductoRepository
 
         if (syncStatus.HasValue)
         {
-            conditions.Add("sync_status = @syncStatus");
+            conditions.Add($"{Cols(target).Status} = @syncStatus");
             parameters.Add("syncStatus", syncStatus.Value);
         }
 
@@ -516,7 +526,12 @@ public class PostgreSqlProductoRepository : IProductoRepository
                 link_purchase AS LinkPurchase,
                 force_image_update AS ForceImageUpdate,
                 source_hash AS SourceHash,
-                sync_status AS SyncStatus
+                sync_status AS SyncStatus,
+                sync_compara_status AS SyncComparaStatus,
+                last_sent_at AS LastSentAt,
+                last_sent_compara_at AS LastSentComparaAt,
+                last_error AS LastError,
+                last_error_compara AS LastErrorCompara
             FROM productos
             {whereClause}
             ORDER BY code
@@ -551,6 +566,36 @@ public class PostgreSqlProductoRepository : IProductoRepository
     /// <summary>
     /// Obtiene los últimos cambios de todos los productos con paginación.
     /// </summary>
+    /// <summary>
+    /// Contadores por estado para cada destino, en una sola query.
+    /// </summary>
+    public async Task<List<TargetStatusCounts>> GetStatusCountsAsync(CancellationToken cancellationToken = default)
+    {
+        const string query = @"
+            SELECT
+                COUNT(*) FILTER (WHERE sync_status = 0)         AS compras_pending,
+                COUNT(*) FILTER (WHERE sync_status = 1)         AS compras_sent,
+                COUNT(*) FILTER (WHERE sync_status = 2)         AS compras_error,
+                MAX(last_sent_at)                               AS compras_last_sent,
+                COUNT(*) FILTER (WHERE sync_compara_status = 0) AS compara_pending,
+                COUNT(*) FILTER (WHERE sync_compara_status = 1) AS compara_sent,
+                COUNT(*) FILTER (WHERE sync_compara_status = 2) AS compara_error,
+                MAX(last_sent_compara_at)                       AS compara_last_sent
+            FROM productos";
+
+        using (var connection = new NpgsqlConnection(_connectionString))
+        {
+            await connection.OpenAsync(cancellationToken);
+            var row = await connection.QuerySingleAsync(query);
+
+            return new List<TargetStatusCounts>
+            {
+                new(SyncTarget.ComprasParaguai, (int)row.compras_pending, (int)row.compras_sent, (int)row.compras_error, (DateTime?)row.compras_last_sent),
+                new(SyncTarget.ComparaParaguai, (int)row.compara_pending, (int)row.compara_sent, (int)row.compara_error, (DateTime?)row.compara_last_sent)
+            };
+        }
+    }
+
     public async Task<ProductChangeListDto> GetRecentChangesAsync(int page = 1, int pageSize = 20, CancellationToken cancellationToken = default)
     {
         const string query = @"

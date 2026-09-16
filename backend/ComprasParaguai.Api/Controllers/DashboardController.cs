@@ -24,7 +24,7 @@ public class DashboardController : ControllerBase
     }
 
     /// <summary>
-    /// Retorna contadores y resumen para el dashboard.
+    /// Retorna contadores y resumen para el dashboard con información de ambos destinos.
     /// GET /api/dashboard
     /// </summary>
     [HttpGet]
@@ -32,19 +32,36 @@ public class DashboardController : ControllerBase
     {
         try
         {
-            var pending = await _productoRepository.LoadPendingProductsAsync(SyncTarget.ComprasParaguai, cancellationToken);
+            var statusCounts = await _productoRepository.GetStatusCountsAsync(cancellationToken);
             var lastSync = await _syncRunRepository.GetLastSuccessfulSyncAsync(cancellationToken);
             var lastSyncRun = await _syncRunRepository.GetLastSyncRunAsync(cancellationToken);
 
+            var targets = statusCounts.Select(sc => new TargetStatusDto
+            {
+                Target = sc.Target.ToString(),
+                Pending = sc.Pending,
+                Sent = sc.Sent,
+                Error = sc.Error,
+                Total = sc.Pending + sc.Sent + sc.Error,
+                LastSentAt = sc.LastSentAt ?? DateTime.MinValue
+            }).ToList();
+
+            var comprasPending = statusCounts.FirstOrDefault(sc => sc.Target == SyncTarget.ComprasParaguai)?.Pending ?? 0;
+
             var dto = new DashboardDto
             {
-                PendingCount = pending.Count,
+                Targets = targets,
+                PendingCount = comprasPending,
                 LastSyncAt = lastSync,
-                Status = pending.Count == 0 ? "OK" : "PENDIENTE",
-                NewCount = lastSyncRun?.NewCount ?? 0,
-                UpdatedCount = lastSyncRun?.UpdatedCount ?? 0,
-                SentCount = lastSyncRun?.SentCount ?? 0,
-                ErrorCount = lastSyncRun?.ErrorCount ?? 0
+                Status = comprasPending == 0 ? "OK" : "PENDIENTE",
+                LastSyncRun = lastSyncRun is not null ? new LastSyncRunDto
+                {
+                    StartedAt = lastSyncRun.StartedAt,
+                    RowsInView = lastSyncRun.RowsInView,
+                    NewCount = lastSyncRun.NewCount,
+                    UpdatedCount = lastSyncRun.UpdatedCount,
+                    Notes = lastSyncRun.Notes
+                } : null
             };
 
             return Ok(dto);
@@ -54,11 +71,8 @@ public class DashboardController : ControllerBase
             _logger.LogWarning(ex, "Database unavailable, returning empty dashboard");
             return Ok(new DashboardDto
             {
+                Targets = new(),
                 PendingCount = 0,
-                NewCount = 0,
-                UpdatedCount = 0,
-                SentCount = 0,
-                ErrorCount = 0,
                 Status = "NO_DATA",
                 LastSyncAt = null
             });
@@ -145,13 +159,30 @@ public class DashboardController : ControllerBase
 
 public class DashboardDto
 {
+    public List<TargetStatusDto> Targets { get; set; } = new();
     public int PendingCount { get; set; }
+    public DateTime? LastSyncAt { get; set; }
+    public LastSyncRunDto? LastSyncRun { get; set; }
+    public string Status { get; set; } = "UNKNOWN";
+}
+
+public class TargetStatusDto
+{
+    public string Target { get; set; } = string.Empty;
+    public int Pending { get; set; }
+    public int Sent { get; set; }
+    public int Error { get; set; }
+    public int Total { get; set; }
+    public DateTime LastSentAt { get; set; }
+}
+
+public class LastSyncRunDto
+{
+    public DateTime? StartedAt { get; set; }
+    public int? RowsInView { get; set; }
     public int NewCount { get; set; }
     public int UpdatedCount { get; set; }
-    public int SentCount { get; set; }
-    public int ErrorCount { get; set; }
-    public DateTime? LastSyncAt { get; set; }
-    public string Status { get; set; } = "UNKNOWN";
+    public string? Notes { get; set; }
 }
 
 public class SyncTrendsDto

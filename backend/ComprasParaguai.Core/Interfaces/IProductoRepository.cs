@@ -89,7 +89,12 @@ public interface IProductoRepository
     /// <summary>
     /// Busca y pagina productos en la BD.
     /// </summary>
-    Task<ProductListDto> SearchProductsAsync(string? code, string? name, int? syncStatus, int page, int pageSize, CancellationToken cancellationToken = default);
+    Task<ProductListDto> SearchProductsAsync(string? code, string? name, int? syncStatus, int page, int pageSize, SyncTarget target = SyncTarget.ComprasParaguai, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Cuenta productos por estado (Pendiente/Enviado/Error) para cada destino, con fecha del último envío.
+    /// </summary>
+    Task<List<TargetStatusCounts>> GetStatusCountsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Obtiene los cambios recientes de todos los productos con paginación.

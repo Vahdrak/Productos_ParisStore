@@ -46,6 +46,12 @@ builder.Services.AddTransient<IProductoRepository>(sp =>
 builder.Services.AddTransient<ISyncRunRepository>(sp =>
     new PostgreSqlSyncRunRepository(postgresConnStr));
 
+builder.Services.AddTransient<ISendRunRepository>(sp =>
+    new PostgreSqlSendRunRepository(postgresConnStr));
+
+builder.Services.AddTransient<IVerifyRunRepository>(sp =>
+    new PostgreSqlVerifyRunRepository(postgresConnStr));
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())

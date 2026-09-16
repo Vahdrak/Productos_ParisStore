@@ -32,6 +32,8 @@ builder.Services.AddSingleton<IProductoRepository>(sp =>
     new PostgreSqlProductoRepository(connectionString, sp.GetRequiredService<ILogger<PostgreSqlProductoRepository>>()));
 builder.Services.AddSingleton<IProductQueryClient>(sp =>
     new ComprasParaguaiHttpClient(new HttpClient(), comprasUrl, comprasToken, sp.GetRequiredService<ILogger<ComprasParaguaiHttpClient>>()));
+builder.Services.AddSingleton<IVerifyRunRepository>(sp =>
+    new PostgreSqlVerifyRunRepository(connectionString));
 
 var host = builder.Build();
 var logger = host.Services.GetRequiredService<ILogger<Program>>();
@@ -58,7 +60,11 @@ async Task VerifyAsync(SyncTarget target, string targetName, IProductQueryClient
 {
     logger.LogInformation("=== Worker.Verify → {Target}: {N} productos al azar marcados Enviado ===", targetName, sampleSize);
 
-    var service = new VerifyService(host.Services.GetRequiredService<IProductoRepository>(), client, target);
+    var service = new VerifyService(
+        host.Services.GetRequiredService<IProductoRepository>(),
+        client,
+        target,
+        host.Services.GetRequiredService<IVerifyRunRepository>());
     var progress = new Progress<int>(i => { if (i % 50 == 0) logger.LogInformation("  consultados {I}/{N}", i, sampleSize); });
 
     var results = await service.VerifyAsync(sampleSize, delayMs, progress);

@@ -5,37 +5,50 @@ namespace ComprasParaguai.Core.Services;
 
 /// <summary>
 /// Orquesta el envío de productos a un destino (SendOptions.Target).
-/// Batcha, envía por el cliente, y marca Enviado/Error en la columna de estado de ese destino.
+/// Batcha, envía por el cliente, marca Enviado/Error en la columna de estado de ese destino
+/// y registra la corrida en send_runs (si hay repositorio de corridas).
 /// </summary>
 public class SendService : ISendService
 {
     private readonly IProductoRepository _repository;
     private readonly IComprasParaguaiClient _client;
     private readonly SendOptions _options;
+    private readonly ISendRunRepository? _runs;
 
-    public SendService(IProductoRepository repository, IComprasParaguaiClient client, SendOptions options)
+    public SendService(IProductoRepository repository, IComprasParaguaiClient client, SendOptions options, ISendRunRepository? runs = null)
     {
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _client = client ?? throw new ArgumentNullException(nameof(client));
         _options = options ?? throw new ArgumentNullException(nameof(options));
+        _runs = runs;
     }
 
-    public async Task<SendResult> SendAllAsync(CancellationToken cancellationToken = default)
-    {
-        var all = await _repository.LoadAllProductsAsync(cancellationToken);
-        return await SendBatchesAsync(all, cancellationToken);
-    }
+    public Task<SendResult> SendAllAsync(CancellationToken cancellationToken = default) =>
+        RunAsync("all", ct => _repository.LoadAllProductsAsync(ct), cancellationToken);
 
-    public async Task<SendResult> SendPendingAsync(CancellationToken cancellationToken = default)
-    {
-        var pending = await _repository.LoadPendingProductsAsync(_options.Target, cancellationToken);
-        return await SendBatchesAsync(pending, cancellationToken);
-    }
+    public Task<SendResult> SendPendingAsync(CancellationToken cancellationToken = default) =>
+        RunAsync("pending", ct => _repository.LoadPendingProductsAsync(_options.Target, ct), cancellationToken);
 
-    public async Task<SendResult> SendSampleAsync(int count, CancellationToken cancellationToken = default)
+    public Task<SendResult> SendSampleAsync(int count, CancellationToken cancellationToken = default) =>
+        RunAsync("sample", ct => _repository.LoadRandomProductsAsync(count, ct), cancellationToken);
+
+    private async Task<SendResult> RunAsync(string mode, Func<CancellationToken, Task<List<ProductoApi>>> load, CancellationToken cancellationToken)
     {
-        var sample = await _repository.LoadRandomProductsAsync(count, cancellationToken);
-        return await SendBatchesAsync(sample, cancellationToken);
+        long? runId = _runs is null ? null : await _runs.StartAsync(_options.Target, mode, cancellationToken);
+        try
+        {
+            var products = await load(cancellationToken);
+            var result = await SendBatchesAsync(products, cancellationToken);
+            if (runId is { } id)
+                await _runs!.FinishAsync(id, result, null, cancellationToken);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            if (runId is { } id)
+                await _runs!.FinishAsync(id, SendResult.Empty, ex.Message, cancellationToken);
+            throw;
+        }
     }
 
     private async Task<SendResult> SendBatchesAsync(List<ProductoApi> products, CancellationToken cancellationToken)

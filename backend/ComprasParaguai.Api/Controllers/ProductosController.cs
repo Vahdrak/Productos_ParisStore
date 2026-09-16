@@ -54,20 +54,22 @@ public class ProductosController : ControllerBase
 
     /// <summary>
     /// Lista todos los productos con filtros opcionales.
-    /// GET /api/productos?syncStatus=0&page=1&pageSize=50
+    /// GET /api/productos?syncStatus=0&target=compras&page=1&pageSize=50
     /// </summary>
     [HttpGet]
     public async Task<ActionResult<ProductListDto>> GetAll(
         [FromQuery] int? syncStatus = null,
         [FromQuery] string? code = null,
         [FromQuery] string? name = null,
+        [FromQuery] string? target = null,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 50,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            var result = await _repository.SearchProductsAsync(code, name, syncStatus, page, pageSize, cancellationToken);
+            var syncTarget = ParseTarget(target);
+            var result = await _repository.SearchProductsAsync(code, name, syncStatus, page, pageSize, syncTarget, cancellationToken);
             return Ok(result);
         }
         catch (Exception ex)
@@ -79,14 +81,17 @@ public class ProductosController : ControllerBase
 
     /// <summary>
     /// Lista todos los productos Pendiente de envío.
-    /// GET /api/productos/pending
+    /// GET /api/productos/pending?target=compras
     /// </summary>
     [HttpGet("pending")]
-    public async Task<ActionResult<List<ProductoApi>>> GetPending(CancellationToken cancellationToken)
+    public async Task<ActionResult<List<ProductoApi>>> GetPending(
+        [FromQuery] string? target = null,
+        CancellationToken cancellationToken = default)
     {
         try
         {
-            var products = await _repository.LoadPendingProductsAsync(SyncTarget.ComprasParaguai, cancellationToken);
+            var syncTarget = ParseTarget(target);
+            var products = await _repository.LoadPendingProductsAsync(syncTarget, cancellationToken);
             return Ok(products);
         }
         catch (Exception ex)
@@ -264,15 +269,18 @@ public class ProductosController : ControllerBase
     }
 
     /// <summary>
-    /// Obtiene productos con errores (sync_status = 2).
-    /// GET /api/productos/errors
+    /// Obtiene productos con errores.
+    /// GET /api/productos/errors?target=compras
     /// </summary>
     [HttpGet("errors")]
-    public async Task<ActionResult<List<ProductoWithErrorDto>>> GetErrors(CancellationToken cancellationToken)
+    public async Task<ActionResult<List<ProductoWithErrorDto>>> GetErrors(
+        [FromQuery] string? target = null,
+        CancellationToken cancellationToken = default)
     {
         try
         {
-            var errors = await _repository.LoadErrorProductsAsync(SyncTarget.ComprasParaguai, cancellationToken);
+            var syncTarget = ParseTarget(target);
+            var errors = await _repository.LoadErrorProductsAsync(syncTarget, cancellationToken);
             return Ok(errors);
         }
         catch (Exception ex)
@@ -281,6 +289,13 @@ public class ProductosController : ControllerBase
             return StatusCode(500, new { error = ex.Message });
         }
     }
+
+    private static SyncTarget ParseTarget(string? target) =>
+        target?.ToLowerInvariant() switch
+        {
+            "compara" or "comparaparaguai" => SyncTarget.ComparaParaguai,
+            _ => SyncTarget.ComprasParaguai
+        };
 }
 
 public class ProductDiffDto

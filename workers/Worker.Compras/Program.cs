@@ -35,8 +35,10 @@ builder.Services.AddSingleton<IProductoRepository>(sp =>
     new PostgreSqlProductoRepository(connectionString, sp.GetRequiredService<ILogger<PostgreSqlProductoRepository>>()));
 builder.Services.AddSingleton<IComprasParaguaiClient>(sp =>
     new ComprasParaguaiHttpClient(new HttpClient(), apiUrl, token, sp.GetRequiredService<ILogger<ComprasParaguaiHttpClient>>()));
+builder.Services.AddSingleton<ISendRunRepository>(_ => new PostgreSqlSendRunRepository(connectionString));
 builder.Services.AddSingleton<ISendService>(sp =>
-    new SendService(sp.GetRequiredService<IProductoRepository>(), sp.GetRequiredService<IComprasParaguaiClient>(), options));
+    new SendService(sp.GetRequiredService<IProductoRepository>(), sp.GetRequiredService<IComprasParaguaiClient>(), options,
+        sp.GetRequiredService<ISendRunRepository>()));
 
 var command = args.FirstOrDefault()?.ToLowerInvariant();
 
