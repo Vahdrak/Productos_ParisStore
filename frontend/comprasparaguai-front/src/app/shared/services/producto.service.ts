@@ -18,6 +18,11 @@ export interface Producto {
   forceImageUpdate?: boolean;
   sourceHash?: string;
   syncStatus?: number;
+  syncComparaStatus?: number;
+  lastSentAt?: string;
+  lastSentComparaAt?: string;
+  lastError?: string;
+  lastErrorCompara?: string;
 }
 
 export interface ProductHistorial {
@@ -38,13 +43,28 @@ export interface ProductDiff {
   hasChanges: boolean;
 }
 
-export interface Dashboard {
-  pendingCount: number;
+export interface TargetStatus {
+  target: string;
+  pending: number;
+  sent: number;
+  error: number;
+  total: number;
+  lastSentAt: string;
+}
+
+export interface LastSyncRun {
+  startedAt?: string;
+  rowsInView?: number;
   newCount: number;
   updatedCount: number;
-  sentCount: number;
-  errorCount: number;
+  notes?: string;
+}
+
+export interface Dashboard {
+  targets: TargetStatus[];
+  pendingCount: number;
   lastSyncAt?: string;
+  lastSyncRun?: LastSyncRun;
   status: string;
 }
 
@@ -111,18 +131,58 @@ export interface SyncTrends {
   statistics: TrendStatistics;
 }
 
+export interface SendRun {
+  id: number;
+  target: string;
+  mode: string;
+  startedAt: string;
+  finishedAt?: string;
+  total: number;
+  sent: number;
+  failed: number;
+  error?: string;
+}
+
+export interface VerifyRun {
+  id: number;
+  target: string;
+  startedAt: string;
+  finishedAt?: string;
+  sampleSize: number;
+  found: number;
+  priceMatch: number;
+  stockMatch: number;
+  csvPath?: string;
+}
+
+export interface VerifyResult {
+  code: string;
+  namePt?: string;
+  found: boolean;
+  priceLocal?: number;
+  priceApi?: number;
+  stockLocal?: number;
+  stockApi?: number;
+  availableApi?: boolean;
+  updatedAtApi?: string;
+}
+
 @Injectable({
   providedIn: 'root'
 })
 export class ProductoService {
   constructor(private http: HttpService) {}
 
-  getPendingProducts(): Observable<Producto[]> {
-    return this.http.get<Producto[]>('/productos/pending');
+  getPendingProducts(target?: string): Observable<Producto[]> {
+    let url = '/productos/pending';
+    if (target) url += `?target=${target}`;
+    return this.http.get<Producto[]>(url);
   }
 
-  getErrorProducts(): Observable<any[]> {
-    return this.http.get<any[]>('/productos/errors');
+  getErrorProducts(target?: string): Observable<any[]> {
+    let url = '/productos/errors';
+    if (target) url += `?target=${target}`;
+    return this.http.get<any[]>(url);
   }
 
   getProductByCode(code: string): Observable<Producto> {
@@ -158,6 +218,7 @@ export class ProductoService {
     if (filters?.code) url += `&code=${encodeURIComponent(filters.code)}`;
     if (filters?.name) url += `&name=${encodeURIComponent(filters.name)}`;
     if (filters?.syncStatus !== null && filters?.syncStatus !== undefined) url += `&syncStatus=${filters.syncStatus}`;
+    if (filters?.target) url += `&target=${filters.target}`;
     return this.http.get<ProductList>(url);
   }
 
@@ -183,6 +244,20 @@ export class ProductoService {
 
   importCPProducts(token: string, payload: any): Observable<any> {
     return this.http.post<any>(`/comprasparaguai/import?token=${encodeURIComponent(token)}`, payload);
+  }
+
+  getSendRuns(target?: string, limit: number = 50): Observable<SendRun[]> {
+    let url = `/workers/send-runs?limit=${limit}`;
+    if (target) url += `&target=${target}`;
+    return this.http.get<SendRun[]>(url);
+  }
+
+  getVerifyRuns(limit: number = 20): Observable<VerifyRun[]> {
+    return this.http.get<VerifyRun[]>(`/workers/verify-runs?limit=${limit}`);
+  }
+
+  getVerifyResults(runId: number): Observable<VerifyResult[]> {
+    return this.http.get<VerifyResult[]>(`/workers/verify-runs/${runId}`);
   }
 
   verifyImageExists(imageUrl: string): Promise<boolean> {
