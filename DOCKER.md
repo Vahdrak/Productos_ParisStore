@@ -6,32 +6,32 @@ Este documento describe cómo construir y desplegar las imágenes Docker del ser
 
 El proyecto se divide en **6 imágenes Docker**:
 
-1. **API Backend** (`escarlos/comprasparaguai-api`)
+1. **API Backend** (`proyectsoft/comprasparaguai-api`)
    - Servicio ASP.NET Core
    - Puerto: 5000
    - Endpoints REST para lectura
 
-2. **Frontend Angular** (`escarlos/comprasparaguai-frontend`)
+2. **Frontend Angular** (`proyectsoft/comprasparaguai-frontend`)
    - Interfaz web
    - Puerto: 4200
    - Nginx + Angular build
 
-3. **Worker.Sync** (`escarlos/comprasparaguai-worker-sync`)
+3. **Worker.Sync** (`proyectsoft/comprasparaguai-worker-sync`)
    - Lee Oracle → sincroniza PostgreSQL
    - Corre cada 2 horas
    - Detecta cambios por hash
 
-4. **Worker.Compras** (`escarlos/comprasparaguai-worker-compras`)
+4. **Worker.Compras** (`proyectsoft/comprasparaguai-worker-compras`)
    - Envía productos a Compras Paraguai API
    - Corre cada 2 horas
    - Lotes máximo 500
 
-5. **Worker.Compara** (`escarlos/comprasparaguai-worker-compara`)
+5. **Worker.Compara** (`proyectsoft/comprasparaguai-worker-compara`)
    - Envía productos a Compara Paraguai API
    - Corre cada 2 horas
    - Lotes máximo 1000, rate limit 80 req/hora
 
-6. **Worker.Verify** (`escarlos/comprasparaguai-worker-verify`)
+6. **Worker.Verify** (`proyectsoft/comprasparaguai-worker-verify`)
    - Verifica productos enviados
    - On-demand (sin scheduler)
    - Genera CSV de resultados
@@ -80,22 +80,22 @@ Ver `.env.example` para plantilla.
 
 ```bash
 # API
-docker build -t escarlos/comprasparaguai-api:local -f Dockerfile.api .
+docker build -t proyectsoft/comprasparaguai-api:local -f Dockerfile.api .
 
 # Worker.Sync
-docker build -t escarlos/comprasparaguai-worker-sync:local -f Dockerfile.worker-sync .
+docker build -t proyectsoft/comprasparaguai-worker-sync:local -f Dockerfile.worker-sync .
 
 # Worker.Compras
-docker build -t escarlos/comprasparaguai-worker-compras:local -f Dockerfile.worker-compras .
+docker build -t proyectsoft/comprasparaguai-worker-compras:local -f Dockerfile.worker-compras .
 
 # Worker.Compara
-docker build -t escarlos/comprasparaguai-worker-compara:local -f Dockerfile.worker-compara .
+docker build -t proyectsoft/comprasparaguai-worker-compara:local -f Dockerfile.worker-compara .
 
 # Worker.Verify
-docker build -t escarlos/comprasparaguai-worker-verify:local -f Dockerfile.worker-verify .
+docker build -t proyectsoft/comprasparaguai-worker-verify:local -f Dockerfile.worker-verify .
 
 # Frontend
-docker build -t escarlos/comprasparaguai-frontend:local -f Dockerfile.frontend .
+docker build -t proyectsoft/comprasparaguai-frontend:local -f Dockerfile.frontend .
 ```
 
 ### Build todos a la vez:
@@ -134,9 +134,9 @@ Automáticamente usa el tag de git (`git describe --tags`) o `latest`.
 docker login
 
 # Build y push
-docker build -t escarlos/comprasparaguai-api:1.0.0 -f Dockerfile.api .
-docker push escarlos/comprasparaguai-api:1.0.0
-docker push escarlos/comprasparaguai-api:latest
+docker build -t proyectsoft/comprasparaguai-api:1.0.0 -f Dockerfile.api .
+docker push proyectsoft/comprasparaguai-api:1.0.0
+docker push proyectsoft/comprasparaguai-api:latest
 ```
 
 ---
@@ -278,7 +278,7 @@ docker compose up -d
 
 ## Referencias
 
-- [DockerHub - escarlos](https://hub.docker.com/u/escarlos)
+- [DockerHub - proyectsoft](https://hub.docker.com/u/proyectsoft)
 - [Docker Compose Docs](https://docs.docker.com/compose/)
 - [.NET Docker Images](https://hub.docker.com/_/microsoft-dotnet)
 - [Nginx Docker Image](https://hub.docker.com/_/nginx)

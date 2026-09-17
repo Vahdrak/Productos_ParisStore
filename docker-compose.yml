@@ -22,7 +22,7 @@ services:
 
   # Backend API
   api:
-    image: escarlos/comprasparaguai-api:latest
+    image: proyectsoft/comprasparaguai-api:latest
     container_name: comprasparaguai_api_prod
     ports:
       - "5000:5000"
@@ -39,7 +39,7 @@ services:
 
   # Frontend (Angular)
   frontend:
-    image: escarlos/comprasparaguai-frontend:latest
+    image: proyectsoft/comprasparaguai-frontend:latest
     container_name: comprasparaguai_frontend_prod
     ports:
       - "4200:80"
@@ -51,7 +51,7 @@ services:
 
   # Worker.Sync (Oracle → PostgreSQL)
   worker-sync:
-    image: escarlos/comprasparaguai-worker-sync:latest
+    image: proyectsoft/comprasparaguai-worker-sync:latest
     container_name: comprasparaguai_worker_sync_prod
     environment:
       - ConnectionStrings__PostgreSQL=Host=db;Port=5432;Database=${DB_NAME:-comprasparaguaidb};Username=${DB_USER:-postgres};Password=${DB_PASSWORD:-password}
@@ -69,7 +69,7 @@ services:
 
   # Worker.Compras (Send to Compras Paraguai API)
   worker-compras:
-    image: escarlos/comprasparaguai-worker-compras:latest
+    image: proyectsoft/comprasparaguai-worker-compras:latest
     container_name: comprasparaguai_worker_compras_prod
     environment:
       - ConnectionStrings__PostgreSQL=Host=db;Port=5432;Database=${DB_NAME:-comprasparaguaidb};Username=${DB_USER:-postgres};Password=${DB_PASSWORD:-password}
@@ -89,7 +89,7 @@ services:
 
   # Worker.Compara (Send to Compara Paraguai API)
   worker-compara:
-    image: escarlos/comprasparaguai-worker-compara:latest
+    image: proyectsoft/comprasparaguai-worker-compara:latest
     container_name: comprasparaguai_worker_compara_prod
     environment:
       - ConnectionStrings__PostgreSQL=Host=db;Port=5432;Database=${DB_NAME:-comprasparaguaidb};Username=${DB_USER:-postgres};Password=${DB_PASSWORD:-password}
@@ -109,7 +109,7 @@ services:
 
   # Worker.Verify (Verify sent products)
   worker-verify:
-    image: escarlos/comprasparaguai-worker-verify:latest
+    image: proyectsoft/comprasparaguai-worker-verify:latest
     container_name: comprasparaguai_worker_verify_prod
     environment:
       - ConnectionStrings__PostgreSQL=Host=db;Port=5432;Database=${DB_NAME:-comprasparaguaidb};Username=${DB_USER:-postgres};Password=${DB_PASSWORD:-password}
