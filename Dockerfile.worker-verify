@@ -1,0 +1,29 @@
+# Build stage
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS builder
+WORKDIR /src
+
+# Copy project files
+COPY ["workers/Worker.Verify/Worker.Verify.csproj", "workers/Worker.Verify/"]
+COPY ["backend/ComprasParaguai.Core/ComprasParaguai.Core.csproj", "backend/ComprasParaguai.Core/"]
+COPY ["backend/ComprasParaguai.Infrastructure/ComprasParaguai.Infrastructure.csproj", "backend/ComprasParaguai.Infrastructure/"]
+
+# Restore
+RUN dotnet restore "workers/Worker.Verify/Worker.Verify.csproj"
+
+# Copy everything
+COPY . .
+
+# Build
+WORKDIR "/src/workers/Worker.Verify"
+RUN dotnet build "Worker.Verify.csproj" -c Release -o /app/build
+
+# Publish stage
+FROM builder AS publish
+RUN dotnet publish "Worker.Verify.csproj" -c Release -o /app/publish
+
+# Runtime stage
+FROM mcr.microsoft.com/dotnet/runtime:8.0
+WORKDIR /app
+COPY --from=publish /app/publish .
+
+ENTRYPOINT ["dotnet", "Worker.Verify.dll"]

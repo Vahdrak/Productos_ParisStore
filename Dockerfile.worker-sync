@@ -1,0 +1,29 @@
+# Build stage
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS builder
+WORKDIR /src
+
+# Copy project files
+COPY ["workers/Worker.Sync/Worker.Sync.csproj", "workers/Worker.Sync/"]
+COPY ["backend/ComprasParaguai.Core/ComprasParaguai.Core.csproj", "backend/ComprasParaguai.Core/"]
+COPY ["backend/ComprasParaguai.Infrastructure/ComprasParaguai.Infrastructure.csproj", "backend/ComprasParaguai.Infrastructure/"]
+
+# Restore
+RUN dotnet restore "workers/Worker.Sync/Worker.Sync.csproj"
+
+# Copy everything
+COPY . .
+
+# Build
+WORKDIR "/src/workers/Worker.Sync"
+RUN dotnet build "Worker.Sync.csproj" -c Release -o /app/build
+
+# Publish stage
+FROM builder AS publish
+RUN dotnet publish "Worker.Sync.csproj" -c Release -o /app/publish
+
+# Runtime stage
+FROM mcr.microsoft.com/dotnet/runtime:8.0
+WORKDIR /app
+COPY --from=publish /app/publish .
+
+ENTRYPOINT ["dotnet", "Worker.Sync.dll"]

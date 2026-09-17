@@ -1,0 +1,28 @@
+# Build stage
+FROM node:20-alpine AS builder
+WORKDIR /app
+
+# Copy package files
+COPY frontend/comprasparaguai-front/package*.json ./
+
+# Install dependencies
+RUN npm ci
+
+# Copy source
+COPY frontend/comprasparaguai-front .
+
+# Build
+RUN npm run build -- --configuration production
+
+# Runtime stage
+FROM nginx:alpine
+WORKDIR /usr/share/nginx/html
+
+# Copy built app
+COPY --from=builder /app/dist/comprasparaguai-front/browser .
+
+# Copy nginx config
+COPY scripts/nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]

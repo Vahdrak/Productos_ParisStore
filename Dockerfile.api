@@ -1,0 +1,30 @@
+# Build stage
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS builder
+WORKDIR /src
+
+# Copy project files
+COPY ["backend/ComprasParaguai.Api/ComprasParaguai.Api.csproj", "backend/ComprasParaguai.Api/"]
+COPY ["backend/ComprasParaguai.Core/ComprasParaguai.Core.csproj", "backend/ComprasParaguai.Core/"]
+COPY ["backend/ComprasParaguai.Infrastructure/ComprasParaguai.Infrastructure.csproj", "backend/ComprasParaguai.Infrastructure/"]
+
+# Restore
+RUN dotnet restore "backend/ComprasParaguai.Api/ComprasParaguai.Api.csproj"
+
+# Copy everything
+COPY . .
+
+# Build
+WORKDIR "/src/backend/ComprasParaguai.Api"
+RUN dotnet build "ComprasParaguai.Api.csproj" -c Release -o /app/build
+
+# Publish stage
+FROM builder AS publish
+RUN dotnet publish "ComprasParaguai.Api.csproj" -c Release -o /app/publish
+
+# Runtime stage
+FROM mcr.microsoft.com/dotnet/aspnet:8.0
+WORKDIR /app
+COPY --from=publish /app/publish .
+
+EXPOSE 5000
+ENTRYPOINT ["dotnet", "ComprasParaguai.Api.dll"]
