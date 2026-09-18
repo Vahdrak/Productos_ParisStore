@@ -976,6 +976,27 @@ export class AppComponent implements OnInit {
   comparaFilterFechaDesde: string = '';
   comparaFilterFechaHasta: string = '';
 
+  // Sync pagination
+  syncPageSize: number = 25;
+  syncPage: number = 1;
+  syncTotalPages: number = 1;
+  syncRunsPaged: any[] = [];
+  syncRunsFiltered: any[] = [];
+
+  // Compras pagination
+  comprasPageSize: number = 25;
+  comprasPage: number = 1;
+  comprasTotalPages: number = 1;
+  sendRunsComprasPaged: SendRun[] = [];
+  sendRunsComprasFiltered: SendRun[] = [];
+
+  // Compara pagination
+  comparaPageSize: number = 25;
+  comparaPage: number = 1;
+  comparaTotalPages: number = 1;
+  sendRunsComparaPaged: SendRun[] = [];
+  sendRunsComparaFiltered: SendRun[] = [];
+
   constructor(private productoService: ProductoService) {}
 
   ngOnInit() {
@@ -1023,9 +1044,16 @@ export class AppComponent implements OnInit {
   }
 
   applySyncFilters() {
-    this.syncRuns = this.syncRunsOriginal.filter(r =>
+    this.syncRunsFiltered = this.syncRunsOriginal.filter(r =>
       this.isDateInRange(r.startedAt, this.syncFilterFechaDesde, this.syncFilterFechaHasta)
     );
+    if (this.syncPage < 1) this.syncPage = 1;
+    this.syncTotalPages = Math.ceil(this.syncRunsFiltered.length / this.syncPageSize) || 1;
+    if (this.syncPage > this.syncTotalPages) this.syncPage = this.syncTotalPages;
+    const start = (this.syncPage - 1) * this.syncPageSize;
+    const end = start + this.syncPageSize;
+    this.syncRunsPaged = this.syncRunsFiltered.slice(start, end);
+    this.syncRuns = this.syncRunsPaged;
   }
 
   loadComprasData() {
@@ -1045,9 +1073,16 @@ export class AppComponent implements OnInit {
   }
 
   applyComprasFilters() {
-    this.sendRunsCompras = this.sendRunsComprasOriginal.filter(r =>
+    this.sendRunsComprasFiltered = this.sendRunsComprasOriginal.filter(r =>
       this.isDateInRange(r.startedAt, this.comprasFilterFechaDesde, this.comprasFilterFechaHasta)
     );
+    if (this.comprasPage < 1) this.comprasPage = 1;
+    this.comprasTotalPages = Math.ceil(this.sendRunsComprasFiltered.length / this.comprasPageSize) || 1;
+    if (this.comprasPage > this.comprasTotalPages) this.comprasPage = this.comprasTotalPages;
+    const start = (this.comprasPage - 1) * this.comprasPageSize;
+    const end = start + this.comprasPageSize;
+    this.sendRunsComprasPaged = this.sendRunsComprasFiltered.slice(start, end);
+    this.sendRunsCompras = this.sendRunsComprasPaged;
   }
 
   loadComparaData() {
@@ -1064,9 +1099,16 @@ export class AppComponent implements OnInit {
   }
 
   applyComparaFilters() {
-    this.sendRunsCompara = this.sendRunsComparaOriginal.filter(r =>
+    this.sendRunsComparaFiltered = this.sendRunsComparaOriginal.filter(r =>
       this.isDateInRange(r.startedAt, this.comparaFilterFechaDesde, this.comparaFilterFechaHasta)
     );
+    if (this.comparaPage < 1) this.comparaPage = 1;
+    this.comparaTotalPages = Math.ceil(this.sendRunsComparaFiltered.length / this.comparaPageSize) || 1;
+    if (this.comparaPage > this.comparaTotalPages) this.comparaPage = this.comparaTotalPages;
+    const start = (this.comparaPage - 1) * this.comparaPageSize;
+    const end = start + this.comparaPageSize;
+    this.sendRunsComparaPaged = this.sendRunsComparaFiltered.slice(start, end);
+    this.sendRunsCompara = this.sendRunsComparaPaged;
   }
 
   searchProductos() {
