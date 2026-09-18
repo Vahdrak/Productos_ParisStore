@@ -52,8 +52,16 @@ public class ProductoMapperService
         if (!price.HasValue)
             return null; // Sin precio → no se puede enviar.
 
-        // Precio con IVA (10% Paraguay).
-        decimal priceWithIva = price.Value * 1.10m;
+        // Régimen de Turismo: convertir "Si"/"No" de Oracle → boolean
+        // Usar ToUpper() para manejar variaciones de capitalización ("Si", "SI", "si", etc.)
+        bool regimenTurismo = (view.RegimenTurismo?.Trim()?.ToUpper() ?? "") == "SI";
+
+        // Precio exenta (sin IVA): solo si es régimen turismo
+        decimal? precioExenta = null;
+        if (regimenTurismo && price.HasValue)
+        {
+            precioExenta = price.Value - (price.Value / 11);
+        }
 
         // Nombre en portugués: por ahora, duplicar el español (MVP). Luego: traducir.
         string namePt = view.Nombre ?? "Sin nombre";
@@ -91,7 +99,9 @@ public class ProductoMapperService
             NameEs = view.Nombre ?? string.Empty,
             NamePt = namePt,
             Price = price.Value,
-            PriceIva = priceWithIva,
+            PriceIva = price.Value,
+            RegimenTurismo = regimenTurismo,
+            PrecioExenta = precioExenta,
             Stock = stock,
             Brand = brand,
             DescriptionEs = descriptionEs,
@@ -123,6 +133,8 @@ public class ProductoMapperService
             api.NamePt,
             api.Price,
             api.PriceIva,
+            api.RegimenTurismo,
+            api.PrecioExenta,
             api.Stock,
             api.Brand,
             api.DescriptionEs,
