@@ -26,5 +26,8 @@ FROM mcr.microsoft.com/dotnet/aspnet:8.0
 WORKDIR /app
 COPY --from=publish /app/publish .
 
+# Copy migrations (DbMigrator.cs needs these)
+COPY db/migrations ./db/migrations
+
 EXPOSE 5000
 ENTRYPOINT ["dotnet", "ComprasParaguai.Api.dll"]
