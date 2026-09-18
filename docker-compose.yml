@@ -4,11 +4,11 @@ services:
   # PostgreSQL Database
   db:
     image: postgres:16-alpine
-    container_name: comprasparaguai_db_prod
+    container_name: catalogos_db_prod
     environment:
       POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
-      POSTGRES_DB: ${DB_NAME:-comprasparaguaidb}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-catalogosdb}
     ports:
       - "5432:5432"
     volumes:
@@ -19,17 +19,19 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - comprasparaguai-network
 
   # Backend API
-  api:
+  backend:
     image: proyectsoft/comprasparaguai-api:latest
-    container_name: comprasparaguai_api_prod
+    container_name: backend_api_prod
     ports:
       - "5000:5000"
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://+:5000
-      - ConnectionStrings__PostgreSQL=Host=db;Port=5432;Database=${DB_NAME:-comprasparaguaidb};Username=${DB_USER:-postgres};Password=${DB_PASSWORD:-password}
+      - ConnectionStrings__PostgreSQL=Host=db;Port=5432;Database=${DB_NAME:-catalogosdb};Username=${DB_USER:-postgres};Password=${DB_PASSWORD:-postgres}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:4200,http://172.16.249.94:4200,http://172.16.249.94}
     depends_on:
       db:
@@ -41,11 +43,11 @@ services:
   # Frontend (Angular)
   frontend:
     image: proyectsoft/comprasparaguai-frontend:latest
-    container_name: comprasparaguai_frontend_prod
+    container_name: frontend_prod
     ports:
       - "4200:80"
     depends_on:
-      - api
+      - backend
     restart: always
     networks:
       - comprasparaguai-network
@@ -53,9 +55,9 @@ services:
   # Worker.Sync (Oracle → PostgreSQL)
   worker-sync:
     image: proyectsoft/comprasparaguai-worker-sync:latest
-    container_name: comprasparaguai_worker_sync_prod
+    container_name: worker_sync_prod
     environment:
-      - ConnectionStrings__PostgreSQL=Host=db;Port=5432;Database=${DB_NAME:-comprasparaguaidb};Username=${DB_USER:-postgres};Password=${DB_PASSWORD:-password}
+      - ConnectionStrings__PostgreSQL=Host=db;Port=5432;Database=${DB_NAME:-catalogosdb};Username=${DB_USER:-postgres};Password=${DB_PASSWORD:-postgres}
       - OracleConnection__ConnectionString=${ORACLE_CONNECTION_STRING}
     depends_on:
       db:
@@ -71,9 +73,9 @@ services:
   # Worker.Compras (Send to Compras Paraguai API)
   worker-compras:
     image: proyectsoft/comprasparaguai-worker-compras:latest
-    container_name: comprasparaguai_worker_compras_prod
+    container_name: worker_compras_prod
     environment:
-      - ConnectionStrings__PostgreSQL=Host=db;Port=5432;Database=${DB_NAME:-comprasparaguaidb};Username=${DB_USER:-postgres};Password=${DB_PASSWORD:-password}
+      - ConnectionStrings__PostgreSQL=Host=db;Port=5432;Database=${DB_NAME:-catalogosdb};Username=${DB_USER:-postgres};Password=${DB_PASSWORD:-postgres}
       - Compras__ApiUrl=${COMPRAS_API_URL:-https://produtos.comprasparaguai.com.br}
       - Compras__Token=${COMPRAS_API_TOKEN}
       - Compras__IntervalHours=2
@@ -91,9 +93,9 @@ services:
   # Worker.Compara (Send to Compara Paraguai API)
   worker-compara:
     image: proyectsoft/comprasparaguai-worker-compara:latest
-    container_name: comprasparaguai_worker_compara_prod
+    container_name: worker_compara_prod
     environment:
-      - ConnectionStrings__PostgreSQL=Host=db;Port=5432;Database=${DB_NAME:-comprasparaguaidb};Username=${DB_USER:-postgres};Password=${DB_PASSWORD:-password}
+      - ConnectionStrings__PostgreSQL=Host=db;Port=5432;Database=${DB_NAME:-catalogosdb};Username=${DB_USER:-postgres};Password=${DB_PASSWORD:-postgres}
       - Compara__ApiUrl=${COMPARA_API_URL:-https://comparaparaguai.com/api/integracao/produtos}
       - Compara__Token=${COMPARA_API_TOKEN}
       - Compara__IntervalHours=2
@@ -108,34 +110,8 @@ services:
         limits:
           memory: 1G
 
-  # Worker.Verify (Verify sent products)
-  worker-verify:
-    image: proyectsoft/comprasparaguai-worker-verify:latest
-    container_name: comprasparaguai_worker_verify_prod
-    environment:
-      - ConnectionStrings__PostgreSQL=Host=db;Port=5432;Database=${DB_NAME:-comprasparaguaidb};Username=${DB_USER:-postgres};Password=${DB_PASSWORD:-password}
-      - Compras__ApiUrl=${COMPRAS_API_URL:-https://produtos.comprasparaguai.com.br}
-      - Compras__Token=${COMPRAS_API_TOKEN}
-      - Verify__SampleSize=500
-      - Verify__DelayMs=100
-      - Verify__OutputDir=/app/verify-output
-    depends_on:
-      db:
-        condition: service_healthy
-    restart: on-failure
-    networks:
-      - comprasparaguai-network
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-    volumes:
-      - verify_output:/app/verify-output
-
 volumes:
   postgres_data:
-    driver: local
-  verify_output:
     driver: local
 
 networks:
