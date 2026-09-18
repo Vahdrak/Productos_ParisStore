@@ -11,11 +11,18 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// CORS configurado por variable de entorno
+var corsOrigins = builder.Configuration["CORS_ALLOWED_ORIGINS"]
+    ?? "http://localhost:4200,http://172.16.249.94:4200,http://172.16.249.94";
+var origins = corsOrigins.Split(',').Select(o => o.Trim()).ToArray();
+
+Console.WriteLine($"CORS Origins configurados: {string.Join(", ", origins)}");
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAngular", policy =>
     {
-        policy.WithOrigins("http://localhost:4200")
+        policy.WithOrigins(origins)
             .AllowAnyMethod()
             .AllowAnyHeader();
     });
