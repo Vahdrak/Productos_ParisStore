@@ -68,14 +68,31 @@ public static class DbMigrator
             using var connection = new NpgsqlConnection(connectionString);
             connection.Open();
 
+            // Crear tabla de control de migraciones si no existe
+            CreateMigrationsTable(connection);
+
+            // Obtener migraciones ya aplicadas
+            var appliedMigrations = GetAppliedMigrations(connection);
+
             foreach (var file in sqlFiles)
             {
                 string fileName = Path.GetFileName(file);
+
+                // Saltar si ya fue aplicada
+                if (appliedMigrations.Contains(fileName))
+                {
+                    Console.WriteLine($"Migración {fileName} ya fue aplicada. Saltando...");
+                    continue;
+                }
+
                 Console.WriteLine($"Aplicando migración: {fileName}...");
                 string script = File.ReadAllText(file);
 
                 using var cmd = new NpgsqlCommand(script, connection);
                 cmd.ExecuteNonQuery();
+
+                // Registrar migración como aplicada
+                RegisterMigration(connection, fileName);
                 Console.WriteLine($"Migración {fileName} aplicada con éxito.");
             }
         }
@@ -83,6 +100,69 @@ public static class DbMigrator
         {
             Console.WriteLine($"Error ejecutando las migraciones: {ex.Message}");
             throw;
+        }
+    }
+
+    private static void CreateMigrationsTable(NpgsqlConnection connection)
+    {
+        const string createTableSql = @"
+            CREATE TABLE IF NOT EXISTS schema_migrations (
+                id SERIAL PRIMARY KEY,
+                filename VARCHAR(255) NOT NULL UNIQUE,
+                applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        ";
+        try
+        {
+            using var cmd = new NpgsqlCommand(createTableSql, connection);
+            cmd.CommandTimeout = 30;
+            cmd.ExecuteNonQuery();
+            Console.WriteLine("✓ Tabla schema_migrations verificada/creada");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Advertencia al crear tabla de migraciones: {ex.Message}");
+            // Continuar de todas formas, la tabla podría existir
+        }
+    }
+
+    private static HashSet<string> GetAppliedMigrations(NpgsqlConnection connection)
+    {
+        var applied = new HashSet<string>();
+        const string querySql = "SELECT filename FROM schema_migrations ORDER BY applied_at;";
+        try
+        {
+            using var cmd = new NpgsqlCommand(querySql, connection);
+            cmd.CommandTimeout = 30;
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                applied.Add(reader.GetString(0));
+            }
+            Console.WriteLine($"✓ Migraciones registradas: {applied.Count}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Advertencia al leer migraciones aplicadas: {ex.Message}");
+            // Continuar sin lista de migraciones previas (ejecutará todas)
+        }
+        return applied;
+    }
+
+    private static void RegisterMigration(NpgsqlConnection connection, string filename)
+    {
+        const string insertSql = "INSERT INTO schema_migrations (filename) VALUES (@filename) ON CONFLICT (filename) DO NOTHING;";
+        try
+        {
+            using var cmd = new NpgsqlCommand(insertSql, connection);
+            cmd.CommandTimeout = 30;
+            cmd.Parameters.AddWithValue("@filename", filename);
+            cmd.ExecuteNonQuery();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Advertencia al registrar migración {filename}: {ex.Message}");
+            // No es crítico si falla el registro
         }
     }
 

@@ -8,6 +8,8 @@ export interface Producto {
   namePt: string;
   price?: number;
   priceIva?: number;
+  regimenTurismo?: boolean;
+  precioExenta?: number;
   stock: number;
   brand?: string;
   descriptionEs?: string;

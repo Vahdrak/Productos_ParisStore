@@ -87,7 +87,7 @@ public class ComparaParaguaiHttpClient : IComprasParaguaiClient
                 Code = p.Code,
                 NameEs = p.NameEs,
                 NamePt = p.NamePt,
-                Price = p.Price,
+                Price = p.RegimenTurismo && p.PrecioExenta.HasValue ? p.PrecioExenta.Value : p.Price,
                 PriceIva = p.PriceIva,
                 Stock = p.Stock,
                 Brand = p.Brand,

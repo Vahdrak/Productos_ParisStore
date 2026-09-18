@@ -33,6 +33,7 @@ public class OracleViewReader : IViewReader
                 SKU AS Code,
                 NOMBRE AS Nombre,
                 PRECIO_NORMAL AS PrecioNormal,
+                REGIMEN_TURISMO AS RegimenTurismo,
                 INVENTARIO AS Inventario,
                 VALOR_ATRIBUTO_1 AS ValorAtributo1,
                 NOMBRE_ATRIBUTO_1 AS NombreAtributo1,
@@ -61,11 +62,12 @@ public class OracleViewReader : IViewReader
                         Code = reader.GetString(0) ?? string.Empty,
                         Nombre = reader.GetString(1) ?? string.Empty,
                         PrecioNormal = reader.IsDBNull(2) ? null : reader.GetDecimal(2),
-                        Inventario = reader.IsDBNull(3) ? null : reader.GetInt32(3),
-                        ValorAtributo1 = reader.IsDBNull(4) ? null : reader.GetString(4),
-                        NombreAtributo1 = reader.IsDBNull(5) ? null : reader.GetString(5),
-                        Categoria = reader.IsDBNull(6) ? null : reader.GetString(6),
-                        Imagenes = reader.IsDBNull(7) ? null : reader.GetString(7)
+                        RegimenTurismo = reader.IsDBNull(3) ? null : reader.GetString(3),
+                        Inventario = reader.IsDBNull(4) ? null : reader.GetInt32(4),
+                        ValorAtributo1 = reader.IsDBNull(5) ? null : reader.GetString(5),
+                        NombreAtributo1 = reader.IsDBNull(6) ? null : reader.GetString(6),
+                        Categoria = reader.IsDBNull(7) ? null : reader.GetString(7),
+                        Imagenes = reader.IsDBNull(8) ? null : reader.GetString(8)
                     };
 
                     yield return view;

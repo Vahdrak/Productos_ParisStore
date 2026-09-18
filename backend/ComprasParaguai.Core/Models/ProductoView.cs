@@ -15,6 +15,9 @@ public class ProductoView
     /// <summary>Precio normal en moneda local (PYG).</summary>
     public decimal? PrecioNormal { get; set; }
 
+    /// <summary>Régimen de Turismo de Oracle ("Si" o "No").</summary>
+    public string? RegimenTurismo { get; set; }
+
     /// <summary>Stock en inventario (puede ser negativo en Cangrejo).</summary>
     public int? Inventario { get; set; }
 

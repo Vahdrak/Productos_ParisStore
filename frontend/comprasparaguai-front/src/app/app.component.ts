@@ -24,6 +24,7 @@ import { switchMap } from 'rxjs/operators';
       <nav class="app-nav">
         <button [class.active]="page === 'dashboard'" (click)="setPage('dashboard')" class="tab-btn">Dashboard</button>
         <button [class.active]="page === 'productos'" (click)="setPage('productos')" class="tab-btn">Productos</button>
+        <button [class.active]="page === 'pendientes'" (click)="setPage('pendientes')" class="tab-btn">Pendientes</button>
         <button [class.active]="page === 'sync'" (click)="setPage('sync')" class="tab-btn">Sync</button>
         <button [class.active]="page === 'compras'" (click)="setPage('compras')" class="tab-btn">Compras</button>
         <button [class.active]="page === 'compara'" (click)="setPage('compara')" class="tab-btn">Compara</button>
@@ -95,30 +96,68 @@ import { switchMap } from 'rxjs/operators';
         <div *ngIf="page === 'productos'" class="fade-in">
           <div class="search-bar">
             <input type="text" placeholder="Buscar código..." [(ngModel)]="filterCode" class="form-input" />
-            <select [(ngModel)]="filterTarget" class="form-input" style="width: 120px;">
-              <option value="">Todos</option>
+            <select [(ngModel)]="filterTarget" (ngModelChange)="searchProductos()" class="form-input" style="width: 120px;">
+              <option value="">Destino: Todos</option>
               <option value="compras">Compras</option>
               <option value="compara">Compara</option>
+            </select>
+            <select [(ngModel)]="filterProductosRegimen" (ngModelChange)="searchProductos()" class="form-input" style="width: 140px;">
+              <option value="">Régimen: Todos</option>
+              <option value="true">🎫 Con régimen turismo</option>
+              <option value="false">Normal (sin régimen)</option>
+            </select>
+            <select [(ngModel)]="filterProductosState" (ngModelChange)="searchProductos()" class="form-input" style="width: 140px;">
+              <option value="">Estado: Todos</option>
+              <option value="0">⏳ Pendiente</option>
+              <option value="1">✅ Enviado</option>
+              <option value="2">❌ Error</option>
             </select>
             <button (click)="searchProductos()" class="btn btn-primary">Buscar</button>
           </div>
 
-          <div class="table-container mt-6" *ngIf="productList && productList.items.length > 0">
+          <div class="search-bar">
+            <label style="color: #8f8f8f; font-size: 12px;">📅 Rango de fechas:</label>
+            <input type="date" [(ngModel)]="filterProductosFechaDesde" (ngModelChange)="productosPage = 1; searchProductos()" class="form-input" style="width: 120px;" />
+            <span style="color: #8f8f8f;">hasta</span>
+            <input type="date" [(ngModel)]="filterProductosFechaHasta" (ngModelChange)="productosPage = 1; searchProductos()" class="form-input" style="width: 120px;" />
+            <button (click)="setQuickDateRange('hoy', 'productos')" class="btn" style="background: #333; color: #8f8f8f; border: 1px solid rgba(255,255,255,0.12); font-size: 12px;">Hoy</button>
+            <button (click)="setQuickDateRange('hora', 'productos')" class="btn" style="background: #333; color: #8f8f8f; border: 1px solid rgba(255,255,255,0.12); font-size: 12px;">Última hora</button>
+            <button (click)="setQuickDateRange('semana', 'productos')" class="btn" style="background: #333; color: #8f8f8f; border: 1px solid rgba(255,255,255,0.12); font-size: 12px;">7 días</button>
+            <button (click)="setQuickDateRange('mes', 'productos')" class="btn" style="background: #333; color: #8f8f8f; border: 1px solid rgba(255,255,255,0.12); font-size: 12px;">30 días</button>
+            <button (click)="filterProductosFechaDesde = ''; filterProductosFechaHasta = ''; productosPage = 1; searchProductos();" class="btn" style="background: #333; color: #8f8f8f; border: 1px solid rgba(255,255,255,0.12);">Limpiar</button>
+          </div>
+
+          <div class="search-bar" *ngIf="productList && productList.items.length > 0">
+            <select [(ngModel)]="productosPageSize" (ngModelChange)="productosPage = 1; searchProductos()" class="form-input" style="width: 140px;">
+              <option value="10">10 por página</option>
+              <option value="25">25 por página</option>
+              <option value="50">50 por página</option>
+              <option value="100">100 por página</option>
+            </select>
+          </div>
+
+          <div class="table-container mt-6" *ngIf="productosPagedProducts.length > 0">
             <table class="data-table">
               <thead>
                 <tr>
                   <th>Código</th>
                   <th>Nombre (ES)</th>
+                  <th>Régimen</th>
+                  <th>Precio (IVA)</th>
+                  <th>Precio Exenta</th>
+                  <th>Stock</th>
                   <th>Compras</th>
                   <th>Compara</th>
-                  <th>Precio</th>
-                  <th>Stock</th>
                 </tr>
               </thead>
               <tbody>
-                <tr *ngFor="let p of productList.items">
+                <tr *ngFor="let p of productosPagedProducts">
                   <td class="text-bold">{{ p.code }}</td>
                   <td>{{ p.nameEs }}</td>
+                  <td><span class="badge" [class.badge-success]="p.regimenTurismo" [class.badge-secondary]="!p.regimenTurismo">{{ p.regimenTurismo ? '🎫 Sí' : 'No' }}</span></td>
+                  <td>{{ p.price | currency:'':'symbol-narrow' }}</td>
+                  <td>{{ (p.precioExenta || 0) | currency:'':'symbol-narrow' }}</td>
+                  <td class="text-center">{{ p.stock }}</td>
                   <td>
                     <span class="badge" [ngClass]="getStatusClass(p.syncStatus)">
                       {{ getStatusLabel(p.syncStatus) }}
@@ -129,21 +168,118 @@ import { switchMap } from 'rxjs/operators';
                       {{ getStatusLabel(p.syncComparaStatus) }}
                     </span>
                   </td>
-                  <td>{{ p.price | currency }}</td>
-                  <td>{{ p.stock }}</td>
                 </tr>
               </tbody>
             </table>
           </div>
+
+          <div *ngIf="productosTotalPages > 1" class="pagination">
+            <button [disabled]="productosPage === 1" (click)="firstProductosPage()">«</button>
+            <button [disabled]="productosPage === 1" (click)="prevProductosPage()">‹</button>
+            <span class="page-info">Pág {{ productosPage }}/{{ productosTotalPages }}</span>
+            <button [disabled]="productosPage === productosTotalPages" (click)="nextProductosPage()">›</button>
+            <button [disabled]="productosPage === productosTotalPages" (click)="lastProductosPage()">»</button>
+          </div>
+
           <div *ngIf="!productList || productList.items.length === 0" class="text-center py-8 text-dim">
             No hay productos
           </div>
         </div>
 
-        <!-- 3. SYNC PAGE (Oracle → BD) -->
+        <!-- 3. PENDIENTES PAGE -->
+        <div *ngIf="page === 'pendientes'" class="fade-in">
+          <div class="section-card">
+            <div class="filter-tabs">
+              <button [class.active]="pendientesTarget === 'compras'" (click)="switchPendientesTarget('compras')">Compras Paraguai</button>
+              <button [class.active]="pendientesTarget === 'compara'" (click)="switchPendientesTarget('compara')">Compara Paraguai</button>
+            </div>
+          </div>
+
+          <div class="section-card">
+            <h3 class="section-title">Filtros</h3>
+            <div class="filters-grid">
+              <input type="text" placeholder="Código..." [(ngModel)]="pendientesFilterCode" (ngModelChange)="resetPendientesPage()" class="form-input" />
+              <select [(ngModel)]="pendientesFilterRegimen" (ngModelChange)="resetPendientesPage()" class="form-input">
+                <option value="">Régimen: Todos</option>
+                <option value="true">🎫 Con régimen turismo</option>
+                <option value="false">Normal (sin régimen)</option>
+              </select>
+              <select [(ngModel)]="pendientesFilterStatus" (ngModelChange)="resetPendientesPage()" class="form-input">
+                <option value="">Estado: Todos</option>
+                <option value="0">⏳ Pendiente</option>
+                <option value="1">✅ Enviado</option>
+                <option value="2">❌ Error</option>
+              </select>
+              <select [(ngModel)]="pendientesPageSize" (ngModelChange)="resetPendientesPage()" class="form-input">
+                <option value="10">10 por página</option>
+                <option value="25">25 por página</option>
+                <option value="50">50 por página</option>
+                <option value="100">100 por página</option>
+              </select>
+            </div>
+            <div class="filters-grid" style="margin-top: 12px;">
+              <label style="color: #8f8f8f; font-size: 12px; grid-column: 1 / -1;">📅 Rango de envíos:</label>
+              <input type="date" [(ngModel)]="pendientesFilterFechaDesde" (ngModelChange)="resetPendientesPage()" class="form-input" />
+              <input type="date" [(ngModel)]="pendientesFilterFechaHasta" (ngModelChange)="resetPendientesPage()" class="form-input" />
+              <button (click)="setQuickDateRange('hoy', 'pendientes')" class="btn" style="background: #333; color: #8f8f8f; border: 1px solid rgba(255,255,255,0.12); font-size: 12px;">Hoy</button>
+              <button (click)="setQuickDateRange('hora', 'pendientes')" class="btn" style="background: #333; color: #8f8f8f; border: 1px solid rgba(255,255,255,0.12); font-size: 12px;">Última hora</button>
+              <button (click)="setQuickDateRange('semana', 'pendientes')" class="btn" style="background: #333; color: #8f8f8f; border: 1px solid rgba(255,255,255,0.12); font-size: 12px;">7 días</button>
+              <button (click)="setQuickDateRange('mes', 'pendientes')" class="btn" style="background: #333; color: #8f8f8f; border: 1px solid rgba(255,255,255,0.12); font-size: 12px;">30 días</button>
+              <button (click)="pendientesFilterFechaDesde = ''; pendientesFilterFechaHasta = ''; resetPendientesPage();" class="btn" style="background: #333; color: #8f8f8f; border: 1px solid rgba(255,255,255,0.12);">Limpiar</button>
+            </div>
+          </div>
+
+          <div class="section-card">
+            <h3 class="section-title">Productos ({{ pendientesFiltered.length }} resultados)</h3>
+            <div class="table-container" *ngIf="pendientesPagedProducts.length > 0">
+              <table class="data-table">
+                <thead><tr><th>Código</th><th>Nombre</th><th>Régimen</th><th>Precio (IVA)</th><th>Precio Exenta</th><th>Stock</th><th>Estado</th></tr></thead>
+                <tbody>
+                  <tr *ngFor="let p of pendientesPagedProducts">
+                    <td class="text-bold">{{ p.code }}</td>
+                    <td>{{ p.namePt | slice:0:35 }}</td>
+                    <td><span class="badge" [class.badge-success]="p.regimenTurismo" [class.badge-secondary]="!p.regimenTurismo">{{ p.regimenTurismo ? '🎫 Sí' : 'No' }}</span></td>
+                    <td>{{ p.price | currency:'':'symbol-narrow' }}</td>
+                    <td>{{ (p.precioExenta || 0) | currency:'':'symbol-narrow' }}</td>
+                    <td class="text-center">{{ p.stock }}</td>
+                    <td><span class="badge" [ngClass]="getStatusBadgeClassPendientes(pendientesTarget, p)">{{ getStatusLabelPendientes(pendientesTarget, p) }}</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div *ngIf="pendientesFiltered.length === 0" class="text-center py-8 text-dim">No hay productos que coincidan</div>
+
+            <div *ngIf="pendientesTotalPages > 1" class="pagination">
+              <button [disabled]="pendientesPage === 1" (click)="firstPendientesPage()">«</button>
+              <button [disabled]="pendientesPage === 1" (click)="prevPendientesPage()">‹</button>
+              <span class="page-info">Pág {{ pendientesPage }}/{{ pendientesTotalPages }}</span>
+              <button [disabled]="pendientesPage === pendientesTotalPages" (click)="nextPendientesPage()">›</button>
+              <button [disabled]="pendientesPage === pendientesTotalPages" (click)="lastPendientesPage()">»</button>
+            </div>
+
+            <div *ngIf="pendientesProducts.length > 0" class="summary-bar">
+              <div class="summary-item"><span class="summary-label">🎫 Con régimen:</span><span class="summary-value">{{ countPendientesRegimen() }}</span></div>
+              <div class="summary-item"><span class="summary-label">Normal:</span><span class="summary-value">{{ pendientesProducts.length - countPendientesRegimen() }}</span></div>
+              <div class="summary-item"><span class="summary-label">Total:</span><span class="summary-value">{{ pendientesProducts.length }}</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. SYNC PAGE (Oracle → BD) -->
         <div *ngIf="page === 'sync'" class="fade-in">
           <div class="section-card">
             <h3 class="section-title">🔄 Sincronización Oracle → PostgreSQL</h3>
+            <div class="search-bar">
+              <label style="color: #8f8f8f; font-size: 12px;">📅 Rango de sincronizaciones:</label>
+              <input type="date" [(ngModel)]="syncFilterFechaDesde" (ngModelChange)="applySyncFilters()" class="form-input" style="width: 120px;" />
+              <span style="color: #8f8f8f;">hasta</span>
+              <input type="date" [(ngModel)]="syncFilterFechaHasta" (ngModelChange)="applySyncFilters()" class="form-input" style="width: 120px;" />
+              <button (click)="setQuickDateRange('hoy', 'sync')" class="btn" style="background: #333; color: #8f8f8f; border: 1px solid rgba(255,255,255,0.12); font-size: 12px;">Hoy</button>
+              <button (click)="setQuickDateRange('hora', 'sync')" class="btn" style="background: #333; color: #8f8f8f; border: 1px solid rgba(255,255,255,0.12); font-size: 12px;">Última hora</button>
+              <button (click)="setQuickDateRange('semana', 'sync')" class="btn" style="background: #333; color: #8f8f8f; border: 1px solid rgba(255,255,255,0.12); font-size: 12px;">7 días</button>
+              <button (click)="setQuickDateRange('mes', 'sync')" class="btn" style="background: #333; color: #8f8f8f; border: 1px solid rgba(255,255,255,0.12); font-size: 12px;">30 días</button>
+              <button (click)="syncFilterFechaDesde = ''; syncFilterFechaHasta = ''; loadSyncRuns();" class="btn" style="background: #333; color: #8f8f8f; border: 1px solid rgba(255,255,255,0.12);">Limpiar</button>
+            </div>
             <div class="table-container">
               <table class="data-table">
                 <thead>
@@ -184,6 +320,17 @@ import { switchMap } from 'rxjs/operators';
         <div *ngIf="page === 'compras'" class="fade-in">
           <div class="section-card">
             <h3 class="section-title">📤 Envíos a Compras Paraguai</h3>
+            <div class="search-bar">
+              <label style="color: #8f8f8f; font-size: 12px;">📅 Rango de envíos:</label>
+              <input type="date" [(ngModel)]="comprasFilterFechaDesde" (ngModelChange)="applyComprasFilters()" class="form-input" style="width: 120px;" />
+              <span style="color: #8f8f8f;">hasta</span>
+              <input type="date" [(ngModel)]="comprasFilterFechaHasta" (ngModelChange)="applyComprasFilters()" class="form-input" style="width: 120px;" />
+              <button (click)="setQuickDateRange('hoy', 'compras')" class="btn" style="background: #333; color: #8f8f8f; border: 1px solid rgba(255,255,255,0.12); font-size: 12px;">Hoy</button>
+              <button (click)="setQuickDateRange('hora', 'compras')" class="btn" style="background: #333; color: #8f8f8f; border: 1px solid rgba(255,255,255,0.12); font-size: 12px;">Última hora</button>
+              <button (click)="setQuickDateRange('semana', 'compras')" class="btn" style="background: #333; color: #8f8f8f; border: 1px solid rgba(255,255,255,0.12); font-size: 12px;">7 días</button>
+              <button (click)="setQuickDateRange('mes', 'compras')" class="btn" style="background: #333; color: #8f8f8f; border: 1px solid rgba(255,255,255,0.12); font-size: 12px;">30 días</button>
+              <button (click)="comprasFilterFechaDesde = ''; comprasFilterFechaHasta = ''; loadComprasData();" class="btn" style="background: #333; color: #8f8f8f; border: 1px solid rgba(255,255,255,0.12);">Limpiar</button>
+            </div>
             <div class="table-container">
               <table class="data-table">
                 <thead>
@@ -276,6 +423,17 @@ import { switchMap } from 'rxjs/operators';
         <div *ngIf="page === 'compara'" class="fade-in">
           <div class="section-card">
             <h3 class="section-title">📤 Envíos a Compara Paraguai</h3>
+            <div class="search-bar">
+              <label style="color: #8f8f8f; font-size: 12px;">📅 Rango de envíos:</label>
+              <input type="date" [(ngModel)]="comparaFilterFechaDesde" (ngModelChange)="applyComparaFilters()" class="form-input" style="width: 120px;" />
+              <span style="color: #8f8f8f;">hasta</span>
+              <input type="date" [(ngModel)]="comparaFilterFechaHasta" (ngModelChange)="applyComparaFilters()" class="form-input" style="width: 120px;" />
+              <button (click)="setQuickDateRange('hoy', 'compara')" class="btn" style="background: #333; color: #8f8f8f; border: 1px solid rgba(255,255,255,0.12); font-size: 12px;">Hoy</button>
+              <button (click)="setQuickDateRange('hora', 'compara')" class="btn" style="background: #333; color: #8f8f8f; border: 1px solid rgba(255,255,255,0.12); font-size: 12px;">Última hora</button>
+              <button (click)="setQuickDateRange('semana', 'compara')" class="btn" style="background: #333; color: #8f8f8f; border: 1px solid rgba(255,255,255,0.12); font-size: 12px;">7 días</button>
+              <button (click)="setQuickDateRange('mes', 'compara')" class="btn" style="background: #333; color: #8f8f8f; border: 1px solid rgba(255,255,255,0.12); font-size: 12px;">30 días</button>
+              <button (click)="comparaFilterFechaDesde = ''; comparaFilterFechaHasta = ''; loadComparaData();" class="btn" style="background: #333; color: #8f8f8f; border: 1px solid rgba(255,255,255,0.12);">Limpiar</button>
+            </div>
             <div class="table-container">
               <table class="data-table">
                 <thead>
@@ -486,18 +644,22 @@ import { switchMap } from 'rxjs/operators';
 
     .search-bar {
       display: flex;
-      gap: 8px;
-      margin-bottom: 16px;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      align-items: center;
     }
 
     .form-input {
       flex: 1;
+      min-width: 120px;
       background: #131313;
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
       color: #eaeaea;
-      padding: 8px 12px;
+      padding: 10px 14px;
       border-radius: 6px;
       font-size: 14px;
+      transition: border-color 0.2s ease;
     }
 
     .form-input:focus {
@@ -527,28 +689,37 @@ import { switchMap } from 'rxjs/operators';
 
     .table-container {
       overflow-x: auto;
+      margin: 16px 0;
     }
 
     .data-table {
       width: 100%;
       border-collapse: collapse;
       font-size: 13px;
+      table-layout: fixed;
     }
 
     .data-table thead tr {
-      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+      border-bottom: 2px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.02);
     }
 
     .data-table th {
       text-align: left;
-      padding: 10px;
+      padding: 10px 8px;
       font-weight: 600;
-      color: #8f8f8f;
+      color: #b0b0b0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .data-table td {
-      padding: 10px;
+      padding: 10px 8px;
       border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      color: #e0e0e0;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .data-table tbody tr:hover {
@@ -633,6 +804,126 @@ import { switchMap } from 'rxjs/operators';
     li {
       margin: 4px 0;
     }
+
+    .filter-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .filter-tabs button {
+      padding: 8px 16px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: transparent;
+      color: #8f8f8f;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+
+    .filter-tabs button:hover {
+      border-color: rgba(255, 255, 255, 0.2);
+      color: #ffffff;
+    }
+
+    .filter-tabs button.active {
+      background: #2563eb;
+      color: #ffffff;
+      border-color: #2563eb;
+    }
+
+    .filter-bar {
+      display: flex;
+      gap: 12px;
+      align-items: flex-end;
+    }
+
+    .filter-bar .form-input {
+      flex: 1;
+    }
+
+    .badge-secondary {
+      background: rgba(100, 100, 100, 0.2);
+      color: #8f8f8f;
+    }
+
+    .summary-bar {
+      display: flex;
+      gap: 24px;
+      padding: 12px 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      margin-top: 16px;
+    }
+
+    .summary-item {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .summary-label {
+      color: #8f8f8f;
+      font-size: 12px;
+    }
+
+    .summary-value {
+      font-weight: 600;
+      color: #ffffff;
+      font-size: 14px;
+    }
+
+    .py-8 {
+      padding: 32px 0;
+    }
+
+    .filters-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px;
+    }
+
+    .pagination {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+      margin-top: 20px;
+      padding: 12px 0;
+    }
+
+    .pagination button {
+      background: #181818;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #8f8f8f;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+
+    .pagination button:hover:not(:disabled) {
+      background: #2563eb;
+      border-color: #2563eb;
+      color: #ffffff;
+    }
+
+    .pagination button:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    .page-info {
+      font-size: 12px;
+      color: #8f8f8f;
+      min-width: 80px;
+      text-align: center;
+    }
+
+    .text-center {
+      text-align: center;
+    }
   `]
 })
 export class AppComponent implements OnInit {
@@ -641,8 +932,11 @@ export class AppComponent implements OnInit {
 
   dashboard: Dashboard | null = null;
   syncRuns: any[] = [];
+  syncRunsOriginal: any[] = [];
   sendRunsCompras: SendRun[] = [];
+  sendRunsComprasOriginal: SendRun[] = [];
   sendRunsCompara: SendRun[] = [];
+  sendRunsComparaOriginal: SendRun[] = [];
   verifyRuns: VerifyRun[] = [];
   errorProductsCompras: any[] = [];
   errorProductsCompara: any[] = [];
@@ -650,6 +944,37 @@ export class AppComponent implements OnInit {
 
   filterCode: string = '';
   filterTarget: string = '';
+  filterProductosRegimen: string = '';
+  filterProductosState: string = '';
+  filterProductosFechaDesde: string = '';
+  filterProductosFechaHasta: string = '';
+  productosPageSize: number = 25;
+  productosPage: number = 1;
+  productosTotalPages: number = 1;
+  productosPagedProducts: any[] = [];
+  productosFiltered: any[] = [];
+
+  // Pendientes page
+  pendientesTarget: string = 'compras';
+  pendientesProducts: any[] = [];
+  pendientesFiltered: any[] = [];
+  pendientesFilterCode: string = '';
+  pendientesFilterRegimen: string = '';
+  pendientesFilterStatus: string = '';
+  pendientesFilterFechaDesde: string = '';
+  pendientesFilterFechaHasta: string = '';
+  pendientesPageSize: number = 50;
+  pendientesPage: number = 1;
+  pendientesTotalPages: number = 1;
+  pendientesPagedProducts: any[] = [];
+
+  // Sync, Compras, Compara filters
+  syncFilterFechaDesde: string = '';
+  syncFilterFechaHasta: string = '';
+  comprasFilterFechaDesde: string = '';
+  comprasFilterFechaHasta: string = '';
+  comparaFilterFechaDesde: string = '';
+  comparaFilterFechaHasta: string = '';
 
   constructor(private productoService: ProductoService) {}
 
@@ -677,6 +1002,7 @@ export class AppComponent implements OnInit {
     if (p === 'compras') this.loadComprasData();
     if (p === 'compara') this.loadComparaData();
     if (p === 'productos') this.searchProductos();
+    if (p === 'pendientes') this.loadPendientes();
   }
 
   loadDashboard() {
@@ -688,14 +1014,26 @@ export class AppComponent implements OnInit {
 
   loadSyncRuns() {
     this.productoService.getSyncRuns().subscribe(
-      runs => this.syncRuns = runs,
+      runs => {
+        this.syncRunsOriginal = runs;
+        this.applySyncFilters();
+      },
       e => this.errorMessage = 'Error cargando sync runs'
+    );
+  }
+
+  applySyncFilters() {
+    this.syncRuns = this.syncRunsOriginal.filter(r =>
+      this.isDateInRange(r.startedAt, this.syncFilterFechaDesde, this.syncFilterFechaHasta)
     );
   }
 
   loadComprasData() {
     this.productoService.getSendRuns('compras').subscribe(
-      runs => this.sendRunsCompras = runs,
+      runs => {
+        this.sendRunsComprasOriginal = runs;
+        this.applyComprasFilters();
+      },
       e => this.errorMessage = 'Error cargando send runs'
     );
     this.productoService.getErrorProducts('compras').subscribe(
@@ -706,9 +1044,18 @@ export class AppComponent implements OnInit {
     );
   }
 
+  applyComprasFilters() {
+    this.sendRunsCompras = this.sendRunsComprasOriginal.filter(r =>
+      this.isDateInRange(r.startedAt, this.comprasFilterFechaDesde, this.comprasFilterFechaHasta)
+    );
+  }
+
   loadComparaData() {
     this.productoService.getSendRuns('compara').subscribe(
-      runs => this.sendRunsCompara = runs,
+      runs => {
+        this.sendRunsComparaOriginal = runs;
+        this.applyComparaFilters();
+      },
       e => this.errorMessage = 'Error cargando send runs'
     );
     this.productoService.getErrorProducts('compara').subscribe(
@@ -716,11 +1063,167 @@ export class AppComponent implements OnInit {
     );
   }
 
+  applyComparaFilters() {
+    this.sendRunsCompara = this.sendRunsComparaOriginal.filter(r =>
+      this.isDateInRange(r.startedAt, this.comparaFilterFechaDesde, this.comparaFilterFechaHasta)
+    );
+  }
+
   searchProductos() {
-    this.productoService.getProductos({ code: this.filterCode, target: this.filterTarget }).subscribe(
-      list => this.productList = list,
+    this.productoService.getProductos({
+      code: this.filterCode,
+      target: this.filterTarget,
+      syncStatus: this.filterProductosState ? parseInt(this.filterProductosState) : undefined
+    }).subscribe(
+      list => {
+        if (!list || !list.items) return;
+        // Aplicar filtro de régimen turismo
+        this.productosFiltered = list.items;
+        if (this.filterProductosRegimen === 'true') {
+          this.productosFiltered = this.productosFiltered.filter(p => p.regimenTurismo === true);
+        } else if (this.filterProductosRegimen === 'false') {
+          this.productosFiltered = this.productosFiltered.filter(p => !p.regimenTurismo);
+        }
+        // Aplicar filtro de estado
+        if (this.filterProductosState) {
+          const targetToUse = this.filterTarget || 'compras';
+          const statusField = targetToUse === 'compras' ? 'syncStatus' : 'syncComparaStatus';
+          this.productosFiltered = this.productosFiltered.filter(p =>
+            p[statusField]?.toString() === this.filterProductosState
+          );
+        }
+        // Aplicar filtro de fecha (usando lastSentAt de Compras como referencia)
+        if (this.filterProductosFechaDesde || this.filterProductosFechaHasta) {
+          this.productosFiltered = this.productosFiltered.filter(p =>
+            this.isDateInRange(p.lastSentAt, this.filterProductosFechaDesde, this.filterProductosFechaHasta)
+          );
+        }
+        // Aplicar paginación
+        this.productosPage = 1;
+        this.productosTotalPages = list.totalPages || Math.ceil(this.productosFiltered.length / this.productosPageSize) || 1;
+        const start = 0;
+        const end = this.productosPageSize;
+        this.productosPagedProducts = this.productosFiltered.slice(start, end);
+        this.productList = list;
+      },
       e => this.errorMessage = 'Error cargando productos'
     );
+  }
+
+  resetProductosPage() {
+    this.productosPage = 1;
+    this.searchProductos();
+  }
+
+  firstProductosPage() {
+    this.productosPage = 1;
+    this.applyProductosPage();
+  }
+
+  prevProductosPage() {
+    if (this.productosPage > 1) this.productosPage--;
+    this.applyProductosPage();
+  }
+
+  nextProductosPage() {
+    if (this.productosPage < this.productosTotalPages) this.productosPage++;
+    this.applyProductosPage();
+  }
+
+  lastProductosPage() {
+    this.productosPage = this.productosTotalPages;
+    this.applyProductosPage();
+  }
+
+  applyProductosPage() {
+    const start = (this.productosPage - 1) * this.productosPageSize;
+    const end = start + this.productosPageSize;
+    this.productosPagedProducts = this.productosFiltered.slice(start, end);
+  }
+
+  loadPendientes() {
+    this.productoService.getPendingProducts(this.pendientesTarget).subscribe(
+      products => {
+        this.pendientesProducts = products;
+        this.applyPendientesFilters();
+      },
+      e => this.errorMessage = 'Error cargando productos pendientes'
+    );
+  }
+
+  applyPendientesFilters() {
+    this.pendientesFiltered = this.pendientesProducts.filter(p => {
+      const matchCode = !this.pendientesFilterCode ||
+        p.code.toLowerCase().includes(this.pendientesFilterCode.toLowerCase());
+      const matchRegimen = !this.pendientesFilterRegimen ||
+        (this.pendientesFilterRegimen === 'true' && p.regimenTurismo) ||
+        (this.pendientesFilterRegimen === 'false' && !p.regimenTurismo);
+      const statusField = this.pendientesTarget === 'compras' ? 'syncStatus' : 'syncComparaStatus';
+      const matchStatus = !this.pendientesFilterStatus || p[statusField]?.toString() === this.pendientesFilterStatus;
+      const dateField = this.pendientesTarget === 'compras' ? 'lastSentAt' : 'lastSentComparaAt';
+      const matchDate = this.isDateInRange(p[dateField], this.pendientesFilterFechaDesde, this.pendientesFilterFechaHasta);
+      return matchCode && matchRegimen && matchStatus && matchDate;
+    });
+
+    // Aplicar paginación
+    if (this.pendientesPage < 1) this.pendientesPage = 1;
+    this.pendientesTotalPages = Math.ceil(this.pendientesFiltered.length / this.pendientesPageSize) || 1;
+    if (this.pendientesPage > this.pendientesTotalPages) this.pendientesPage = this.pendientesTotalPages;
+
+    const start = (this.pendientesPage - 1) * this.pendientesPageSize;
+    const end = start + this.pendientesPageSize;
+    this.pendientesPagedProducts = this.pendientesFiltered.slice(start, end);
+  }
+
+  resetPendientesPage() {
+    this.pendientesPage = 1;
+    this.applyPendientesFilters();
+  }
+
+  firstPendientesPage() {
+    this.pendientesPage = 1;
+    this.applyPendientesFilters();
+  }
+
+  prevPendientesPage() {
+    if (this.pendientesPage > 1) this.pendientesPage--;
+    this.applyPendientesFilters();
+  }
+
+  nextPendientesPage() {
+    if (this.pendientesPage < this.pendientesTotalPages) this.pendientesPage++;
+    this.applyPendientesFilters();
+  }
+
+  lastPendientesPage() {
+    this.pendientesPage = this.pendientesTotalPages;
+    this.applyPendientesFilters();
+  }
+
+  switchPendientesTarget(target: string) {
+    this.pendientesTarget = target;
+    this.pendientesPage = 1;
+    this.loadPendientes();
+  }
+
+  countPendientesRegimen(): number {
+    return this.pendientesProducts.filter(p => p.regimenTurismo).length;
+  }
+
+  getStatusLabelPendientes(target: string, p: any): string {
+    const statusField = target === 'compras' ? 'syncStatus' : 'syncComparaStatus';
+    const status = p[statusField];
+    return status === 0 ? '⏳ Pendiente' : status === 1 ? '✅ Enviado' : '❌ Error';
+  }
+
+  getStatusBadgeClassPendientes(target: string, p: any): any {
+    const statusField = target === 'compras' ? 'syncStatus' : 'syncComparaStatus';
+    const status = p[statusField];
+    return {
+      'badge-success': status === 1,
+      'badge-error': status === 2,
+      'badge': status === 0
+    };
   }
 
   getDuration(run: any): string {
@@ -740,6 +1243,81 @@ export class AppComponent implements OnInit {
       'badge-success': status === 1,
       'badge-error': status === 2
     };
+  }
+
+  isDateInRange(date: string | Date | null | undefined, desde: string, hasta: string): boolean {
+    if (!date) return true;
+    if (!desde && !hasta) return true;
+
+    const d = new Date(date);
+    if (desde) {
+      const desdeDate = new Date(desde);
+      desdeDate.setHours(0, 0, 0, 0);
+      if (d < desdeDate) return false;
+    }
+    if (hasta) {
+      const hastaDate = new Date(hasta);
+      hastaDate.setHours(23, 59, 59, 999);
+      if (d > hastaDate) return false;
+    }
+    return true;
+  }
+
+  setQuickDateRange(range: string, filterType: 'productos' | 'pendientes' | 'sync' | 'compras' | 'compara') {
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    let desde = '', hasta = '';
+
+    switch (range) {
+      case 'hoy':
+        desde = today;
+        hasta = today;
+        break;
+      case 'hora':
+        // Última hora: desde hace 60 minutos
+        const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+        desde = oneHourAgo.toISOString().split('T')[0];
+        hasta = today;
+        break;
+      case 'semana':
+        // Últimos 7 días
+        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        desde = sevenDaysAgo.toISOString().split('T')[0];
+        hasta = today;
+        break;
+      case 'mes':
+        // Últimos 30 días
+        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        desde = thirtyDaysAgo.toISOString().split('T')[0];
+        hasta = today;
+        break;
+      case 'todo':
+        desde = '';
+        hasta = '';
+        break;
+    }
+
+    if (filterType === 'productos') {
+      this.filterProductosFechaDesde = desde;
+      this.filterProductosFechaHasta = hasta;
+      this.resetProductosPage();
+    } else if (filterType === 'pendientes') {
+      this.pendientesFilterFechaDesde = desde;
+      this.pendientesFilterFechaHasta = hasta;
+      this.resetPendientesPage();
+    } else if (filterType === 'sync') {
+      this.syncFilterFechaDesde = desde;
+      this.syncFilterFechaHasta = hasta;
+      this.applySyncFilters();
+    } else if (filterType === 'compras') {
+      this.comprasFilterFechaDesde = desde;
+      this.comprasFilterFechaHasta = hasta;
+      this.applyComprasFilters();
+    } else if (filterType === 'compara') {
+      this.comparaFilterFechaDesde = desde;
+      this.comparaFilterFechaHasta = hasta;
+      this.applyComparaFilters();
+    }
   }
 
   expandVerifyRun(id: number) {

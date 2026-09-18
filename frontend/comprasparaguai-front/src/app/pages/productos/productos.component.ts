@@ -33,6 +33,14 @@ import { ProductoService, Producto, ProductDiff, ProductHistorial } from '../../
           <div class="product-info">
             <div><strong>Nombre:</strong> {{ product.namePt }}</div>
             <div><strong>Precio:</strong> {{ product.price | currency }}</div>
+            <div><strong>Precio con IVA:</strong> {{ product.priceIva | currency }}</div>
+            <div *ngIf="product.regimenTurismo">
+              <strong style="color: var(--text-accent)">🎫 Régimen Turismo:</strong> Sí
+              <div style="margin-left: 16px; margin-top: 4px;">
+                <strong>Precio Exenta:</strong> {{ product.precioExenta | currency }}
+              </div>
+            </div>
+            <div *ngIf="!product.regimenTurismo"><strong>Régimen Turismo:</strong> No</div>
             <div><strong>Stock:</strong> {{ product.stock }}</div>
             <div *ngIf="product.brand"><strong>Marca:</strong> {{ product.brand }}</div>
           </div>

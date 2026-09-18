@@ -6,23 +6,16 @@ namespace ComprasParaguai.Core.Models;
 /// </summary>
 public class ProductoApi
 {
+    // Identificadores
     /// <summary>SKU (llave del upsert en la API).</summary>
     public string Code { get; set; } = string.Empty;
 
+    // Datos básicos
     /// <summary>Nombre en español (de Cangrejo).</summary>
     public string NameEs { get; set; } = string.Empty;
 
     /// <summary>Nombre en portugués (propio, enriquecido).</summary>
     public string NamePt { get; set; } = string.Empty;
-
-    /// <summary>Precio normal en PYG. Rango válido: 0.05 – 99999.</summary>
-    public decimal Price { get; set; }
-
-    /// <summary>Precio con IVA (10% Paraguay). Opcional.</summary>
-    public decimal? PriceIva { get; set; }
-
-    /// <summary>Stock disponible. Negativos → 0. 0 = no disponible.</summary>
-    public int Stock { get; set; }
 
     /// <summary>Marca (de Cangrejo cuando NOMBRE_ATRIBUTO_1 = "Marca").</summary>
     public string? Brand { get; set; }
@@ -33,6 +26,27 @@ public class ProductoApi
     /// <summary>Descripción en portugués (propio).</summary>
     public string DescriptionPt { get; set; } = string.Empty;
 
+    /// <summary>Categoría del producto.</summary>
+    public string? Categoria { get; set; }
+
+    // Precios
+    /// <summary>Régimen de Turismo (Si/No de Oracle). True si el producto aplica régimen turismo.</summary>
+    public bool RegimenTurismo { get; set; } = false;
+
+    /// <summary>Precio normal en PYG. Rango válido: 0.05 – 99999.</summary>
+    public decimal Price { get; set; }
+
+    /// <summary>Precio sin IVA (exento): precio - (precio / 11). Solo se calcula si RegimenTurismo = true.</summary>
+    public decimal? PrecioExenta { get; set; }
+
+    /// <summary>Precio con IVA (10% Paraguay). Igual a Price. Opcional.</summary>
+    public decimal? PriceIva { get; set; }
+
+    // Stock
+    /// <summary>Stock disponible. Negativos → 0. 0 = no disponible.</summary>
+    public int Stock { get; set; }
+
+    // URLs/Links
     /// <summary>Nombre de la imagen (de Cangrejo). Ej: "producto123.jpg".</summary>
     public string UrlImage { get; set; } = string.Empty;
 
@@ -45,6 +59,7 @@ public class ProductoApi
     /// <summary>Forzar refresco de imagen en el comparador (típicamente false).</summary>
     public bool ForceImageUpdate { get; set; } = false;
 
+    // Sync
     /// <summary>Hash SHA-256 del payload final. Se recalcula en cada sync para detectar cambios.</summary>
     public string? SourceHash { get; set; }
 
@@ -54,12 +69,10 @@ public class ProductoApi
     /// <summary>Estado de envío a Compara Paraguai: 0=Pendiente, 1=Enviado, 2=Error.</summary>
     public int SyncComparaStatus { get; set; }
 
+    // Auditoría
     public DateTime? LastSentAt { get; set; }
     public DateTime? LastSentComparaAt { get; set; }
     public string? LastError { get; set; }
     public string? LastErrorCompara { get; set; }
-
-    /// <summary>Categoría del producto.</summary>
-    public string? Categoria { get; set; }
 }
 

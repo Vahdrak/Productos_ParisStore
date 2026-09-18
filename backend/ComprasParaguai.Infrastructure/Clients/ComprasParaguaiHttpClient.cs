@@ -88,7 +88,7 @@ public class ComprasParaguaiHttpClient : IComprasParaguaiClient, IProductQueryCl
             {
                 code = p.Code,
                 name = new { pt = p.NamePt, es = p.NameEs },
-                price = p.Price,
+                price = p.RegimenTurismo && p.PrecioExenta.HasValue ? p.PrecioExenta.Value : p.Price,
                 price_iva = p.PriceIva,
                 stock = p.Stock,
                 brand = p.Brand,

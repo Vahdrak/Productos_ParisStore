@@ -81,19 +81,20 @@ public class PostgreSqlProductoRepository : IProductoRepository
                     code VARCHAR(255) NOT NULL,
                     name_es VARCHAR(255),
                     name_pt VARCHAR(255) NOT NULL,
-                    price NUMERIC(12,2),
-                    price_iva NUMERIC(12,2),
-                    stock INT NOT NULL,
                     brand VARCHAR(255),
                     description_es TEXT,
                     description_pt TEXT,
+                    categoria_name VARCHAR(255),
+                    regimen_turismo BOOLEAN,
+                    price NUMERIC(12,2),
+                    precio_exenta NUMERIC(12,2),
+                    price_iva NUMERIC(12,2),
+                    stock INT NOT NULL,
                     url_image VARCHAR(1000),
-                    url_image_full VARCHAR(1000),
                     link VARCHAR(1000),
                     link_purchase VARCHAR(1000),
                     force_image_update BOOLEAN,
-                    source_hash CHAR(64),
-                    categoria_name VARCHAR(255)
+                    source_hash CHAR(64)
                 );
             ";
 
@@ -102,7 +103,7 @@ public class PostgreSqlProductoRepository : IProductoRepository
 
             // COPY: escribir filas a staging en bulk.
             using (var writer = await connection.BeginBinaryImportAsync(
-                "COPY productos_staging (code, name_es, name_pt, price, price_iva, stock, brand, description_es, description_pt, url_image, link, link_purchase, force_image_update, source_hash, categoria_name) FROM STDIN (FORMAT BINARY)"))
+                "COPY productos_staging (code, name_es, name_pt, brand, description_es, description_pt, categoria_name, regimen_turismo, price, precio_exenta, price_iva, stock, url_image, link, link_purchase, force_image_update, source_hash) FROM STDIN (FORMAT BINARY)"))
             {
                 foreach (var product in productList)
                 {
@@ -110,18 +111,20 @@ public class PostgreSqlProductoRepository : IProductoRepository
                     await writer.WriteAsync(product.Code, NpgsqlDbType.Varchar);
                     await writer.WriteAsync(product.NameEs, NpgsqlDbType.Varchar);
                     await writer.WriteAsync(product.NamePt, NpgsqlDbType.Varchar);
-                    await writer.WriteAsync(product.Price, NpgsqlDbType.Numeric);
-                    await writer.WriteAsync(product.PriceIva, NpgsqlDbType.Numeric);
-                    await writer.WriteAsync(product.Stock, NpgsqlDbType.Integer);
                     await writer.WriteAsync(product.Brand, NpgsqlDbType.Varchar);
                     await writer.WriteAsync(product.DescriptionEs, NpgsqlDbType.Text);
                     await writer.WriteAsync(product.DescriptionPt, NpgsqlDbType.Text);
+                    await writer.WriteAsync(product.Categoria, NpgsqlDbType.Varchar);
+                    await writer.WriteAsync(product.RegimenTurismo, NpgsqlDbType.Boolean);
+                    await writer.WriteAsync(product.Price, NpgsqlDbType.Numeric);
+                    await writer.WriteAsync(product.PrecioExenta, NpgsqlDbType.Numeric);
+                    await writer.WriteAsync(product.PriceIva, NpgsqlDbType.Numeric);
+                    await writer.WriteAsync(product.Stock, NpgsqlDbType.Integer);
                     await writer.WriteAsync(product.UrlImage, NpgsqlDbType.Varchar);
                     await writer.WriteAsync(product.Link, NpgsqlDbType.Varchar);
                     await writer.WriteAsync(product.LinkPurchase, NpgsqlDbType.Varchar);
                     await writer.WriteAsync(product.ForceImageUpdate, NpgsqlDbType.Boolean);
                     await writer.WriteAsync(product.SourceHash, NpgsqlDbType.Char);
-                    await writer.WriteAsync(product.Categoria, NpgsqlDbType.Varchar);
                 }
 
                 await writer.CompleteAsync();
@@ -132,41 +135,42 @@ public class PostgreSqlProductoRepository : IProductoRepository
             // Upsert: INSERT ... ON CONFLICT DO UPDATE relacionando categoria_id.
             const string upsert = @"
                 INSERT INTO productos (
-                    code, name_es, name_pt, price, price_iva, stock, brand,
-                    description_es, description_pt, url_image, link, link_purchase,
-                    force_image_update, source_hash, sync_status, sync_compara_status, last_changed_at, updated_at,
-                    categoria_id
+                    code, name_es, name_pt, brand, description_es, description_pt, categoria_id,
+                    regimen_turismo, price, precio_exenta, price_iva, stock,
+                    url_image, link, link_purchase, force_image_update, source_hash,
+                    sync_status, sync_compara_status, last_changed_at, updated_at
                 )
                 SELECT
-                    ps.code, ps.name_es, ps.name_pt, ps.price, ps.price_iva, ps.stock, ps.brand,
-                    ps.description_es, ps.description_pt, ps.url_image, ps.link, ps.link_purchase,
-                    ps.force_image_update, ps.source_hash,
-                    0 AS sync_status,  -- Pendiente (Compras)
-                    0 AS sync_compara_status,  -- Pendiente (Compara)
+                    ps.code, ps.name_es, ps.name_pt, ps.brand, ps.description_es, ps.description_pt, c.id,
+                    ps.regimen_turismo, ps.price, ps.precio_exenta, ps.price_iva, ps.stock,
+                    ps.url_image, ps.link, ps.link_purchase, ps.force_image_update, ps.source_hash,
+                    0 AS sync_status,
+                    0 AS sync_compara_status,
                     @now AS last_changed_at,
-                    @now AS updated_at,
-                    c.id AS categoria_id
+                    @now AS updated_at
                 FROM productos_staging ps
                 LEFT JOIN categorias c ON c.name = ps.categoria_name
                 ON CONFLICT (code) DO UPDATE SET
                     name_es = EXCLUDED.name_es,
                     name_pt = EXCLUDED.name_pt,
-                    price = EXCLUDED.price,
-                    price_iva = EXCLUDED.price_iva,
-                    stock = EXCLUDED.stock,
                     brand = EXCLUDED.brand,
                     description_es = EXCLUDED.description_es,
                     description_pt = EXCLUDED.description_pt,
+                    categoria_id = EXCLUDED.categoria_id,
+                    regimen_turismo = EXCLUDED.regimen_turismo,
+                    price = EXCLUDED.price,
+                    precio_exenta = EXCLUDED.precio_exenta,
+                    price_iva = EXCLUDED.price_iva,
+                    stock = EXCLUDED.stock,
                     url_image = EXCLUDED.url_image,
                     link = EXCLUDED.link,
                     link_purchase = EXCLUDED.link_purchase,
                     force_image_update = EXCLUDED.force_image_update,
                     source_hash = EXCLUDED.source_hash,
-                    sync_status = 0,  -- Resetear a Pendiente (Compras)
-                    sync_compara_status = 0,  -- Resetear a Pendiente (Compara)
+                    sync_status = 0,
+                    sync_compara_status = 0,
                     last_changed_at = @now,
-                    updated_at = @now,
-                    categoria_id = EXCLUDED.categoria_id;
+                    updated_at = @now;
             ";
 
             int affected = await connection.ExecuteAsync(upsert, new { now });
@@ -203,6 +207,8 @@ public class PostgreSqlProductoRepository : IProductoRepository
                 name_pt AS NamePt,
                 price AS Price,
                 price_iva AS PriceIva,
+                regimen_turismo AS RegimenTurismo,
+                precio_exenta AS PrecioExenta,
                 stock AS Stock,
                 brand AS Brand,
                 description_es AS DescriptionEs,
@@ -396,6 +402,8 @@ public class PostgreSqlProductoRepository : IProductoRepository
                 name_pt AS NamePt,
                 price AS Price,
                 price_iva AS PriceIva,
+                regimen_turismo AS RegimenTurismo,
+                precio_exenta AS PrecioExenta,
                 stock AS Stock,
                 brand AS Brand,
                 description_es AS DescriptionEs,
@@ -515,7 +523,9 @@ public class PostgreSqlProductoRepository : IProductoRepository
                 code AS Code,
                 name_es AS NameEs,
                 name_pt AS NamePt,
+                regimen_turismo AS RegimenTurismo,
                 price AS Price,
+                precio_exenta AS PrecioExenta,
                 price_iva AS PriceIva,
                 stock AS Stock,
                 brand AS Brand,
