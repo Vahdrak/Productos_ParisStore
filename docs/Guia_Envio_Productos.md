@@ -134,6 +134,34 @@ Los workers siguen corriendo igual: lo único que cambia es que sus consultas de
 En el Dashboard cada destino muestra **Pendientes** (se enviarán), **Retenidos** (pendientes por pausa o excepción) y
 **Retirados** (ya con stock 0 en el destino). La pestaña Pendientes marca cuáles están retenidos y por qué regla.
 
+
+## Cuando un producto da error (panel → pestaña "Errores")
+
+Un envío que el destino rechaza deja el producto en **Error** (estado 2, con el mensaje del destino). **Un producto en Error no se
+reintenta solo**: sale de la cola de pendientes. Hay dos caminos para resolverlo:
+
+1. **Corregir el dato en Cangrejo.** Si el producto cambia, el siguiente `Worker.Sync` lo vuelve a Pendiente y se reenvía solo.
+2. **Reintentar desde el panel** (pestaña **Errores**, requiere iniciar sesión): vuelve a Pendiente lo que elijas y el worker lo
+   envía en su próximo ciclo. Sirve para errores transitorios o cuando el problema ya se arregló.
+
+La pestaña **Errores** agrupa lo que falló por **tipo de error**, por **departamento** y por **marca** (clic en un grupo para
+filtrar; los filtros se combinan con la búsqueda por código o nombre), indica **qué hacer** con cada tipo y permite reintentar los
+seleccionados o todo lo filtrado.
+
+| Tipo | Causa | Qué hacer |
+|---|---|---|
+| Duplicado en el destino (slug repetido) | El destino ya tiene otro producto con el mismo nombre/código y responde 500 | Cambiar nombre o código en Cangrejo, o pedir al comparador que lo corrija. Reintentar sin cambiar nada vuelve a fallar |
+| Imagen con formato no soportado | Solo se aceptan png, jpg, jpeg y webp | El sync usa la imagen por defecto en esos casos; se reenvían solos tras el próximo sync |
+| Precio fuera de rango | Entre 0,05 y 99.999 (Compras rechaza justo 0,05) | Corregir el precio en Cangrejo. Desde esta versión el sync ya no toma esos productos |
+| Código (SKU) de más de 20 caracteres | Límite de Compras | Corregir el SKU en Cangrejo. El sync ya no toma esos productos |
+| Credenciales o token rechazados | Token vencido o mal puesto | Revisar el `.env` del worker y reintentar |
+| Error temporal del destino o de la red | 5xx, tiempo de espera, 429 | Reintentar |
+
+**Un solo producto malo ya no arrastra al resto.** Si el destino responde error de servidor (5xx) para un lote completo, el worker
+parte el lote en mitades hasta aislar al culpable: solo ese producto queda en Error y los demás se envían (máximo 60 pedidos extra
+por lote; los errores 4xx, los 429 y las caídas de red no se parten). En Compara cada pedido extra respeta la pausa de 46 s.
+Antes, un solo producto con slug duplicado dejaba en Error a los 500 de su lote.
+
 ## Monitoreo
 
 ```sql
@@ -155,6 +183,8 @@ El front Angular / `ComprasParaguai.Api` muestran el estado de **Compras** (`syn
 **`HTTP TooManyRequests` en Compara** — límite de 80 requests por hora (no por segundo). `SendOptions.ComparaParaguai` usa 1000 por lote + 46 s de pausa, así que en condiciones normales no aparece; si otro proceso consumió la cuota, el worker espera 5 min y reintenta el lote hasta 3 veces antes de marcarlo en Error. Los que igual queden en `2` no se reintentan solos: `UPDATE productos SET sync_compara_status = 0 WHERE sync_compara_status = 2;` y volver a correr `--send-pending`.
 
 **`HTTP Unauthorized`** — token incorrecto, ausente o en el header equivocado. Cada API autentica distinto: **Compras** usa un header propio `token: <valor>` (si se manda como `Authorization: Bearer` responde "Token is invalid or expired"); **Compara** usa `Authorization: Bearer <valor>`. Ver sección Credenciales.
+
+**Muchos productos en Error** — ver la sección "Cuando un producto da error" (pestaña Errores del panel).
 
 **`--send-pending` no envía nada** — `--check-pending` da 0. Si esperabas cambios, verificar que `Worker.Sync` corrió (`sync_runs`) y que la vista tiene datos distintos.
 

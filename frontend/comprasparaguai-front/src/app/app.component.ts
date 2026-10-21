@@ -12,6 +12,7 @@ import { ComparaComponent } from './pages/compara/compara.component';
 import { ApiComponent } from './pages/api/api.component';
 import { CambiosComponent } from './pages/cambios/cambios.component';
 import { FiltrosEnvioComponent } from './pages/filtros-envio/filtros-envio.component';
+import { ErroresComponent } from './pages/errores/errores.component';
 
 @Component({
   selector: 'app-root',
@@ -19,7 +20,7 @@ import { FiltrosEnvioComponent } from './pages/filtros-envio/filtros-envio.compo
   imports: [
     CommonModule, FormsModule,
     DashboardComponent, ProductosComponent, PendientesComponent,
-    SyncComponent, ComprasComponent, ComparaComponent, ApiComponent, CambiosComponent, FiltrosEnvioComponent
+    SyncComponent, ComprasComponent, ComparaComponent, ApiComponent, CambiosComponent, FiltrosEnvioComponent, ErroresComponent
   ],
   template: `
     <div class="app-container">
@@ -73,6 +74,7 @@ import { FiltrosEnvioComponent } from './pages/filtros-envio/filtros-envio.compo
         <app-pendientes *ngIf="page === 'pendientes'"></app-pendientes>
         <app-cambios *ngIf="page === 'cambios'"></app-cambios>
         <app-filtros-envio *ngIf="page === 'filtros'"></app-filtros-envio>
+        <app-errores *ngIf="page === 'errores'"></app-errores>
         <app-sync *ngIf="page === 'sync'"></app-sync>
         <app-compras *ngIf="page === 'compras'"></app-compras>
         <app-compara *ngIf="page === 'compara'"></app-compara>
@@ -223,6 +225,7 @@ export class AppComponent {
     { id: 'productos', label: 'Productos' },
     { id: 'pendientes', label: 'Pendientes' },
     { id: 'filtros', label: 'Filtros de envío' },
+    { id: 'errores', label: 'Errores' },
     { id: 'cambios', label: 'Cambios' },
     { id: 'sync', label: 'Sync' },
     { id: 'compras', label: 'Compras' },
