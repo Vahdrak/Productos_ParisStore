@@ -113,5 +113,8 @@ public class SyncService : ISyncService
             var now = DateTime.UtcNow;
             await _repository.MarkAsUnavailableAsync(codesToMarkAsUnavailable, now, cancellationToken);
         }
+
+        // Marcas y categorías sin productos pasan a inactivas (no se borran: conservan sus flags).
+        await _repository.RefreshCatalogoActivoAsync(cancellationToken);
     }
 }

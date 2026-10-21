@@ -7,6 +7,7 @@ una vez ejecutados: cualquier cambio va en una migración nueva (`NNN_descripcio
 |---|---|---|
 | 001 | `001_create_core_tables.sql` | Tablas `categorias`, `productos`, `sync_runs` + índices |
 | 002 | `002_audit_historial.sql` | Tabla `productos_historial` + función y trigger de auditoría |
+| 009 | `009_normalizar_categorias_marcas.sql` | `categorias` pasa a árbol (`parent_id`, `ruta`), nuevas tablas `marcas` y `categoria_alias`, `productos.brand` → `marca_id`, recrea el trigger de auditoría |
 
 ## Cómo aplicarlas
 

@@ -66,10 +66,11 @@ public class ProductoMapperService
         // Nombre en portugués: por ahora, duplicar el español (MVP). Luego: traducir.
         string namePt = view.Nombre ?? "Sin nombre";
 
-        // Descripción: armar con nombre + categoría (MVP).
+        // Descripción: nombre + categoría normalizada, sin la empresa ("... - COCINA > VAJILLAS > PLATILLOS").
         string descriptionEs = $"{view.Nombre}";
-        if (!string.IsNullOrWhiteSpace(view.Categoria))
-            descriptionEs += $" - {view.Categoria}";
+        string categoriaTexto = CategoriaTexto.ParaMostrar(view.Categoria);
+        if (categoriaTexto.Length > 0)
+            descriptionEs += $" - {categoriaTexto}";
 
         string descriptionPt = descriptionEs; // MVP: mismo en portugués.
 

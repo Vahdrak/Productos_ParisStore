@@ -60,19 +60,9 @@ public class PostgreSqlProductoRepository : IProductoRepository
         {
             await connection.OpenAsync(cancellationToken);
 
-            // Insertar categorías únicas de manera relacional
-            var uniqueCategories = productList
-                .Select(p => p.Categoria)
-                .Where(c => !string.IsNullOrWhiteSpace(c))
-                .Distinct()
-                .ToList();
-
-            if (uniqueCategories.Any())
-            {
-                const string insertCats = "INSERT INTO categorias (name) VALUES (@name) ON CONFLICT (name) DO NOTHING";
-                await connection.ExecuteAsync(insertCats, uniqueCategories.Select(c => new { name = c }));
-                _logger.LogInformation("Categorías actualizadas/insertadas en la base de datos");
-            }
+            // Para loguear cuántas categorías/marcas nuevas aprendió esta corrida.
+            int categoriasAntes = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM categorias");
+            int marcasAntes = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM marcas");
 
             // Crear tabla staging temporal.
             const string createStaging = @"
@@ -81,10 +71,10 @@ public class PostgreSqlProductoRepository : IProductoRepository
                     code VARCHAR(255) NOT NULL,
                     name_es VARCHAR(255),
                     name_pt VARCHAR(255) NOT NULL,
-                    brand VARCHAR(255),
+                    marca_nombre TEXT,
                     description_es TEXT,
                     description_pt TEXT,
-                    categoria_name VARCHAR(255),
+                    categoria_ruta TEXT,
                     regimen_turismo BOOLEAN,
                     price NUMERIC(12,2),
                     precio_exenta NUMERIC(12,2),
@@ -94,7 +84,9 @@ public class PostgreSqlProductoRepository : IProductoRepository
                     link VARCHAR(1000),
                     link_purchase VARCHAR(1000),
                     force_image_update BOOLEAN,
-                    source_hash CHAR(64)
+                    source_hash CHAR(64),
+                    categoria_id INT,
+                    marca_id INT
                 );
             ";
 
@@ -103,7 +95,7 @@ public class PostgreSqlProductoRepository : IProductoRepository
 
             // COPY: escribir filas a staging en bulk.
             using (var writer = await connection.BeginBinaryImportAsync(
-                "COPY productos_staging (code, name_es, name_pt, brand, description_es, description_pt, categoria_name, regimen_turismo, price, precio_exenta, price_iva, stock, url_image, link, link_purchase, force_image_update, source_hash) FROM STDIN (FORMAT BINARY)"))
+                "COPY productos_staging (code, name_es, name_pt, marca_nombre, description_es, description_pt, categoria_ruta, regimen_turismo, price, precio_exenta, price_iva, stock, url_image, link, link_purchase, force_image_update, source_hash) FROM STDIN (FORMAT BINARY)"))
             {
                 foreach (var product in productList)
                 {
@@ -111,10 +103,10 @@ public class PostgreSqlProductoRepository : IProductoRepository
                     await writer.WriteAsync(product.Code, NpgsqlDbType.Varchar);
                     await writer.WriteAsync(product.NameEs, NpgsqlDbType.Varchar);
                     await writer.WriteAsync(product.NamePt, NpgsqlDbType.Varchar);
-                    await writer.WriteAsync(product.Brand, NpgsqlDbType.Varchar);
+                    await writer.WriteAsync(product.Brand, NpgsqlDbType.Text);
                     await writer.WriteAsync(product.DescriptionEs, NpgsqlDbType.Text);
                     await writer.WriteAsync(product.DescriptionPt, NpgsqlDbType.Text);
-                    await writer.WriteAsync(product.Categoria, NpgsqlDbType.Varchar);
+                    await writer.WriteAsync(product.Categoria, NpgsqlDbType.Text);
                     await writer.WriteAsync(product.RegimenTurismo, NpgsqlDbType.Boolean);
                     await writer.WriteAsync(product.Price, NpgsqlDbType.Numeric);
                     await writer.WriteAsync(product.PrecioExenta, NpgsqlDbType.Numeric);
@@ -132,16 +124,59 @@ public class PostgreSqlProductoRepository : IProductoRepository
 
             _logger.LogInformation("COPY completado: {Count} filas en staging", productList.Count);
 
-            // Upsert: INSERT ... ON CONFLICT DO UPDATE relacionando categoria_id.
+            // Resolver categoría y marca de cada fila a su id, todo por conjuntos (sin bucles desde C#).
+            // Categorías: cada texto crudo de Oracle se normaliza UNA sola vez y queda en categoria_alias;
+            // en una corrida normal todo se resuelve con ese join. Solo las rutas nuevas crean nodos.
+            const string resolveCategorias = @"
+                INSERT INTO categoria_alias (ruta_origen, categoria_id)
+                SELECT d.r, fn_asegurar_categoria(fn_normalizar_ruta_categoria(d.r))
+                FROM (
+                    SELECT DISTINCT s.categoria_ruta AS r
+                    FROM productos_staging s
+                    WHERE s.categoria_ruta IS NOT NULL
+                      AND NOT EXISTS (SELECT 1 FROM categoria_alias a WHERE a.ruta_origen = s.categoria_ruta)
+                ) d
+                WHERE fn_normalizar_ruta_categoria(d.r) IS NOT NULL
+                ON CONFLICT (ruta_origen) DO NOTHING;
+
+                UPDATE productos_staging s
+                SET categoria_id = a.categoria_id
+                FROM categoria_alias a
+                WHERE a.ruta_origen = s.categoria_ruta;
+            ";
+            await connection.ExecuteAsync(resolveCategorias);
+
+            // Marcas: las nuevas se agregan a la tabla; vacío/NULL = BRANDLESS.
+            const string resolveMarcas = @"
+                INSERT INTO marcas (nombre)
+                SELECT DISTINCT ON (upper(t.n)) t.n
+                FROM (SELECT fn_normalizar_marca(marca_nombre) AS n FROM productos_staging GROUP BY 1) t
+                WHERE NOT EXISTS (SELECT 1 FROM marcas m WHERE upper(m.nombre) = upper(t.n))
+                ORDER BY upper(t.n), (t.n = upper(t.n)) DESC, t.n
+                ON CONFLICT DO NOTHING;
+
+                UPDATE productos_staging s
+                SET marca_id = m.id
+                FROM marcas m
+                WHERE upper(m.nombre) = upper(fn_normalizar_marca(s.marca_nombre));
+            ";
+            await connection.ExecuteAsync(resolveMarcas);
+
+            int categoriasDespues = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM categorias");
+            int marcasDespues = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM marcas");
+            _logger.LogInformation("Categorías nuevas: {Categorias}, marcas nuevas: {Marcas}",
+                categoriasDespues - categoriasAntes, marcasDespues - marcasAntes);
+
+            // Upsert: INSERT ... ON CONFLICT DO UPDATE con categoria_id y marca_id ya resueltos.
             const string upsert = @"
                 INSERT INTO productos (
-                    code, name_es, name_pt, brand, description_es, description_pt, categoria_id,
+                    code, name_es, name_pt, marca_id, description_es, description_pt, categoria_id,
                     regimen_turismo, price, precio_exenta, price_iva, stock,
                     url_image, link, link_purchase, force_image_update, source_hash,
                     sync_status, sync_compara_status, last_changed_at, updated_at
                 )
                 SELECT
-                    ps.code, ps.name_es, ps.name_pt, ps.brand, ps.description_es, ps.description_pt, c.id,
+                    ps.code, ps.name_es, ps.name_pt, ps.marca_id, ps.description_es, ps.description_pt, ps.categoria_id,
                     ps.regimen_turismo, ps.price, ps.precio_exenta, ps.price_iva, ps.stock,
                     ps.url_image, ps.link, ps.link_purchase, ps.force_image_update, ps.source_hash,
                     0 AS sync_status,
@@ -149,11 +184,10 @@ public class PostgreSqlProductoRepository : IProductoRepository
                     @now AS last_changed_at,
                     @now AS updated_at
                 FROM productos_staging ps
-                LEFT JOIN categorias c ON c.name = ps.categoria_name
                 ON CONFLICT (code) DO UPDATE SET
                     name_es = EXCLUDED.name_es,
                     name_pt = EXCLUDED.name_pt,
-                    brand = EXCLUDED.brand,
+                    marca_id = EXCLUDED.marca_id,
                     description_es = EXCLUDED.description_es,
                     description_pt = EXCLUDED.description_pt,
                     categoria_id = EXCLUDED.categoria_id,
@@ -201,29 +235,65 @@ public class PostgreSqlProductoRepository : IProductoRepository
         }
     }
 
+    /// <summary>
+    /// Recalcula marcas.activo y categorias.activo a partir de los productos existentes.
+    /// </summary>
+    public async Task RefreshCatalogoActivoAsync(CancellationToken cancellationToken = default)
+    {
+        const string query = @"
+            UPDATE marcas m
+            SET activo = EXISTS (SELECT 1 FROM productos p WHERE p.marca_id = m.id)
+            WHERE m.activo IS DISTINCT FROM EXISTS (SELECT 1 FROM productos p WHERE p.marca_id = m.id);
+
+            WITH RECURSIVE con_productos AS (
+                SELECT DISTINCT categoria_id AS id FROM productos WHERE categoria_id IS NOT NULL
+                UNION
+                SELECT c.parent_id
+                FROM categorias c
+                JOIN con_productos cp ON cp.id = c.id
+                WHERE c.parent_id IS NOT NULL
+            )
+            UPDATE categorias c
+            SET activo = (c.id IN (SELECT id FROM con_productos))
+            WHERE c.activo IS DISTINCT FROM (c.id IN (SELECT id FROM con_productos));
+        ";
+
+        using (var connection = new NpgsqlConnection(_connectionString))
+        {
+            await connection.OpenAsync(cancellationToken);
+            await connection.ExecuteAsync(query);
+            _logger.LogInformation("Estado activo de marcas y categorías recalculado");
+        }
+    }
+
+    // Alias: p = productos, m = marcas (nombre -> Brand), c = categorias (ruta -> Categoria).
     private const string ProductoApiColumns = @"
-                code AS Code,
-                name_es AS NameEs,
-                name_pt AS NamePt,
-                price AS Price,
-                price_iva AS PriceIva,
-                regimen_turismo AS RegimenTurismo,
-                precio_exenta AS PrecioExenta,
-                stock AS Stock,
-                brand AS Brand,
-                description_es AS DescriptionEs,
-                description_pt AS DescriptionPt,
-                url_image AS UrlImage,
-                link AS Link,
-                link_purchase AS LinkPurchase,
-                force_image_update AS ForceImageUpdate,
-                source_hash AS SourceHash,
-                sync_status AS SyncStatus,
-                sync_compara_status AS SyncComparaStatus,
-                last_sent_at AS LastSentAt,
-                last_sent_compara_at AS LastSentComparaAt,
-                last_error AS LastError,
-                last_error_compara AS LastErrorCompara";
+                p.code AS Code,
+                p.name_es AS NameEs,
+                p.name_pt AS NamePt,
+                p.price AS Price,
+                p.price_iva AS PriceIva,
+                p.regimen_turismo AS RegimenTurismo,
+                p.precio_exenta AS PrecioExenta,
+                p.stock AS Stock,
+                m.nombre AS Brand,
+                c.ruta AS Categoria,
+                p.description_es AS DescriptionEs,
+                p.description_pt AS DescriptionPt,
+                p.url_image AS UrlImage,
+                p.link AS Link,
+                p.link_purchase AS LinkPurchase,
+                p.force_image_update AS ForceImageUpdate,
+                p.source_hash AS SourceHash,
+                p.sync_status AS SyncStatus,
+                p.sync_compara_status AS SyncComparaStatus,
+                p.last_sent_at AS LastSentAt,
+                p.last_sent_compara_at AS LastSentComparaAt,
+                p.last_error AS LastError,
+                p.last_error_compara AS LastErrorCompara";
+
+    private const string ProductoApiFrom =
+        "productos p JOIN marcas m ON m.id = p.marca_id LEFT JOIN categorias c ON c.id = p.categoria_id";
 
     // Columnas de estado por destino. Switch cerrado: los nombres nunca vienen de input externo.
     private static (string Status, string SentAt, string Error) Cols(SyncTarget target) => target switch
@@ -238,7 +308,7 @@ public class PostgreSqlProductoRepository : IProductoRepository
     /// </summary>
     public async Task<List<ProductoApi>> LoadAllProductsAsync(CancellationToken cancellationToken = default)
     {
-        string query = $"SELECT {ProductoApiColumns} FROM productos ORDER BY code";
+        string query = $"SELECT {ProductoApiColumns} FROM {ProductoApiFrom} ORDER BY p.code";
 
         using (var connection = new NpgsqlConnection(_connectionString))
         {
@@ -255,7 +325,7 @@ public class PostgreSqlProductoRepository : IProductoRepository
     /// </summary>
     public async Task<List<ProductoApi>> LoadRandomProductsAsync(int count, CancellationToken cancellationToken = default)
     {
-        string query = $"SELECT {ProductoApiColumns} FROM productos ORDER BY random() LIMIT @count";
+        string query = $"SELECT {ProductoApiColumns} FROM {ProductoApiFrom} ORDER BY random() LIMIT @count";
 
         using (var connection = new NpgsqlConnection(_connectionString))
         {
@@ -273,7 +343,7 @@ public class PostgreSqlProductoRepository : IProductoRepository
     public async Task<List<ProductoApi>> LoadRandomSentProductsAsync(int count, SyncTarget target, CancellationToken cancellationToken = default)
     {
         var c = Cols(target);
-        string query = $"SELECT {ProductoApiColumns} FROM productos WHERE {c.Status} = 1 ORDER BY random() LIMIT @count";
+        string query = $"SELECT {ProductoApiColumns} FROM {ProductoApiFrom} WHERE p.{c.Status} = 1 ORDER BY random() LIMIT @count";
 
         using (var connection = new NpgsqlConnection(_connectionString))
         {
@@ -291,7 +361,7 @@ public class PostgreSqlProductoRepository : IProductoRepository
     public async Task<List<ProductoApi>> LoadPendingProductsAsync(SyncTarget target = SyncTarget.ComprasParaguai, CancellationToken cancellationToken = default)
     {
         var c = Cols(target);
-        string query = $"SELECT {ProductoApiColumns} FROM productos WHERE {c.Status} = 0 ORDER BY code";
+        string query = $"SELECT {ProductoApiColumns} FROM {ProductoApiFrom} WHERE p.{c.Status} = 0 ORDER BY p.code";
 
         using (var connection = new NpgsqlConnection(_connectionString))
         {
@@ -395,33 +465,7 @@ public class PostgreSqlProductoRepository : IProductoRepository
     /// </summary>
     public async Task<ProductoApi?> LoadProductByCodeAsync(string code, CancellationToken cancellationToken = default)
     {
-        const string query = @"
-            SELECT
-                code AS Code,
-                name_es AS NameEs,
-                name_pt AS NamePt,
-                price AS Price,
-                price_iva AS PriceIva,
-                regimen_turismo AS RegimenTurismo,
-                precio_exenta AS PrecioExenta,
-                stock AS Stock,
-                brand AS Brand,
-                description_es AS DescriptionEs,
-                description_pt AS DescriptionPt,
-                url_image AS UrlImage,
-                link AS Link,
-                link_purchase AS LinkPurchase,
-                force_image_update AS ForceImageUpdate,
-                source_hash AS SourceHash,
-                sync_status AS SyncStatus,
-                sync_compara_status AS SyncComparaStatus,
-                last_sent_at AS LastSentAt,
-                last_sent_compara_at AS LastSentComparaAt,
-                last_error AS LastError,
-                last_error_compara AS LastErrorCompara
-            FROM productos
-            WHERE code = @code
-        ";
+        string query = $"SELECT {ProductoApiColumns} FROM {ProductoApiFrom} WHERE p.code = @code";
 
         using (var connection = new NpgsqlConnection(_connectionString))
         {
@@ -519,32 +563,10 @@ public class PostgreSqlProductoRepository : IProductoRepository
         string whereClause = conditions.Count > 0 ? "WHERE " + string.Join(" AND ", conditions) : "";
 
         string query = $@"
-            SELECT
-                code AS Code,
-                name_es AS NameEs,
-                name_pt AS NamePt,
-                regimen_turismo AS RegimenTurismo,
-                price AS Price,
-                precio_exenta AS PrecioExenta,
-                price_iva AS PriceIva,
-                stock AS Stock,
-                brand AS Brand,
-                description_es AS DescriptionEs,
-                description_pt AS DescriptionPt,
-                url_image AS UrlImage,
-                link AS Link,
-                link_purchase AS LinkPurchase,
-                force_image_update AS ForceImageUpdate,
-                source_hash AS SourceHash,
-                sync_status AS SyncStatus,
-                sync_compara_status AS SyncComparaStatus,
-                last_sent_at AS LastSentAt,
-                last_sent_compara_at AS LastSentComparaAt,
-                last_error AS LastError,
-                last_error_compara AS LastErrorCompara
-            FROM productos
+            SELECT {ProductoApiColumns}
+            FROM {ProductoApiFrom}
             {whereClause}
-            ORDER BY code
+            ORDER BY p.code
             LIMIT @pageSize OFFSET @offset
         ";
 
@@ -622,12 +644,13 @@ public class PostgreSqlProductoRepository : IProductoRepository
                     p.price AS current_price,
                     p.price_iva AS current_price_iva,
                     p.stock AS current_stock,
-                    p.brand AS current_brand,
+                    m.nombre AS current_brand,
                     p.name_es AS current_name_es,
                     p.name_pt AS current_name_pt,
                     ROW_NUMBER() OVER (ORDER BY ph.changed_at DESC) as rn
                 FROM productos_historial ph
                 INNER JOIN productos p ON p.code = ph.code
+                INNER JOIN marcas m ON m.id = p.marca_id
             ),
             paginated AS (
                 SELECT * FROM changes

@@ -40,6 +40,56 @@ public class ProductoMapperServiceTests
     }
 
     [Fact]
+    public void MapAndValidate_Description_UsesNormalizedCategoryWithoutCompany()
+    {
+        var view = new ProductoView
+        {
+            Code = "DESC-001",
+            Nombre = "PLATO LLANO",
+            PrecioNormal = 10,
+            Inventario = 1,
+            Categoria = "TOKU IMPORTADOS>COCINA>VAJILLAS>VAJILLAS>PLATILLOS PLASTICO"
+        };
+
+        var result = _mapper.MapAndValidate(view);
+
+        Assert.NotNull(result);
+        Assert.Equal("PLATO LLANO - COCINA > VAJILLAS > PLATILLOS PLASTICO", result.DescriptionEs);
+        Assert.Equal(result.DescriptionEs, result.DescriptionPt);
+        // La categoría cruda se conserva para que la BD arme el árbol.
+        Assert.Equal("TOKU IMPORTADOS>COCINA>VAJILLAS>VAJILLAS>PLATILLOS PLASTICO", result.Categoria);
+    }
+
+    [Fact]
+    public void MapAndValidate_Description_FixesBrokenEncoding()
+    {
+        var view = new ProductoView
+        {
+            Code = "DESC-002",
+            Nombre = "MUﾑECA",
+            PrecioNormal = 10,
+            Inventario = 1,
+            Categoria = "TOKU IMPORTADOS>JUGUETERIA>JUGUETES NIﾑAS"
+        };
+
+        var result = _mapper.MapAndValidate(view);
+
+        Assert.NotNull(result);
+        Assert.EndsWith(" - JUGUETERIA > JUGUETES NIÑAS", result.DescriptionEs);
+    }
+
+    [Fact]
+    public void MapAndValidate_Description_WithoutCategory_IsJustTheName()
+    {
+        var view = new ProductoView { Code = "DESC-003", Nombre = "SIN CATEGORIA", PrecioNormal = 10, Inventario = 1 };
+
+        var result = _mapper.MapAndValidate(view);
+
+        Assert.NotNull(result);
+        Assert.Equal("SIN CATEGORIA", result.DescriptionEs);
+    }
+
+    [Fact]
     public void MapAndValidate_NegativeStock_ReturnsZero()
     {
         var view = new ProductoView

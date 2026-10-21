@@ -67,8 +67,8 @@ El hash se calcula sobre el **payload final** (Cangrejo + enriquecimiento), así
 | `price` | ✅ | `PRECIO_NORMAL` | Debe estar entre **0.05 y 99999**. Si es inválido/vacío → saltar y registrar. |
 | `price_iva` | ⬜ | `PRECIO_NORMAL` + IVA | IVA Paraguay 10%. Opcional. |
 | `stock` | ✅ | `INVENTARIO` | Negativos → **0**. `0` = no disponible. |
-| `brand` | ⬜ | `VALOR_ATRIBUTO_1` (cuando `NOMBRE_ATRIBUTO_1` = "Marca") | Se refresca. |
-| `description.pt` | ✅ | *(propio)* | No existe en la vista. MVP: armar con nombre + categoría. |
+| `brand` | ⬜ | `VALOR_ATRIBUTO_1` (cuando `NOMBRE_ATRIBUTO_1` = "Marca") | Se refresca. En la BD vive en la tabla `marcas` (`productos.marca_id`); vacío/NULL = `BRANDLESS`. Ver "Catálogo normalizado" (sección 4). |
+| `description.pt` | ✅ | *(propio)* | No existe en la vista. MVP: nombre + categoría normalizada sin la empresa (`NOMBRE - COCINA > VAJILLAS > PLATILLOS`). |
 | `description.es` | ⬜ | *(propio)* | Idem. |
 | `url_image` | ✅ | base + `IMAGENES` | Anteponer la URL base. Si es `sinimagen.jpg` → **imagen por defecto**. |
 | `link` | ✅ | *(propio)* patrón de tienda + `code` | Definir patrón de URL del producto. |
@@ -123,13 +123,57 @@ CREATE TABLE productos (
 CREATE INDEX ix_productos_sync_status ON productos(sync_status);
 ```
 
-### Tabla `categorias`
+### Tabla `categorias` y tabla `marcas` (catálogo normalizado, migración 009)
+
+> El esquema de `productos` de arriba es el original. Desde la migración 009 `productos.brand` (texto)
+> se reemplazó por `productos.marca_id → marcas`, y `categorias` pasó de lista plana a **árbol**.
+> Ver "Catálogo normalizado" más abajo.
+
 ```sql
-CREATE TABLE categorias (
-    id   INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    ruta VARCHAR(4000) NOT NULL UNIQUE  -- "TOKU>COMESTIBLES>CHOCOLATES>ALFAJORES"
+CREATE TABLE categorias (               -- árbol: cada nodo conoce a su padre
+    id         INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    parent_id  INTEGER REFERENCES categorias(id),   -- NULL = raíz ("TOKU IMPORTADOS")
+    nombre     VARCHAR(255)  NOT NULL,              -- "PLATILLOS PLASTICO"
+    nivel      SMALLINT      NOT NULL,              -- 1 empresa, 2 departamento, 3 sección, 4 familia, 5+ subfamilia
+    ruta       VARCHAR(1000) NOT NULL UNIQUE,       -- "TOKU IMPORTADOS>COCINA>VAJILLAS>PLATILLOS PLASTICO"
+    activo     BOOLEAN       NOT NULL DEFAULT TRUE, -- tiene productos propios o de descendientes
+    created_at TIMESTAMP     NOT NULL DEFAULT now()
+);
+CREATE TABLE marcas (
+    id         INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    nombre     VARCHAR(255) NOT NULL,               -- único sin distinguir mayúsculas; "BRANDLESS" = sin marca
+    activo     BOOLEAN      NOT NULL DEFAULT TRUE,  -- tiene productos
+    created_at TIMESTAMP    NOT NULL DEFAULT now()
+);
+CREATE TABLE categoria_alias (          -- memoria del sync: texto crudo de Oracle -> nodo
+    ruta_origen  TEXT PRIMARY KEY,
+    categoria_id INTEGER NOT NULL REFERENCES categorias(id)
 );
 ```
+
+### Catálogo normalizado: cómo se llena y se mantiene
+
+`PARAGUAY_COMPRAS_VIEW.CATEGORIAS` entrega la categoría como un único texto separado por `>` y con
+dos problemas: Cangrejo **repite el nivel** cuando no lo usa (`COCINA>VAJILLAS>VAJILLAS>PLATILLOS`) y algunas
+letras llegan como katakana de ancho medio (`NIﾑAS` en vez de `NIÑAS`). Como referencia, la vista interna
+`CLASIFICACION_PRODUCTOS_TOKU_VIEW` (sin acceso) confirma la jerarquía Empresa > Departamento > Sección > Familia > Subfamilia.
+
+**Regla de normalización** (`fn_normalizar_ruta_categoria`, espejo en C#: `CategoriaTexto`):
+1. Corregir la codificación (U+FF61–U+FF9F → Latin-1, `cp - 0xFF61 + 0xA1`).
+2. Recortar cada segmento, colapsar espacios y descartar vacíos.
+3. Colapsar segmentos consecutivos iguales.
+
+**Cómo aprende el sync** (`UpsertProductsAsync`): cada texto crudo se normaliza una sola vez y queda en
+`categoria_alias`; en una corrida normal todo se resuelve con ese join. Solo una ruta nueva crea nodos
+(`fn_asegurar_categoria` crea los prefijos que falten, nivel por nivel). Las marcas se resuelven igual por nombre
+(sin distinguir mayúsculas; vacío = `BRANDLESS`). El log informa `Categorías nuevas: N, marcas nuevas: M`.
+
+**Ciclo de vida:** el sync nunca borra categorías ni marcas, así se conservarán los flags de envío que se les
+configuren. La reconciliación diaria recalcula `activo` (con productos o sin ellos).
+
+**Pedido a Cangrejo** (mejora futura): exponer un código de categoría (`CODIGO_COMPUESTO` de
+`CLASIFICACION_PRODUCTOS_TOKU_VIEW`) en `PARAGUAY_COMPRAS_VIEW` o dar `SELECT` sobre esa vista, y corregir la
+codificación de la columna `CATEGORIAS`. Con eso el árbol podría copiarse tal cual y enlazar por código en lugar de por texto.
 
 ### Tabla `sync_runs` (bitácora)
 ```sql

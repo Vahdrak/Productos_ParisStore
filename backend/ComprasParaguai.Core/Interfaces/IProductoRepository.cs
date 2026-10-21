@@ -30,6 +30,13 @@ public interface IProductoRepository
     Task MarkAsUnavailableAsync(IEnumerable<string> codes, DateTime now, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Recalcula marcas.activo y categorias.activo (una marca/nodo está activo si tiene productos,
+    /// propios o de sus descendientes). Nunca borra: así se conservan los flags si vuelve a aparecer.
+    /// Se llama desde la reconciliación diaria.
+    /// </summary>
+    Task RefreshCatalogoActivoAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Carga TODOS los productos de la BD (sin filtrar por estado).
     /// Usado para el envío inicial completo a un destino.
     /// </summary>
