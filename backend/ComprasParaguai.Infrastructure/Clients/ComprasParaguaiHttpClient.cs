@@ -139,6 +139,7 @@ public class ComprasParaguaiHttpClient : IComprasParaguaiClient, IProductQueryCl
             {
                 Success = false,
                 Message = $"HTTP {response.StatusCode}: {body}",
+                StatusCode = (int)response.StatusCode,
                 RateLimited = response.StatusCode == System.Net.HttpStatusCode.TooManyRequests
             };
         }

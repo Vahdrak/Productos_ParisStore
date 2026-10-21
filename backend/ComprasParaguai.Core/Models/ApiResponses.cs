@@ -24,6 +24,10 @@ public class ImportResponse
     [JsonPropertyName("validation_errors")]
     public List<ValidationErrorEntry> ValidationErrors { get; set; } = new();
 
+    /// <summary>Código HTTP cuando la API respondió con error (0 si no aplica). Un 5xx de todo el lote suele ser un producto "venenoso".</summary>
+    [JsonIgnore]
+    public int StatusCode { get; set; }
+
     /// <summary>HTTP 429: la API pidió esperar. El lote no se procesó; conviene reintentar tras una pausa.</summary>
     [JsonIgnore]
     public bool RateLimited { get; set; }

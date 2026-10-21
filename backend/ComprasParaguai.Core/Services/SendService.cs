@@ -89,73 +89,119 @@ public class SendService : ISendService
         }
     }
 
+    /// <summary>
+    /// Máximo de pedidos extra por lote al aislar un producto "venenoso". Con lotes de 1000 y un solo culpable
+    /// hacen falta ~20; el tope evita una avalancha de pedidos si falla todo (p. ej. el servidor caído).
+    /// </summary>
+    private const int MaxPedidosAislamiento = 60;
+
+    /// <summary>Contadores y estado compartidos mientras se procesa un lote (y sus sub-lotes).</summary>
+    private sealed class Acumulado
+    {
+        public int Sent;
+        public int Failed;
+        public readonly List<string> FailedCodes = new();
+        public int PedidosExtra;
+    }
+
     private async Task<SendResult> SendBatchesAsync(List<ProductoApi> products, CancellationToken cancellationToken, bool retiro = false)
     {
         if (products.Count == 0)
             return SendResult.Empty;
 
-        int sent = 0, failed = 0;
-        var failedCodes = new List<string>();
+        var acc = new Acumulado();
         var batches = products.Chunk(_options.BatchSize).ToList();
 
         for (int i = 0; i < batches.Count; i++)
         {
-            var batch = batches[i];
-            try
-            {
-                var response = await _client.ImportProductsAsync(batch, cancellationToken);
-
-                // 429: la cuota por hora se agotó. Esperar y reintentar el mismo lote en vez de marcarlo en Error.
-                for (int attempt = 0; response.RateLimited && attempt < _options.RateLimitRetries; attempt++)
-                {
-                    await Task.Delay(_options.RateLimitWaitMs, cancellationToken);
-                    response = await _client.ImportProductsAsync(batch, cancellationToken);
-                }
-
-                if (response.Success)
-                {
-                    // El lote se procesó, pero la API puede rechazar productos individuales (207 Multi-Status).
-                    var rejected = response.FailedProducts();
-                    foreach (var (code, error) in rejected)
-                    {
-                        await _repository.MarkAsErrorAsync(code, retiro ? $"Retiro: {error}" : error, _options.Target, cancellationToken);
-                        failedCodes.Add(code);
-                    }
-
-                    var accepted = batch.Select(p => p.Code).Where(c => !rejected.ContainsKey(c)).ToList();
-                    if (accepted.Count > 0 && retiro)
-                        await _repository.MarkRetiradosAsync(accepted, _options.Target, cancellationToken);
-                    else if (accepted.Count > 0)
-                        await _repository.MarkAsSentAsync(accepted, DateTime.UtcNow, _options.Target, cancellationToken);
-
-                    sent += accepted.Count;
-                    failed += rejected.Count;
-                }
-                else
-                {
-                    string errorMsg = (retiro ? "Retiro: " : "") + (response.Message ?? "Error desconocido");
-                    foreach (var product in batch)
-                    {
-                        await _repository.MarkAsErrorAsync(product.Code, errorMsg, _options.Target, cancellationToken);
-                        failedCodes.Add(product.Code);
-                    }
-                    failed += batch.Length;
-                }
-            }
-            catch (Exception ex)
-            {
-                foreach (var product in batch)
-                {
-                    await _repository.MarkAsErrorAsync(product.Code, retiro ? $"Retiro: {ex.Message}" : ex.Message, _options.Target, cancellationToken);
-                    failedCodes.Add(product.Code);
-                }
-                failed += batch.Length;
-            }
+            acc.PedidosExtra = 0;
+            await ProcesarLoteAsync(batches[i], retiro, acc, cancellationToken);
 
             if (_options.DelayMs > 0 && i < batches.Count - 1)
                 await Task.Delay(_options.DelayMs, cancellationToken);
         }
 
-        return new SendResult(sent, failed, products.Count, failedCodes);
+        return new SendResult(acc.Sent, acc.Failed, products.Count, acc.FailedCodes);
+    }
+
+    /// <summary>Envía el lote (con reintento por 429).</summary>
+    private async Task<ImportResponse> EnviarLoteAsync(ProductoApi[] batch, CancellationToken cancellationToken)
+    {
+        var response = await _client.ImportProductsAsync(batch, cancellationToken);
+
+        // 429: la cuota por hora se agotó. Esperar y reintentar el mismo lote en vez de marcarlo en Error.
+        for (int attempt = 0; response.RateLimited && attempt < _options.RateLimitRetries; attempt++)
+        {
+            await Task.Delay(_options.RateLimitWaitMs, cancellationToken);
+            response = await _client.ImportProductsAsync(batch, cancellationToken);
+        }
+
+        return response;
+    }
+
+    private async Task ProcesarLoteAsync(ProductoApi[] batch, bool retiro, Acumulado acc, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await EnviarLoteAsync(batch, cancellationToken);
+
+            if (response.Success)
+            {
+                // El lote se procesó, pero la API puede rechazar productos individuales (207 Multi-Status).
+                var rejected = response.FailedProducts();
+                foreach (var (code, error) in rejected)
+                {
+                    await _repository.MarkAsErrorAsync(code, retiro ? $"Retiro: {error}" : error, _options.Target, cancellationToken);
+                    acc.FailedCodes.Add(code);
+                }
+
+                var accepted = batch.Select(p => p.Code).Where(c => !rejected.ContainsKey(c)).ToList();
+                if (accepted.Count > 0 && retiro)
+                    await _repository.MarkRetiradosAsync(accepted, _options.Target, cancellationToken);
+                else if (accepted.Count > 0)
+                    await _repository.MarkAsSentAsync(accepted, DateTime.UtcNow, _options.Target, cancellationToken);
+
+                acc.Sent += accepted.Count;
+                acc.Failed += rejected.Count;
+                return;
+            }
+
+            // Error de servidor (5xx) en TODO el lote: casi siempre es UN producto que el destino no puede procesar
+            // (p. ej. un slug duplicado) y el resto es daño colateral. Se parte el lote en mitades para aislarlo y
+            // que solo ese producto quede en Error. Los 4xx, los 429 y las caídas de red no se parten.
+            if (batch.Length > 1 && response.StatusCode >= 500 && !response.RateLimited && acc.PedidosExtra < MaxPedidosAislamiento)
+            {
+                int mitad = batch.Length / 2;
+                var izquierda = batch[..mitad];
+                var derecha = batch[mitad..];
+
+                foreach (var parte in new[] { izquierda, derecha })
+                {
+                    if (_options.DelayMs > 0)
+                        await Task.Delay(_options.DelayMs, cancellationToken);
+                    acc.PedidosExtra++;
+                    await ProcesarLoteAsync(parte, retiro, acc, cancellationToken);
+                }
+
+                return;
+            }
+
+            string errorMsg = (retiro ? "Retiro: " : "") + (response.Message ?? "Error desconocido");
+            await MarcarErrorAsync(batch, errorMsg, acc, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            await MarcarErrorAsync(batch, retiro ? $"Retiro: {ex.Message}" : ex.Message, acc, cancellationToken);
+        }
+    }
+
+    private async Task MarcarErrorAsync(ProductoApi[] batch, string mensaje, Acumulado acc, CancellationToken cancellationToken)
+    {
+        foreach (var product in batch)
+        {
+            await _repository.MarkAsErrorAsync(product.Code, mensaje, _options.Target, cancellationToken);
+            acc.FailedCodes.Add(product.Code);
+        }
+        acc.Failed += batch.Length;
     }
 }

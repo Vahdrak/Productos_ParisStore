@@ -129,6 +129,7 @@ public class ComparaParaguaiHttpClient : IComprasParaguaiClient
             {
                 Success = false,
                 Message = $"HTTP {response.StatusCode}: {errorContent}",
+                StatusCode = (int)response.StatusCode,
                 RateLimited = response.StatusCode == System.Net.HttpStatusCode.TooManyRequests,
                 ProductsFailed = productList.Count
             };

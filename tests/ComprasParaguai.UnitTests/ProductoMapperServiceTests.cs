@@ -211,4 +211,67 @@ public class ProductoMapperServiceTests
         Assert.Equal(64, hash.Length);
         Assert.True(hash.All(c => "0123456789abcdef".Contains(c)));
     }
+
+    [Theory]
+    [InlineData("prod_1.avif")]
+    [InlineData("prod_2.jfif")]
+    [InlineData("prod_3.gif")]
+    [InlineData("prod_4.AVIF")]
+    public void MapAndValidate_UnsupportedImageFormat_UsesDefaultImage(string archivo)
+    {
+        var view = new ProductoView { Code = "IMG-1", Nombre = "X", PrecioNormal = 10, Inventario = 1, Imagenes = archivo };
+
+        var result = _mapper.MapAndValidate(view);
+
+        Assert.NotNull(result);
+        Assert.Equal("https://images.example.com/default.png", result.UrlImage);
+    }
+
+    [Theory]
+    [InlineData("prod_1.png")]
+    [InlineData("prod_2.JPG")]
+    [InlineData("prod_3.jpeg")]
+    [InlineData("prod_4.webp")]
+    public void MapAndValidate_SupportedImageFormat_KeepsTheImage(string archivo)
+    {
+        var view = new ProductoView { Code = "IMG-2", Nombre = "X", PrecioNormal = 10, Inventario = 1, Imagenes = archivo };
+
+        var result = _mapper.MapAndValidate(view);
+
+        Assert.NotNull(result);
+        Assert.Equal("https://images.example.com/" + archivo, result.UrlImage);
+    }
+
+    [Theory]
+    [InlineData("https://x/a.webp?v=3", true)]
+    [InlineData("https://x/a.avif?x=.png", false)]
+    [InlineData("https://x/a", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public void ImagenSoportada_IgnoraLaQueryString(string? url, bool esperado)
+    {
+        Assert.Equal(esperado, ProductoMapperService.ImagenSoportada(url));
+    }
+
+    [Fact]
+    public void MapAndValidate_CodeLongerThan20_IsInvalid()
+    {
+        var largo = new ProductoView { Code = new string('9', 21), Nombre = "X", PrecioNormal = 10, Inventario = 1 };
+        var justo = new ProductoView { Code = new string('9', 20), Nombre = "X", PrecioNormal = 10, Inventario = 1 };
+
+        Assert.Null(_mapper.MapAndValidate(largo));
+        Assert.NotNull(_mapper.MapAndValidate(justo));
+    }
+
+    [Theory]
+    [InlineData(0.05, false)]    // Compras rechaza justo 0.05
+    [InlineData(0.06, true)]
+    [InlineData(99999, true)]
+    [InlineData(99999.01, false)]
+    public void MapAndValidate_PriceBounds(double precio, bool valido)
+    {
+        var view = new ProductoView { Code = "PR-1", Nombre = "X", PrecioNormal = (decimal)precio, Inventario = 1 };
+
+        Assert.Equal(valido, _mapper.MapAndValidate(view) != null);
+    }
 }

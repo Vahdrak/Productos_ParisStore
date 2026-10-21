@@ -16,6 +16,12 @@ public class ProductoMapperService
     private readonly string _imagenPorDefecto;
     private readonly string _linkPattern;
 
+    /// <summary>Largo máximo del código (SKU) que acepta Compras Paraguai.</summary>
+    public const int MaxCodeLength = 20;
+
+    /// <summary>Extensiones de imagen que aceptan las APIs de destino.</summary>
+    private static readonly string[] ExtensionesImagen = [".png", ".jpg", ".jpeg", ".webp"];
+
     /// <summary>
     /// Crea el servicio con parámetros de enriquecimiento.
     /// </summary>
@@ -38,15 +44,16 @@ public class ProductoMapperService
         if (view == null)
             return null;
 
-        if (string.IsNullOrWhiteSpace(view.Code))
+        if (string.IsNullOrWhiteSpace(view.Code) || view.Code.Trim().Length > MaxCodeLength)
             return null;
 
         // Stock: negativos → 0.
         int stock = Math.Max(0, view.Inventario ?? 0);
 
-        // Precio: validar rango [0.05, 99999]. Si inválido → null (saltar producto).
+        // Precio: debe estar entre 0.05 y 99999. Compras rechaza justo 0.05 (límite inferior exclusivo, observado en producción),
+        // así que se exige > 0.05. Si inválido → null (saltar producto).
         decimal? price = view.PrecioNormal;
-        if (price.HasValue && (price < 0.05m || price > 99999m))
+        if (price.HasValue && (price <= 0.05m || price > 99999m))
             return null; // Producto inválido, registrar y saltar.
 
         if (!price.HasValue)
@@ -90,6 +97,10 @@ public class ProductoMapperService
             urlImage = _imageBaseUrl.TrimEnd('/') + "/" + view.Imagenes.Trim().TrimStart('/');
         }
 
+        // Las APIs solo aceptan png/jpg/jpeg/webp: otro formato (avif, jfif, gif...) se reemplaza por la imagen por defecto.
+        if (!ImagenSoportada(urlImage))
+            urlImage = _imagenPorDefecto;
+
         // Link a la página del producto en la tienda (patrón configurable con {code}).
         string link = _linkPattern.Replace("{code}", Uri.EscapeDataString(view.Code));
 
@@ -118,6 +129,17 @@ public class ProductoMapperService
         api.SourceHash = CalculateSourceHash(api);
 
         return api;
+    }
+
+    /// <summary>True si la URL termina en una extensión de imagen soportada (ignora ?query y #fragmento).</summary>
+    public static bool ImagenSoportada(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+            return false;
+
+        int corte = url.IndexOfAny(['?', '#']);
+        string ruta = corte >= 0 ? url[..corte] : url;
+        return ExtensionesImagen.Any(ext => ruta.EndsWith(ext, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
