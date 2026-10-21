@@ -19,27 +19,16 @@ public class ErrorClasificadorTests
     [InlineData(null, "otro")]
     public void Clasifica(string? mensaje, string esperado)
     {
-        Assert.Equal(esperado, ErrorClasificador.Clasificar(mensaje, out _).Codigo);
+        Assert.Equal(esperado, ErrorClasificador.Clasificar(mensaje).Codigo);
     }
 
     [Fact]
     public void Duplicado_NoSeConfundeConErrorTemporal_AunqueSea500()
     {
-        var tipo = ErrorClasificador.Clasificar("HTTP InternalServerError: ... Duplicate entry 'x' ...", out _);
+        var tipo = ErrorClasificador.Clasificar("HTTP InternalServerError: ... Duplicate entry 'x' ...");
 
         Assert.Equal("duplicado", tipo.Codigo);
         Assert.False(tipo.Reintentable);
-    }
-
-    [Fact]
-    public void MensajeDeRetiro_SeMarcaYSeClasificaPorElResto()
-    {
-        var tipo = ErrorClasificador.Clasificar("Retiro: HTTP BadGateway: x", out bool esRetiro);
-
-        Assert.True(esRetiro);
-        Assert.Equal("temporal", tipo.Codigo);
-        Assert.False(ErrorClasificador.Clasificar("HTTP BadGateway: x", out bool otro).Equals(null));
-        Assert.False(otro);
     }
 
     [Fact]

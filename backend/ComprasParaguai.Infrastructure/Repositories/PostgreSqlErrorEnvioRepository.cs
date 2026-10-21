@@ -23,10 +23,10 @@ public class PostgreSqlErrorEnvioRepository : IErrorEnvioRepository
         _connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
     }
 
-    private static (string Status, string Error) Cols(SyncTarget target) => target switch
+    private static string StatusCol(SyncTarget target) => target switch
     {
-        SyncTarget.ComprasParaguai => ("sync_status", "last_error"),
-        SyncTarget.ComparaParaguai => ("sync_compara_status", "last_error_compara"),
+        SyncTarget.ComprasParaguai => "sync_status",
+        SyncTarget.ComparaParaguai => "sync_compara_status",
         _ => throw new ArgumentOutOfRangeException(nameof(target), target, null)
     };
 
@@ -39,10 +39,12 @@ public class PostgreSqlErrorEnvioRepository : IErrorEnvioRepository
         public string? CategoriaRuta { get; set; }
         public string? Mensaje { get; set; }
         public DateTime UpdatedAt { get; set; }
+        public DateTime Desde { get; set; }
+        public int Intentos { get; set; } = 1;
+        public string Etapa { get; set; } = "envio";
 
         // Calculados al clasificar
         public ErrorTipo Tipo { get; set; } = ErrorClasificador.Otro;
-        public bool EsRetiro { get; set; }
 
         public string Departamento
         {
@@ -58,7 +60,7 @@ public class PostgreSqlErrorEnvioRepository : IErrorEnvioRepository
     private async Task<(List<Fila> Filas, string? RutaRaiz, Dictionary<string, int> Departamentos)> CargarAsync(
         SyncTarget target, ErroresFiltro filtro, CancellationToken cancellationToken)
     {
-        var cols = Cols(target);
+        string status = StatusCol(target);
         var parametros = new DynamicParameters();
         string texto = "";
         if (!string.IsNullOrWhiteSpace(filtro.Texto))
@@ -67,14 +69,23 @@ public class PostgreSqlErrorEnvioRepository : IErrorEnvioRepository
             parametros.Add("texto", $"%{filtro.Texto.Trim()}%");
         }
 
+        // El error vigente de cada producto = su fallo abierto más reciente (envio_errores); el texto vive en error_mensajes.
         string query = $@"
             SELECT p.code AS Code, p.name_es AS Nombre, p.marca_id AS MarcaId, m.nombre AS Marca,
-                   c.ruta AS CategoriaRuta, p.{cols.Error} AS Mensaje, p.updated_at AS UpdatedAt
+                   c.ruta AS CategoriaRuta, em.mensaje AS Mensaje,
+                   COALESCE(e.ultimo_at, p.updated_at) AS UpdatedAt, COALESCE(e.desde, p.updated_at) AS Desde,
+                   COALESCE(e.intentos, 1) AS Intentos, COALESCE(e.etapa, 'envio') AS Etapa
             FROM productos p
             JOIN marcas m ON m.id = p.marca_id
             LEFT JOIN categorias c ON c.id = p.categoria_id
-            WHERE p.{cols.Status} = 2 {texto}
-            ORDER BY p.updated_at DESC, p.code
+            LEFT JOIN LATERAL (
+                SELECT x.mensaje_id, x.ultimo_at, x.desde, x.intentos, x.etapa
+                FROM envio_errores x
+                WHERE x.producto_id = p.id AND x.target = '{EnvioSql.Destino(target)}' AND x.resuelto_at IS NULL
+                ORDER BY x.ultimo_at DESC LIMIT 1) e ON TRUE
+            LEFT JOIN error_mensajes em ON em.id = e.mensaje_id
+            WHERE p.{status} = 2 {texto}
+            ORDER BY COALESCE(e.ultimo_at, p.updated_at) DESC, p.code
             LIMIT {MaxFilas}";
 
         using var connection = new NpgsqlConnection(_connectionString);
@@ -82,10 +93,7 @@ public class PostgreSqlErrorEnvioRepository : IErrorEnvioRepository
 
         var filas = (await connection.QueryAsync<Fila>(query, parametros)).ToList();
         foreach (var fila in filas)
-        {
-            fila.Tipo = ErrorClasificador.Clasificar(fila.Mensaje, out bool esRetiro);
-            fila.EsRetiro = esRetiro;
-        }
+            fila.Tipo = ErrorClasificador.Clasificar(fila.Mensaje);
 
         string? rutaRaiz = filtro.CategoriaId is { } catId
             ? await connection.ExecuteScalarAsync<string?>("SELECT ruta FROM categorias WHERE id = @catId", new { catId })
@@ -152,7 +160,9 @@ public class PostgreSqlErrorEnvioRepository : IErrorEnvioRepository
             Categoria = f.CategoriaRuta is null ? null : string.Join(" > ", f.CategoriaRuta.Split('>').Skip(1)),
             Tipo = f.Tipo.Codigo,
             TipoTitulo = f.Tipo.Titulo,
-            Etapa = f.EsRetiro ? "retiro" : "envio",
+            Etapa = f.Etapa,
+            Intentos = f.Intentos,
+            Desde = f.Desde,
             Mensaje = f.Mensaje,
             UpdatedAt = f.UpdatedAt
         }).ToList();
@@ -172,7 +182,7 @@ public class PostgreSqlErrorEnvioRepository : IErrorEnvioRepository
 
     public async Task<int> ReintentarAsync(SyncTarget target, ErroresFiltro filtro, IReadOnlyCollection<string>? codes, CancellationToken cancellationToken = default)
     {
-        var cols = Cols(target);
+        string status = StatusCol(target);
         string[] aReiniciar;
 
         if (codes is { Count: > 0 })
@@ -191,11 +201,35 @@ public class PostgreSqlErrorEnvioRepository : IErrorEnvioRepository
         // El UPDATE solo toca los que siguen en Error (si un envío los resolvió mientras tanto, no se pisan).
         string update = $@"
             UPDATE productos
-            SET {cols.Status} = 0, {cols.Error} = NULL, updated_at = now()
-            WHERE {cols.Status} = 2 AND code = ANY(@codes)";
+            SET {status} = 0, updated_at = now()
+            WHERE {status} = 2 AND code = ANY(@codes)";
 
         using var connection = new NpgsqlConnection(_connectionString);
         await connection.OpenAsync(cancellationToken);
         return await connection.ExecuteAsync(update, new { codes = aReiniciar });
+    }
+
+    public async Task<List<ErrorHistorialDto>> HistorialProductoAsync(string code, CancellationToken cancellationToken = default)
+    {
+        const string query = @"
+            SELECT e.target AS Target, e.etapa AS Etapa, em.mensaje AS Mensaje,
+                   e.desde AS Desde, e.ultimo_at AS UltimoAt, e.intentos AS Intentos, e.resuelto_at AS ResueltoAt
+            FROM envio_errores e
+            JOIN productos p ON p.id = e.producto_id
+            JOIN error_mensajes em ON em.id = e.mensaje_id
+            WHERE p.code = @code
+            ORDER BY e.desde DESC, e.id DESC";
+
+        using var connection = new NpgsqlConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken);
+        var lista = (await connection.QueryAsync<ErrorHistorialDto>(query, new { code })).ToList();
+        foreach (var e in lista)
+        {
+            var tipo = ErrorClasificador.Clasificar(e.Mensaje);
+            e.Tipo = tipo.Codigo;
+            e.TipoTitulo = tipo.Titulo;
+        }
+
+        return lista;
     }
 }

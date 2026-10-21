@@ -108,6 +108,11 @@ public interface IProductoRepository
     Task MarkAsErrorAsync(string code, string errorMessage, SyncTarget target = SyncTarget.ComprasParaguai, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Registra que falló el RETIRO del destino (stock 0) de un producto; queda en Error con etapa "retiro".
+    /// </summary>
+    Task MarkRetiroErrorAsync(string code, string errorMessage, SyncTarget target, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Carga un producto por código (valores actuales).
     /// </summary>
     Task<ProductoApi?> LoadProductByCodeAsync(string code, CancellationToken cancellationToken = default);

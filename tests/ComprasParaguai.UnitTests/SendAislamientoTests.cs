@@ -132,6 +132,7 @@ public class SendAislamientoTests
         await new SendService(repo.Object, client.Object, SendOptions.ComprasParaguai).SendPendingAsync();
 
         Assert.Equal(new[] { "R1", "R3", "R4" }, retirados.OrderBy(x => x));
-        repo.Verify(r => r.MarkAsErrorAsync("R2", It.Is<string>(m => m.StartsWith("Retiro:")), It.IsAny<SyncTarget>(), It.IsAny<CancellationToken>()), Times.Once);
+        repo.Verify(r => r.MarkRetiroErrorAsync("R2", It.Is<string>(m => m.Contains("Duplicate entry")), It.IsAny<SyncTarget>(), It.IsAny<CancellationToken>()), Times.Once);
+        repo.Verify(r => r.MarkAsErrorAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<SyncTarget>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 }

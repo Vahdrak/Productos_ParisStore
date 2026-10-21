@@ -309,18 +309,28 @@ public class PostgreSqlProductoRepository : IProductoRepository
                 p.sync_status AS SyncStatus,
                 p.sync_compara_status AS SyncComparaStatus,
                 p.last_sent_at AS LastSentAt,
-                p.last_sent_compara_at AS LastSentComparaAt,
-                p.last_error AS LastError,
-                p.last_error_compara AS LastErrorCompara";
+                p.last_sent_compara_at AS LastSentComparaAt";
 
     private const string ProductoApiFrom =
         "productos p JOIN marcas m ON m.id = p.marca_id LEFT JOIN categorias c ON c.id = p.categoria_id";
 
+    // Último error vigente (fallo abierto más reciente) de cada destino, para las pantallas que lo muestran
+    // (búsqueda y detalle de producto). Los cargadores de envío no lo piden: no lo necesitan.
+    private static string UltimoError(string destino) => $@"(
+                SELECT em.mensaje FROM envio_errores e JOIN error_mensajes em ON em.id = e.mensaje_id
+                WHERE e.producto_id = p.id AND e.target = '{destino}' AND e.resuelto_at IS NULL
+                ORDER BY e.ultimo_at DESC LIMIT 1)";
+
+    private static readonly string ProductoApiColumnsConError =
+        ProductoApiColumns + $@",
+                {UltimoError("compras")} AS LastError,
+                {UltimoError("compara")} AS LastErrorCompara";
+
     // Columnas de estado por destino. Switch cerrado: los nombres nunca vienen de input externo.
-    private static (string Status, string SentAt, string Error) Cols(SyncTarget target) => target switch
+    private static (string Status, string SentAt) Cols(SyncTarget target) => target switch
     {
-        SyncTarget.ComprasParaguai => ("sync_status", "last_sent_at", "last_error"),
-        SyncTarget.ComparaParaguai => ("sync_compara_status", "last_sent_compara_at", "last_error_compara"),
+        SyncTarget.ComprasParaguai => ("sync_status", "last_sent_at"),
+        SyncTarget.ComparaParaguai => ("sync_compara_status", "last_sent_compara_at"),
         _ => throw new ArgumentOutOfRangeException(nameof(target), target, null)
     };
 
@@ -475,7 +485,10 @@ public class PostgreSqlProductoRepository : IProductoRepository
         using (var connection = new NpgsqlConnection(_connectionString))
         {
             await connection.OpenAsync(cancellationToken);
-            int n = await connection.ExecuteAsync(query, new { codes = codeList.ToArray() });
+            await using var tx = await connection.BeginTransactionAsync(cancellationToken);
+            int n = await connection.ExecuteAsync(query, new { codes = codeList.ToArray() }, tx);
+            await ResolverErroresAsync(connection, tx, codeList, target, "retiro", DateTime.UtcNow, cancellationToken);
+            await tx.CommitAsync(cancellationToken);
             _logger.LogInformation("Registrados {Count} productos retirados de {Target}", n, target);
         }
     }
@@ -509,7 +522,7 @@ public class PostgreSqlProductoRepository : IProductoRepository
     }
 
     /// <summary>
-    /// Marca productos como Enviado (status = 1) en la columna del destino.
+    /// Marca productos como Enviado (status = 1) en la columna del destino y da por resueltos sus errores de envío abiertos.
     /// </summary>
     public async Task MarkAsSentAsync(IEnumerable<string> codes, DateTime now, SyncTarget target = SyncTarget.ComprasParaguai, CancellationToken cancellationToken = default)
     {
@@ -527,47 +540,91 @@ public class PostgreSqlProductoRepository : IProductoRepository
         using (var connection = new NpgsqlConnection(_connectionString))
         {
             await connection.OpenAsync(cancellationToken);
-            int affected = await connection.ExecuteAsync(query, new { codes = codeList.ToArray(), now });
+            await using var tx = await connection.BeginTransactionAsync(cancellationToken);
+            int affected = await connection.ExecuteAsync(query, new { codes = codeList.ToArray(), now }, tx);
+            await ResolverErroresAsync(connection, tx, codeList, target, "envio", now, cancellationToken);
+            await tx.CommitAsync(cancellationToken);
             _logger.LogInformation("Marcados {Count} productos como Enviado a {Target}", affected, target);
         }
     }
 
     /// <summary>
-    /// Marca un producto como Error (status = 2) en la columna del destino.
+    /// Marca un producto como Error (status = 2) en la columna del destino y registra el fallo en el historial.
     /// </summary>
-    public async Task MarkAsErrorAsync(string code, string errorMessage, SyncTarget target = SyncTarget.ComprasParaguai, CancellationToken cancellationToken = default)
+    public Task MarkAsErrorAsync(string code, string errorMessage, SyncTarget target = SyncTarget.ComprasParaguai, CancellationToken cancellationToken = default) =>
+        RegistrarErrorAsync(code, errorMessage, target, "envio", cancellationToken);
+
+    /// <summary>
+    /// Registra que falló el retiro del destino (stock 0) de un producto; el producto queda en Error.
+    /// </summary>
+    public Task MarkRetiroErrorAsync(string code, string errorMessage, SyncTarget target, CancellationToken cancellationToken = default) =>
+        RegistrarErrorAsync(code, errorMessage, target, "retiro", cancellationToken);
+
+    private async Task RegistrarErrorAsync(string code, string errorMessage, SyncTarget target, string etapa, CancellationToken cancellationToken)
     {
         var c = Cols(target);
-        string query = $@"
-            UPDATE productos
-            SET {c.Status} = 2, {c.Error} = @error, updated_at = now()
-            WHERE code = @code
-        ";
+        string destino = EnvioSql.Destino(target);
+
+        // El mensaje se guarda una sola vez (error_mensajes); un fallo idéntico y todavía abierto del mismo producto
+        // no agrega otra fila: suma un intento.
+        const string guardarMensaje = @"
+            INSERT INTO error_mensajes (mensaje) VALUES (@mensaje) ON CONFLICT DO NOTHING;
+            SELECT id FROM error_mensajes WHERE md5(mensaje) = md5(@mensaje);";
+
+        string registrar = $@"
+            INSERT INTO envio_errores (producto_id, target, etapa, mensaje_id)
+            SELECT id, '{destino}', @etapa, @mensajeId FROM productos WHERE code = @code
+            ON CONFLICT (producto_id, target, etapa, mensaje_id) WHERE resuelto_at IS NULL
+            DO UPDATE SET intentos = envio_errores.intentos + 1, ultimo_at = now();
+
+            UPDATE productos SET {c.Status} = 2, updated_at = now() WHERE code = @code;";
 
         using (var connection = new NpgsqlConnection(_connectionString))
         {
             await connection.OpenAsync(cancellationToken);
-            await connection.ExecuteAsync(query, new { code, error = errorMessage });
-            _logger.LogWarning("Producto {Code} marcado como Error en {Target}: {Error}", code, target, errorMessage);
+            await using var tx = await connection.BeginTransactionAsync(cancellationToken);
+            int mensajeId = await connection.ExecuteScalarAsync<int>(guardarMensaje, new { mensaje = errorMessage }, tx);
+            await connection.ExecuteAsync(registrar, new { code, etapa, mensajeId }, tx);
+            await tx.CommitAsync(cancellationToken);
+            _logger.LogWarning("Producto {Code} marcado como Error en {Target} ({Etapa}): {Error}", code, target, etapa, errorMessage);
         }
     }
 
+    /// <summary>Da por resueltos los fallos abiertos de esos productos en ese destino y etapa.</summary>
+    private static Task ResolverErroresAsync(NpgsqlConnection connection, NpgsqlTransaction tx, IReadOnlyCollection<string> codes,
+        SyncTarget target, string etapa, DateTime now, CancellationToken cancellationToken)
+    {
+        string query = $@"
+            UPDATE envio_errores e
+            SET resuelto_at = @now
+            FROM productos p
+            WHERE e.producto_id = p.id AND p.code = ANY(@codes)
+              AND e.target = '{EnvioSql.Destino(target)}' AND e.etapa = @etapa AND e.resuelto_at IS NULL";
+        return connection.ExecuteAsync(query, new { codes = codes.ToArray(), etapa, now }, tx);
+    }
+
     /// <summary>
-    /// Carga productos en Error (status = 2) del destino, con mensaje de error.
+    /// Carga productos en Error (status = 2) del destino, con el mensaje y la fecha de su último fallo abierto.
     /// </summary>
     public async Task<List<ProductoWithErrorDto>> LoadErrorProductsAsync(SyncTarget target = SyncTarget.ComprasParaguai, CancellationToken cancellationToken = default)
     {
         var c = Cols(target);
         string query = $@"
             SELECT
-                code AS Code,
-                name_es AS NameEs,
-                name_pt AS NamePt,
-                {c.Error} AS LastError,
-                updated_at AS LastErrorAt
-            FROM productos
-            WHERE {c.Status} = 2
-            ORDER BY updated_at DESC
+                p.code AS Code,
+                p.name_es AS NameEs,
+                p.name_pt AS NamePt,
+                em.mensaje AS LastError,
+                COALESCE(e.ultimo_at, p.updated_at) AS LastErrorAt
+            FROM productos p
+            LEFT JOIN LATERAL (
+                SELECT x.mensaje_id, x.ultimo_at
+                FROM envio_errores x
+                WHERE x.producto_id = p.id AND x.target = '{EnvioSql.Destino(target)}' AND x.resuelto_at IS NULL
+                ORDER BY x.ultimo_at DESC LIMIT 1) e ON TRUE
+            LEFT JOIN error_mensajes em ON em.id = e.mensaje_id
+            WHERE p.{c.Status} = 2
+            ORDER BY COALESCE(e.ultimo_at, p.updated_at) DESC
         ";
 
         using (var connection = new NpgsqlConnection(_connectionString))
@@ -585,7 +642,7 @@ public class PostgreSqlProductoRepository : IProductoRepository
     /// </summary>
     public async Task<ProductoApi?> LoadProductByCodeAsync(string code, CancellationToken cancellationToken = default)
     {
-        string query = $"SELECT {ProductoApiColumns} FROM {ProductoApiFrom} WHERE p.code = @code";
+        string query = $"SELECT {ProductoApiColumnsConError} FROM {ProductoApiFrom} WHERE p.code = @code";
 
         using (var connection = new NpgsqlConnection(_connectionString))
         {
@@ -701,7 +758,7 @@ public class PostgreSqlProductoRepository : IProductoRepository
         string whereClause = conditions.Count > 0 ? "WHERE " + string.Join(" AND ", conditions) : "";
 
         string query = $@"
-            SELECT {ProductoApiColumns}
+            SELECT {ProductoApiColumnsConError}
             FROM {ProductoApiFrom}
             {whereClause}
             ORDER BY p.code

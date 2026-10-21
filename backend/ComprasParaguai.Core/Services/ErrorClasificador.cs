@@ -8,7 +8,7 @@ namespace ComprasParaguai.Core.Services;
 public record ErrorTipo(string Codigo, string Titulo, string QueHacer, bool Reintentable);
 
 /// <summary>
-/// Agrupa los mensajes de error que guardan los envíos (last_error / last_error_compara) en tipos conocidos,
+/// Agrupa los mensajes de error que guardan los envíos (tabla error_mensajes) en tipos conocidos,
 /// para poder verlos agrupados y saber cómo proceder.
 /// </summary>
 public static class ErrorClasificador
@@ -44,16 +44,10 @@ public static class ErrorClasificador
 
     public static readonly IReadOnlyList<ErrorTipo> Todos = new[] { Duplicado, Imagen, Precio, Codigo, Credenciales, Temporal, Otro };
 
-    /// <summary>
-    /// Clasifica un mensaje. Un mensaje que empieza con "Retiro:" es de la etapa de retiro del destino
-    /// (<paramref name="esRetiro"/>) y se clasifica por el texto que sigue.
-    /// </summary>
-    public static ErrorTipo Clasificar(string? mensaje, out bool esRetiro)
+    /// <summary>Clasifica el mensaje del destino. La etapa (envío o retiro) no está en el texto: se guarda aparte.</summary>
+    public static ErrorTipo Clasificar(string? mensaje)
     {
         string m = (mensaje ?? string.Empty).Trim();
-        esRetiro = m.StartsWith("Retiro:", StringComparison.OrdinalIgnoreCase);
-        if (esRetiro)
-            m = m["Retiro:".Length..].Trim();
 
         // Los errores de producto (validación) primero: el HTTP 500 de un duplicado no es "temporal".
         if (Contiene(m, "Duplicate entry"))

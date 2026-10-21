@@ -57,6 +57,24 @@ public class ErroresController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Historial de errores de un producto, con cuántas veces se repitió cada uno y cuándo se resolvió.
+    /// GET /api/errores/producto/{code}
+    /// </summary>
+    [HttpGet("producto/{code}")]
+    public async Task<ActionResult<List<ErrorHistorialDto>>> Historial(string code, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return Ok(await _repository.HistorialProductoAsync(code, cancellationToken));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error cargando el historial de errores de {Code}", code);
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
     public record ReintentarBody(string? Target, string? Tipo, int? MarcaId, int? CategoriaId, string? Q, string[]? Codes, bool Todos = false);
 
     /// <summary>

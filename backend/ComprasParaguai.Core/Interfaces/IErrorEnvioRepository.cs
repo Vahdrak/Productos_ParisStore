@@ -11,10 +11,16 @@ public interface IErrorEnvioRepository
     Task<ErroresResultadoDto> BuscarAsync(SyncTarget target, ErroresFiltro filtro, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Vuelve a Pendiente (y limpia el mensaje) los productos en Error que cumplan el filtro, o solo los códigos indicados.
+    /// Vuelve a Pendiente los productos en Error (su historial de errores se conserva) que cumplan el filtro, o solo los códigos indicados.
     /// Devuelve cuántos se reiniciaron.
     /// </summary>
     Task<int> ReintentarAsync(SyncTarget target, ErroresFiltro filtro, IReadOnlyCollection<string>? codes, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Historial de errores de un producto (todos los destinos y etapas), del más reciente al más antiguo.
+    /// Un fallo repetido no es otra fila: suma a <c>Intentos</c>. <c>ResueltoAt</c> se llena cuando un envío posterior sale bien.
+    /// </summary>
+    Task<List<ErrorHistorialDto>> HistorialProductoAsync(string code, CancellationToken cancellationToken = default);
 }
 
 public class ErroresFiltro
@@ -66,6 +72,10 @@ public class ErrorProductoDto
 
     /// <summary>"envio" o "retiro".</summary>
     public string Etapa { get; set; } = "envio";
+
+    /// <summary>Primer fallo con este mensaje (abierto) y cuántas veces se repitió.</summary>
+    public DateTime Desde { get; set; }
+    public int Intentos { get; set; } = 1;
     public string? Mensaje { get; set; }
     public DateTime UpdatedAt { get; set; }
 }
@@ -86,4 +96,21 @@ public class ErroresResultadoDto
     public int Page { get; set; }
     public int PageSize { get; set; }
     public int TotalPages { get; set; }
+}
+
+public class ErrorHistorialDto
+{
+    public string Target { get; set; } = string.Empty;
+
+    /// <summary>"envio" o "retiro".</summary>
+    public string Etapa { get; set; } = "envio";
+    public string Tipo { get; set; } = string.Empty;
+    public string TipoTitulo { get; set; } = string.Empty;
+    public string Mensaje { get; set; } = string.Empty;
+    public DateTime Desde { get; set; }
+    public DateTime UltimoAt { get; set; }
+    public int Intentos { get; set; }
+
+    /// <summary>Cuándo un envío posterior salió bien; null = sigue abierto.</summary>
+    public DateTime? ResueltoAt { get; set; }
 }

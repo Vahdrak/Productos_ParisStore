@@ -70,7 +70,7 @@ import { QuickRangeComponent } from '../../shared/ui/quick-range.component';
               <tr *ngFor="let e of errorProducts">
                 <td>{{ e.code }}</td>
                 <td>{{ e.namePt }}</td>
-                <td class="text-small">{{ e.lastErrorCompara }}</td>
+                <td class="text-small">{{ e.lastError }}</td>
               </tr>
             </tbody>
           </table>

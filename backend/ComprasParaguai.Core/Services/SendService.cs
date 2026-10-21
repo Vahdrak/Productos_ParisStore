@@ -151,7 +151,7 @@ public class SendService : ISendService
                 var rejected = response.FailedProducts();
                 foreach (var (code, error) in rejected)
                 {
-                    await _repository.MarkAsErrorAsync(code, retiro ? $"Retiro: {error}" : error, _options.Target, cancellationToken);
+                    await RegistrarErrorAsync(code, error, retiro, cancellationToken);
                     acc.FailedCodes.Add(code);
                 }
 
@@ -186,20 +186,25 @@ public class SendService : ISendService
                 return;
             }
 
-            string errorMsg = (retiro ? "Retiro: " : "") + (response.Message ?? "Error desconocido");
-            await MarcarErrorAsync(batch, errorMsg, acc, cancellationToken);
+            string errorMsg = response.Message ?? "Error desconocido";
+            await MarcarErrorAsync(batch, errorMsg, retiro, acc, cancellationToken);
         }
         catch (Exception ex)
         {
-            await MarcarErrorAsync(batch, retiro ? $"Retiro: {ex.Message}" : ex.Message, acc, cancellationToken);
+            await MarcarErrorAsync(batch, ex.Message, retiro, acc, cancellationToken);
         }
     }
 
-    private async Task MarcarErrorAsync(ProductoApi[] batch, string mensaje, Acumulado acc, CancellationToken cancellationToken)
+    private Task RegistrarErrorAsync(string code, string mensaje, bool retiro, CancellationToken cancellationToken) =>
+        retiro
+            ? _repository.MarkRetiroErrorAsync(code, mensaje, _options.Target, cancellationToken)
+            : _repository.MarkAsErrorAsync(code, mensaje, _options.Target, cancellationToken);
+
+    private async Task MarcarErrorAsync(ProductoApi[] batch, string mensaje, bool retiro, Acumulado acc, CancellationToken cancellationToken)
     {
         foreach (var product in batch)
         {
-            await _repository.MarkAsErrorAsync(product.Code, mensaje, _options.Target, cancellationToken);
+            await RegistrarErrorAsync(product.Code, mensaje, retiro, cancellationToken);
             acc.FailedCodes.Add(product.Code);
         }
         acc.Failed += batch.Length;
