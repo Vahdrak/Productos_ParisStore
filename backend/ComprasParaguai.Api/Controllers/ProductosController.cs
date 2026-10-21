@@ -51,18 +51,19 @@ public class ProductosController : ControllerBase
     }
 
     /// <summary>
-    /// Lista todos los productos Pendiente de envío.
+    /// Lista todos los productos Pendiente de envío, indicando cuáles están retenidos por una pausa o excepción.
     /// GET /api/productos/pending?target=compras
     /// </summary>
     [HttpGet("pending")]
-    public async Task<ActionResult<List<ProductoApi>>> GetPending(
+    public async Task<ActionResult<List<ProductoPendiente>>> GetPending(
         [FromQuery] string? target = null,
         CancellationToken cancellationToken = default)
     {
         try
         {
             var syncTarget = ParseTarget(target);
-            var products = await _repository.LoadPendingProductsAsync(syncTarget, cancellationToken);
+            // Todos los pendientes, con "retenido" / "retenidoPor" (los retenidos no se envían mientras dure la pausa).
+            var products = await _repository.LoadPendientesConRetencionAsync(syncTarget, cancellationToken);
             return Ok(products);
         }
         catch (Exception ex)

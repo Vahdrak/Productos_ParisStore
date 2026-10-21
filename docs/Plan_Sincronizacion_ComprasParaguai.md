@@ -194,6 +194,24 @@ codificación de la columna `CATEGORIAS`. Con eso el árbol podría copiarse tal
   (`Sync:HistorialMesesRetencion`, 6 por defecto; 0 = no archivar) pasa a `productos_historial_archivo`.
   Si se agregan columnas a `productos_historial`, hay que agregarlas también al archivo.
 
+### Pausas de envío por marca y categoría (migración 012)
+
+Permiten **no enviar** ciertos productos a un destino sin apagar workers. Tablas: `envio_pausas` (marca, categoría o
+ambas; activa/inactiva; motivo; "retirar del destino"), `envio_excepciones` (por SKU: `enviar` o `retener`, gana sobre
+las pausas), `envio_retirados` (productos ya retirados del destino con stock 0) y `envio_reglas_historial` (quién y cuándo,
+lo llenan triggers con `app.usuario`).
+
+**Regla efectiva** (fragmentos SQL en `EnvioSql`): excepción activa `enviar` ⇒ se envía; `retener` ⇒ retenido; sin excepción,
+retenido si ALGUNA pausa activa del destino lo cubre (marca coincide y/o categoría dentro del subárbol, por prefijo de `ruta`).
+Las consultas de envío (`LoadPending`, `CountPending`, `LoadAll`, `LoadRandom`) excluyen lo retenido; `Worker.Sync` no se entera.
+
+**Retiro:** `SendService.SendPendingAsync` ejecuta, en orden, (1) liberar los retirados que ya no están retenidos (vuelven a
+Pendiente), (2) enviar stock 0 a lo publicado cubierto por una pausa con "retirar", (3) enviar los pendientes enviables.
+
+API: `GET/POST/PATCH/DELETE /api/envio-pausas`, `GET /api/envio-pausas/impacto`, `GET /api/envio-pausas/historial`,
+`GET /api/productos/{code}/envio`, `PUT/DELETE /api/productos/{code}/excepcion?target=`, `GET /api/marcas/{id}/categorias`.
+Escribir exige sesión. Ver `docs/Guia_Envio_Productos.md` para la operación.
+
 ### Tabla `sync_runs` (bitácora)
 ```sql
 CREATE TABLE sync_runs (

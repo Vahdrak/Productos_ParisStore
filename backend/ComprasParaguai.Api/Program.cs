@@ -83,6 +83,9 @@ builder.Services.AddAuthorization();
 builder.Services.AddTransient<ICatalogoRepository>(sp =>
     new PostgreSqlCatalogoRepository(postgresConnStr));
 
+builder.Services.AddTransient<IEnvioReglaRepository>(sp =>
+    new PostgreSqlEnvioReglaRepository(postgresConnStr));
+
 builder.Services.AddTransient<IHistorialRepository>(sp =>
     new PostgreSqlHistorialRepository(postgresConnStr));
 

@@ -9,6 +9,9 @@ export interface Marca {
   productos: number;
   pendientesCompras: number;
   pendientesCompara: number;
+  /** Id de la pausa activa de esta marca (sola, sin categoría) por destino; null si no está pausada. */
+  pausaIdCompras?: number | null;
+  pausaIdCompara?: number | null;
 }
 
 export interface MarcaList {
@@ -30,6 +33,12 @@ export interface CategoriaNodo {
   productos: number;
   pendientesCompras: number;
   pendientesCompara: number;
+  /** Id de la pausa activa de ESTE nodo (solo categoría) por destino; null si no está pausado. */
+  pausaIdCompras?: number | null;
+  pausaIdCompara?: number | null;
+  /** Pausado porque un nivel superior tiene una pausa de categoría activa. */
+  heredadaCompras: boolean;
+  heredadaCompara: boolean;
   hijos: CategoriaNodo[];
 }
 

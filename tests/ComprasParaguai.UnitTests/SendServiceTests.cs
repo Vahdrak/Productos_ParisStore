@@ -187,7 +187,7 @@ public class SendServiceTests
             .ToList();
 
         mockRepository
-            .Setup(r => r.LoadAllProductsAsync(It.IsAny<CancellationToken>()))
+            .Setup(r => r.LoadAllProductsAsync(It.IsAny<SyncTarget>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(allProducts);
 
         var successResponse = new ImportResponse { Success = true, ProductsProcessed = 1 };
@@ -235,7 +235,7 @@ public class SendServiceTests
             .ToList();
 
         mockRepository
-            .Setup(r => r.LoadAllProductsAsync(It.IsAny<CancellationToken>()))
+            .Setup(r => r.LoadAllProductsAsync(It.IsAny<SyncTarget>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(allProducts);
 
         var successResponse = new ImportResponse { Success = true, ProductsProcessed = 1 };
@@ -275,7 +275,7 @@ public class SendServiceTests
         var mockClient = new Mock<IComprasParaguaiClient>();
 
         mockRepository
-            .Setup(r => r.LoadAllProductsAsync(It.IsAny<CancellationToken>()))
+            .Setup(r => r.LoadAllProductsAsync(It.IsAny<SyncTarget>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<ProductoApi>());
 
         var service = new SendService(mockRepository.Object, mockClient.Object, SendOptions.ComprasParaguai);
@@ -427,7 +427,7 @@ public class SendServiceTests
             .ToList();
 
         mockRepository
-            .Setup(r => r.LoadRandomProductsAsync(500, It.IsAny<CancellationToken>()))
+            .Setup(r => r.LoadRandomProductsAsync(500, It.IsAny<SyncTarget>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(sample);
         mockClient
             .Setup(c => c.ImportProductsAsync(It.IsAny<IEnumerable<ProductoApi>>(), It.IsAny<CancellationToken>()))
@@ -439,7 +439,7 @@ public class SendServiceTests
 
         Assert.Equal(500, result.Sent);
         Assert.Equal(500, result.Total);
-        mockRepository.Verify(r => r.LoadAllProductsAsync(It.IsAny<CancellationToken>()), Times.Never);
+        mockRepository.Verify(r => r.LoadAllProductsAsync(It.IsAny<SyncTarget>(), It.IsAny<CancellationToken>()), Times.Never);
         mockRepository.Verify(r => r.LoadPendingProductsAsync(It.IsAny<SyncTarget>(), It.IsAny<CancellationToken>()), Times.Never);
         mockClient.Verify(c => c.ImportProductsAsync(It.IsAny<IEnumerable<ProductoApi>>(), It.IsAny<CancellationToken>()), Times.Once);
     }

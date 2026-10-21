@@ -35,6 +35,11 @@ import { QuickRangeComponent } from '../../shared/ui/quick-range.component';
             <option value="1">✅ Enviado</option>
             <option value="2">❌ Error</option>
           </select>
+          <select [(ngModel)]="filterRetencion" (ngModelChange)="resetPage()" class="form-input">
+            <option value="">Envío: Todos</option>
+            <option value="enviables">✅ Solo enviables</option>
+            <option value="retenidos">🚫 Solo retenidos</option>
+          </select>
           <select [(ngModel)]="pageSize" (ngModelChange)="resetPage()" class="form-input">
             <option [ngValue]="10">10 por página</option>
             <option [ngValue]="25">25 por página</option>
@@ -63,7 +68,13 @@ import { QuickRangeComponent } from '../../shared/ui/quick-range.component';
                 <td>{{ p.price | currency:'':'symbol-narrow' }}</td>
                 <td>{{ (p.precioExenta || 0) | currency:'':'symbol-narrow' }}</td>
                 <td class="text-center">{{ p.stock }}</td>
-                <td><span class="badge" [ngClass]="getStatusBadgeClass(p)">{{ getStatusLabel(p) }}</span></td>
+                <td>
+                  <span class="badge" [ngClass]="getStatusBadgeClass(p)">{{ getStatusLabel(p) }}</span>
+                  <div *ngIf="p.retenido" class="text-small" style="margin-top: 4px;">
+                    <span class="badge badge-warn" title="No se envía mientras dure la pausa">🚫 Retenido</span>
+                    <span class="text-dim">{{ p.retenidoPor }}</span>
+                  </div>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -80,6 +91,7 @@ import { QuickRangeComponent } from '../../shared/ui/quick-range.component';
 
         <div *ngIf="products.length > 0" class="summary-bar">
           <div class="summary-item"><span class="summary-label">🎫 Con régimen:</span><span class="summary-value">{{ countRegimen() }}</span></div>
+          <div class="summary-item"><span class="summary-label">🚫 Retenidos:</span><span class="summary-value">{{ countRetenidos() }}</span></div>
           <div class="summary-item"><span class="summary-label">Normal:</span><span class="summary-value">{{ products.length - countRegimen() }}</span></div>
           <div class="summary-item"><span class="summary-label">Total:</span><span class="summary-value">{{ products.length }}</span></div>
         </div>
@@ -96,6 +108,7 @@ export class PendientesComponent implements OnInit {
   filterCode = '';
   filterRegimen = '';
   filterStatus = '';
+  filterRetencion = '';
   fechaDesde = '';
   fechaHasta = '';
 
@@ -130,7 +143,10 @@ export class PendientesComponent implements OnInit {
         (this.filterRegimen === 'false' && !p.regimenTurismo);
       const matchStatus = !this.filterStatus || p[field]?.toString() === this.filterStatus;
       const matchDate = isDateInRange(p[dateField], this.fechaDesde, this.fechaHasta);
-      return matchCode && matchRegimen && matchStatus && matchDate;
+      const matchRetencion = !this.filterRetencion ||
+        (this.filterRetencion === 'retenidos' && p.retenido) ||
+        (this.filterRetencion === 'enviables' && !p.retenido);
+      return matchCode && matchRegimen && matchStatus && matchDate && matchRetencion;
     });
 
     if (this.page < 1) this.page = 1;
@@ -161,6 +177,10 @@ export class PendientesComponent implements OnInit {
     this.fechaDesde = desde;
     this.fechaHasta = hasta;
     this.resetPage();
+  }
+
+  countRetenidos(): number {
+    return this.products.filter(p => p.retenido).length;
   }
 
   countRegimen(): number {

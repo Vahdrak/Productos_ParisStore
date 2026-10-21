@@ -40,9 +40,11 @@ public class DashboardController : ControllerBase
             {
                 Target = sc.Target.ToString(),
                 Pending = sc.Pending,
+                Held = sc.Held,
+                Retired = sc.Retired,
                 Sent = sc.Sent,
                 Error = sc.Error,
-                Total = sc.Pending + sc.Sent + sc.Error,
+                Total = sc.Total,
                 LastSentAt = sc.LastSentAt ?? DateTime.MinValue
             }).ToList();
 
@@ -169,7 +171,12 @@ public class DashboardDto
 public class TargetStatusDto
 {
     public string Target { get; set; } = string.Empty;
+    /// <summary>Pendientes que SÍ se enviarán.</summary>
     public int Pending { get; set; }
+    /// <summary>Pendientes retenidos por una pausa o excepción (se actualizan pero no se envían).</summary>
+    public int Held { get; set; }
+    /// <summary>Productos ya retirados del destino (se les envió stock 0).</summary>
+    public int Retired { get; set; }
     public int Sent { get; set; }
     public int Error { get; set; }
     public int Total { get; set; }

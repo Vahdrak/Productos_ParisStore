@@ -354,7 +354,9 @@ Cualquier imagen **vieja** contra la BD migrada falla con `column "brand" does n
    pendiente y Compara enviará el catálogo completo (~110k productos, ~1,5 h con lotes de 1000 y pausa de 46 s).
    Si no quieres ese envío ahora, deja `worker-compara` detenido hasta la ventana elegida.
 
-**Migraciones nuevas:** 009 (catálogo normalizado), 010 (historial con diff y búsqueda; variable opcional `Sync__HistorialMesesRetencion`, 6 por defecto) y 011 (usuarios del panel). La 012 (pausas de envío) se documenta al cerrarla.
+**Migraciones nuevas:** 009 (catálogo normalizado), 010 (historial con diff y búsqueda; variable opcional `Sync__HistorialMesesRetencion`, 6 por defecto) y 011 (usuarios del panel). 012 (pausas de envío por marca/categoría, excepciones por SKU y retiro del destino; ver `docs/Guia_Envio_Productos.md`).
+
+> ⚠️ Con la 012, `worker-compras` y `worker-compara` excluyen lo retenido por pausas. Si activas una pausa con **"retirar del destino"**, el worker envía stock 0 a lo ya publicado; en Compara conviene probarlo antes con `--test-batch`.
 
 **Variables nuevas del servicio `backend` (login del panel; ver datos sigue siendo libre, modificar exige sesión):**
 
@@ -364,6 +366,8 @@ Cualquier imagen **vieja** contra la BD migrada falla con `column "brand" does n
 | `AUTH_ADMIN_USUARIO` / `AUTH_ADMIN_PASSWORD` | Primer usuario; se crea solo si la tabla `usuarios` está vacía. Cambia la contraseña. |
 
 Agrégalas al `.env` del servidor (ver `.env.example`).
+---
+
 **Última actualización:** 2026-09-18  
 **Servidor:** 172.16.249.94  
 **Usuario Docker:** proyectsoft

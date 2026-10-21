@@ -38,8 +38,16 @@ import { ErrorService } from '../../shared/services/error.service';
         <h3 class="section-title">{{ target.target }}</h3>
         <div class="dashboard-grid">
           <div class="stat-card">
-            <span class="stat-title">⏳ Pendientes</span>
+            <span class="stat-title">⏳ Pendientes (se enviarán)</span>
             <span class="stat-val">{{ target.pending }}</span>
+          </div>
+          <div class="stat-card" title="Pendientes retenidos por una pausa o excepción: se actualizan pero no se envían">
+            <span class="stat-title">🚫 Retenidos</span>
+            <span class="stat-val" style="color: #fbbf24;">{{ target.held }}</span>
+          </div>
+          <div class="stat-card" title="Productos retirados del destino (se les envió stock 0)">
+            <span class="stat-title">📦 Retirados</span>
+            <span class="stat-val">{{ target.retired }}</span>
           </div>
           <div class="stat-card">
             <span class="stat-title">✅ Enviados</span>

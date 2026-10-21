@@ -24,13 +24,51 @@ public class SendService : ISendService
     }
 
     public Task<SendResult> SendAllAsync(CancellationToken cancellationToken = default) =>
-        RunAsync("all", ct => _repository.LoadAllProductsAsync(ct), cancellationToken);
+        RunAsync("all", ct => _repository.LoadAllProductsAsync(_options.Target, ct), cancellationToken);
 
-    public Task<SendResult> SendPendingAsync(CancellationToken cancellationToken = default) =>
-        RunAsync("pending", ct => _repository.LoadPendingProductsAsync(_options.Target, ct), cancellationToken);
+    /// <summary>
+    /// Ciclo normal de un destino, en este orden:
+    /// 1) libera los productos retirados que ya no están retenidos (vuelven a Pendiente),
+    /// 2) retira del destino (stock 0) lo que una pausa con "retirar" cubre y ya estaba publicado,
+    /// 3) envía los pendientes enviables (sin los retenidos).
+    /// </summary>
+    public async Task<SendResult> SendPendingAsync(CancellationToken cancellationToken = default)
+    {
+        await _repository.LiberarRetiradosAsync(_options.Target, cancellationToken);
+        await RetirarAsync(cancellationToken);
+        return await RunAsync("pending", ct => _repository.LoadPendingProductsAsync(_options.Target, ct), cancellationToken);
+    }
 
     public Task<SendResult> SendSampleAsync(int count, CancellationToken cancellationToken = default) =>
-        RunAsync("sample", ct => _repository.LoadRandomProductsAsync(count, ct), cancellationToken);
+        RunAsync("sample", ct => _repository.LoadRandomProductsAsync(count, _options.Target, ct), cancellationToken);
+
+    /// <summary>
+    /// Envía stock 0 a los productos ya publicados que una pausa con "retirar del destino" cubre.
+    /// No cambia su estado de envío: queda registrado como retirado y, al liberarse, se reenvían.
+    /// </summary>
+    private async Task RetirarAsync(CancellationToken cancellationToken)
+    {
+        var aRetirar = await _repository.LoadParaRetirarAsync(_options.Target, cancellationToken);
+        if (aRetirar is null || aRetirar.Count == 0)
+            return;
+
+        long? runId = _runs is null ? null : await _runs.StartAsync(_options.Target, "retiro", cancellationToken);
+        try
+        {
+            foreach (var producto in aRetirar)
+                producto.Stock = 0;
+
+            var result = await SendBatchesAsync(aRetirar, cancellationToken, retiro: true);
+            if (runId is { } id)
+                await _runs!.FinishAsync(id, result, null, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            if (runId is { } id)
+                await _runs!.FinishAsync(id, SendResult.Empty, ex.Message, cancellationToken);
+            throw;
+        }
+    }
 
     private async Task<SendResult> RunAsync(string mode, Func<CancellationToken, Task<List<ProductoApi>>> load, CancellationToken cancellationToken)
     {
@@ -51,7 +89,7 @@ public class SendService : ISendService
         }
     }
 
-    private async Task<SendResult> SendBatchesAsync(List<ProductoApi> products, CancellationToken cancellationToken)
+    private async Task<SendResult> SendBatchesAsync(List<ProductoApi> products, CancellationToken cancellationToken, bool retiro = false)
     {
         if (products.Count == 0)
             return SendResult.Empty;
@@ -80,12 +118,14 @@ public class SendService : ISendService
                     var rejected = response.FailedProducts();
                     foreach (var (code, error) in rejected)
                     {
-                        await _repository.MarkAsErrorAsync(code, error, _options.Target, cancellationToken);
+                        await _repository.MarkAsErrorAsync(code, retiro ? $"Retiro: {error}" : error, _options.Target, cancellationToken);
                         failedCodes.Add(code);
                     }
 
                     var accepted = batch.Select(p => p.Code).Where(c => !rejected.ContainsKey(c)).ToList();
-                    if (accepted.Count > 0)
+                    if (accepted.Count > 0 && retiro)
+                        await _repository.MarkRetiradosAsync(accepted, _options.Target, cancellationToken);
+                    else if (accepted.Count > 0)
                         await _repository.MarkAsSentAsync(accepted, DateTime.UtcNow, _options.Target, cancellationToken);
 
                     sent += accepted.Count;
@@ -93,7 +133,7 @@ public class SendService : ISendService
                 }
                 else
                 {
-                    string errorMsg = response.Message ?? "Error desconocido";
+                    string errorMsg = (retiro ? "Retiro: " : "") + (response.Message ?? "Error desconocido");
                     foreach (var product in batch)
                     {
                         await _repository.MarkAsErrorAsync(product.Code, errorMsg, _options.Target, cancellationToken);
@@ -106,7 +146,7 @@ public class SendService : ISendService
             {
                 foreach (var product in batch)
                 {
-                    await _repository.MarkAsErrorAsync(product.Code, ex.Message, _options.Target, cancellationToken);
+                    await _repository.MarkAsErrorAsync(product.Code, retiro ? $"Retiro: {ex.Message}" : ex.Message, _options.Target, cancellationToken);
                     failedCodes.Add(product.Code);
                 }
                 failed += batch.Length;

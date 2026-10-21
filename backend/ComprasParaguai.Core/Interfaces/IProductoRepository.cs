@@ -43,15 +43,15 @@ public interface IProductoRepository
     Task RefreshCatalogoActivoAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Carga TODOS los productos de la BD (sin filtrar por estado).
-    /// Usado para el envío inicial completo a un destino.
+    /// Carga todos los productos que se pueden enviar al destino (sin filtrar por estado, pero sin los retenidos
+    /// por una pausa o excepción). Usado para el envío inicial completo.
     /// </summary>
-    Task<List<ProductoApi>> LoadAllProductsAsync(CancellationToken cancellationToken = default);
+    Task<List<ProductoApi>> LoadAllProductsAsync(SyncTarget target, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Carga N productos al azar (para envíos de prueba).
+    /// Carga N productos al azar enviables al destino (para envíos de prueba).
     /// </summary>
-    Task<List<ProductoApi>> LoadRandomProductsAsync(int count, CancellationToken cancellationToken = default);
+    Task<List<ProductoApi>> LoadRandomProductsAsync(int count, SyncTarget target, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Carga N productos al azar marcados como Enviado (status = 1) para el destino (para verificar envíos).
@@ -59,14 +59,38 @@ public interface IProductoRepository
     Task<List<ProductoApi>> LoadRandomSentProductsAsync(int count, SyncTarget target, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Carga productos Pendiente (status = 0) para el destino indicado.
+    /// Carga productos Pendiente (status = 0) del destino que se pueden enviar: excluye los retenidos
+    /// por una pausa o excepción activa.
     /// </summary>
     Task<List<ProductoApi>> LoadPendingProductsAsync(SyncTarget target = SyncTarget.ComprasParaguai, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Cuenta productos Pendiente (status = 0) para el destino indicado.
+    /// Cuenta productos Pendiente (status = 0) enviables del destino (sin los retenidos).
     /// </summary>
     Task<int> CountPendingProductsAsync(SyncTarget target = SyncTarget.ComprasParaguai, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// TODOS los productos Pendiente del destino, indicando cuáles están retenidos y por qué regla.
+    /// Es lo que muestra la pestaña Pendientes (no se usa para enviar).
+    /// </summary>
+    Task<List<ProductoPendiente>> LoadPendientesConRetencionAsync(SyncTarget target = SyncTarget.ComprasParaguai, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Productos ya publicados en el destino que una pausa con "retirar del destino" cubre y que todavía
+    /// no se retiraron. Se envían con stock 0.
+    /// </summary>
+    Task<List<ProductoApi>> LoadParaRetirarAsync(SyncTarget target, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Marca como retirados del destino (ya se les envió stock 0) los productos indicados.
+    /// </summary>
+    Task MarkRetiradosAsync(IEnumerable<string> codes, SyncTarget target, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Los productos retirados que ya no están retenidos por nada vuelven a Pendiente para reenviarse con su
+    /// stock real. Devuelve cuántos se liberaron.
+    /// </summary>
+    Task<int> LiberarRetiradosAsync(SyncTarget target, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Carga productos en Error (status = 2) para el destino indicado, con mensaje de error.

@@ -48,6 +48,10 @@ export interface ProductDiff {
 export interface TargetStatus {
   target: string;
   pending: number;
+  /** Pendientes retenidos por una pausa o excepción (se actualizan pero no se envían). */
+  held: number;
+  /** Productos ya retirados del destino (stock 0). */
+  retired: number;
   sent: number;
   error: number;
   total: number;

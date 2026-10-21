@@ -5,6 +5,8 @@ import { ProductoService } from '../../shared/services/producto.service';
 import { CatalogoService } from '../../shared/services/catalogo.service';
 import { Cambio, CambiosService } from '../../shared/services/cambios.service';
 import { ErrorService } from '../../shared/services/error.service';
+import { AuthService } from '../../shared/services/auth.service';
+import { Destino, EnvioEstadoProducto, EnvioService } from '../../shared/services/envio.service';
 import { isDateInRange, quickRange } from '../../shared/utils/fechas';
 import { statusClass, statusLabel, statusField } from '../../shared/utils/estado';
 import { QuickRangeComponent } from '../../shared/ui/quick-range.component';
@@ -70,6 +72,28 @@ import { CambiosListaComponent } from '../../shared/ui/cambios-lista.component';
           <h3 class="section-title" style="margin: 0;">🕘 Últimos cambios de {{ seleccionado.code }} <span class="text-dim text-small">{{ seleccionado.nameEs }}</span></h3>
           <button class="btn btn-ghost" (click)="seleccionado = null">Cerrar</button>
         </div>
+        <!-- Envío por destino: excepción propia de este SKU -->
+        <div class="filters-grid" style="margin: 16px 0; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">
+          <div *ngFor="let e of estadoEnvio" class="stat-card">
+            <span class="stat-title">{{ e.target === 'compras' ? 'Compras Paraguai' : 'Compara Paraguai' }}</span>
+            <span class="text-small">
+              <span *ngIf="!e.retenido" class="badge badge-success">✅ Se envía</span>
+              <span *ngIf="e.retenido" class="badge badge-warn">🚫 Retenido</span>
+              <span *ngIf="e.retirado" class="badge badge-secondary" title="Se le envió stock 0 al destino">📦 Retirado</span>
+              <span *ngIf="e.retenidoPor" class="text-dim"> por {{ e.retenidoPor }}</span>
+            </span>
+            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px;">
+              <select class="form-input" style="min-width: 150px;" [(ngModel)]="excepciones[e.target].accion">
+                <option value="">Seguir las pausas</option>
+                <option value="enviar">Forzar envío</option>
+                <option value="retener">Retener este SKU</option>
+              </select>
+              <input type="text" class="form-input" placeholder="Motivo (opcional)" [(ngModel)]="excepciones[e.target].motivo" style="min-width: 150px;" />
+              <button class="btn btn-primary btn-sm" (click)="guardarExcepcion(e.target)" [title]="auth.logueado ? '' : 'Inicia sesión para modificar'">Guardar</button>
+            </div>
+          </div>
+        </div>
+
         <app-cambios-lista [items]="cambiosProducto" [mostrarProducto]="false"></app-cambios-lista>
       </div>
 
@@ -150,12 +174,19 @@ export class ProductosComponent implements OnInit {
 
   seleccionado: any = null;
   cambiosProducto: Cambio[] = [];
+  estadoEnvio: EnvioEstadoProducto[] = [];
+  excepciones: Record<Destino, { accion: string; motivo: string }> = {
+    compras: { accion: '', motivo: '' },
+    compara: { accion: '', motivo: '' }
+  };
 
   constructor(
     private productoService: ProductoService,
     private catalogo: CatalogoService,
     private cambios: CambiosService,
-    private errors: ErrorService
+    private errors: ErrorService,
+    private envio: EnvioService,
+    public auth: AuthService
   ) {}
 
   ngOnInit() {
@@ -219,8 +250,44 @@ export class ProductosComponent implements OnInit {
     this.search();
   }
 
+  /** Carga cómo se envía el SKU a cada destino (excepción propia, si está retenido y por qué). */
+  private cargarEstadoEnvio(code: string) {
+    this.envio.getEstadoProducto(code).subscribe(
+      estado => {
+        this.estadoEnvio = estado;
+        for (const e of estado) {
+          this.excepciones[e.target] = { accion: e.excepcion?.accion ?? '', motivo: e.excepcion?.motivo ?? '' };
+        }
+      },
+      () => this.errors.show('Error cargando el estado de envío del producto')
+    );
+  }
+
+  guardarExcepcion(target: Destino) {
+    if (!this.auth.logueado) {
+      this.auth.pedirLogin = true;
+      return;
+    }
+    const code = this.seleccionado?.code;
+    if (!code) return;
+    const { accion, motivo } = this.excepciones[target];
+    const peticion = accion === 'enviar' || accion === 'retener'
+      ? this.envio.guardarExcepcion(code, target, accion, motivo.trim() || undefined)
+      : this.envio.borrarExcepcion(code, target);
+
+    peticion.subscribe({
+      next: () => this.cargarEstadoEnvio(code),
+      // Quitar una excepción que no existía responde 404: no es un error para el usuario.
+      error: e => {
+        if (accion === '' && String(e?.message ?? '').includes('404')) this.cargarEstadoEnvio(code);
+        else if (!String(e?.message ?? '').includes('401')) this.errors.show('No se pudo guardar la excepción');
+      }
+    });
+  }
+
   verCambios(producto: any) {
     this.seleccionado = producto;
+    this.cargarEstadoEnvio(producto.code);
     this.cambiosProducto = [];
     this.cambios.getCambios({ code: producto.code }, 1, 30).subscribe(
       lista => {

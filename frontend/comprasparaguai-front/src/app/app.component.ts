@@ -11,6 +11,7 @@ import { ComprasComponent } from './pages/compras/compras.component';
 import { ComparaComponent } from './pages/compara/compara.component';
 import { ApiComponent } from './pages/api/api.component';
 import { CambiosComponent } from './pages/cambios/cambios.component';
+import { FiltrosEnvioComponent } from './pages/filtros-envio/filtros-envio.component';
 
 @Component({
   selector: 'app-root',
@@ -18,7 +19,7 @@ import { CambiosComponent } from './pages/cambios/cambios.component';
   imports: [
     CommonModule, FormsModule,
     DashboardComponent, ProductosComponent, PendientesComponent,
-    SyncComponent, ComprasComponent, ComparaComponent, ApiComponent, CambiosComponent
+    SyncComponent, ComprasComponent, ComparaComponent, ApiComponent, CambiosComponent, FiltrosEnvioComponent
   ],
   template: `
     <div class="app-container">
@@ -71,6 +72,7 @@ import { CambiosComponent } from './pages/cambios/cambios.component';
         <app-productos *ngIf="page === 'productos'"></app-productos>
         <app-pendientes *ngIf="page === 'pendientes'"></app-pendientes>
         <app-cambios *ngIf="page === 'cambios'"></app-cambios>
+        <app-filtros-envio *ngIf="page === 'filtros'"></app-filtros-envio>
         <app-sync *ngIf="page === 'sync'"></app-sync>
         <app-compras *ngIf="page === 'compras'"></app-compras>
         <app-compara *ngIf="page === 'compara'"></app-compara>
@@ -220,6 +222,7 @@ export class AppComponent {
     { id: 'dashboard', label: 'Dashboard' },
     { id: 'productos', label: 'Productos' },
     { id: 'pendientes', label: 'Pendientes' },
+    { id: 'filtros', label: 'Filtros de envío' },
     { id: 'cambios', label: 'Cambios' },
     { id: 'sync', label: 'Sync' },
     { id: 'compras', label: 'Compras' },

@@ -8,12 +8,35 @@ namespace ComprasParaguai.Api.Controllers;
 public class MarcasController : ControllerBase
 {
     private readonly ICatalogoRepository _repository;
+    private readonly IEnvioReglaRepository _reglas;
     private readonly ILogger<MarcasController> _logger;
 
-    public MarcasController(ICatalogoRepository repository, ILogger<MarcasController> logger)
+    public MarcasController(ICatalogoRepository repository, IEnvioReglaRepository reglas, ILogger<MarcasController> logger)
     {
         _repository = repository;
+        _reglas = reglas;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// Departamentos y secciones donde la marca tiene productos (para pausar "marca en categoría").
+    /// GET /api/marcas/{id}/categorias?target=compras
+    /// </summary>
+    [HttpGet("{id:int}/categorias")]
+    public async Task<ActionResult<List<MarcaCategoriaDto>>> GetCategorias(int id, [FromQuery] string? target, CancellationToken cancellationToken)
+    {
+        var t = target?.ToLowerInvariant() is "compara" or "comparaparaguai"
+            ? ComprasParaguai.Core.Models.SyncTarget.ComparaParaguai
+            : ComprasParaguai.Core.Models.SyncTarget.ComprasParaguai;
+        try
+        {
+            return Ok(await _reglas.CategoriasDeMarcaAsync(id, t, cancellationToken));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error cargando las categorías de la marca {Id}", id);
+            return StatusCode(500, new { error = ex.Message });
+        }
     }
 
     /// <summary>

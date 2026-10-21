@@ -36,7 +36,15 @@ public class PostgreSqlCatalogoRepository : ICatalogoRepository
                 c.activo    AS Activo,
                 COUNT(p.id)                                         AS Productos,
                 COUNT(p.id) FILTER (WHERE p.sync_status = 0)         AS PendientesCompras,
-                COUNT(p.id) FILTER (WHERE p.sync_compara_status = 0) AS PendientesCompara
+                COUNT(p.id) FILTER (WHERE p.sync_compara_status = 0) AS PendientesCompara,
+                (SELECT pa.id FROM envio_pausas pa WHERE pa.target = 'compras' AND pa.activo AND pa.marca_id IS NULL AND pa.categoria_id = c.id LIMIT 1) AS PausaIdCompras,
+                (SELECT pa.id FROM envio_pausas pa WHERE pa.target = 'compara' AND pa.activo AND pa.marca_id IS NULL AND pa.categoria_id = c.id LIMIT 1) AS PausaIdCompara,
+                EXISTS (SELECT 1 FROM envio_pausas pa JOIN categorias a ON a.id = pa.categoria_id
+                        WHERE pa.target = 'compras' AND pa.activo AND pa.marca_id IS NULL
+                          AND left(c.ruta, length(a.ruta) + 1) = a.ruta || '>') AS HeredadaCompras,
+                EXISTS (SELECT 1 FROM envio_pausas pa JOIN categorias a ON a.id = pa.categoria_id
+                        WHERE pa.target = 'compara' AND pa.activo AND pa.marca_id IS NULL
+                          AND left(c.ruta, length(a.ruta) + 1) = a.ruta || '>') AS HeredadaCompara
             FROM categorias c
             JOIN sub s ON s.root_id = c.id
             LEFT JOIN productos p ON p.categoria_id = s.node_id
@@ -88,7 +96,9 @@ public class PostgreSqlCatalogoRepository : ICatalogoRepository
                 m.activo AS Activo,
                 COUNT(p.id)                                          AS Productos,
                 COUNT(p.id) FILTER (WHERE p.sync_status = 0)          AS PendientesCompras,
-                COUNT(p.id) FILTER (WHERE p.sync_compara_status = 0)  AS PendientesCompara
+                COUNT(p.id) FILTER (WHERE p.sync_compara_status = 0)  AS PendientesCompara,
+                (SELECT pa.id FROM envio_pausas pa WHERE pa.target = 'compras' AND pa.activo AND pa.categoria_id IS NULL AND pa.marca_id = m.id LIMIT 1) AS PausaIdCompras,
+                (SELECT pa.id FROM envio_pausas pa WHERE pa.target = 'compara' AND pa.activo AND pa.categoria_id IS NULL AND pa.marca_id = m.id LIMIT 1) AS PausaIdCompara
             FROM marcas m
             LEFT JOIN productos p ON p.marca_id = m.id
             {where}

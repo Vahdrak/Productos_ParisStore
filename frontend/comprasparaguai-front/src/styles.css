@@ -374,3 +374,11 @@ app-dashboard, app-productos, app-pendientes, app-sync, app-compras, app-compara
 app-cambios {
   display: block;
 }
+
+.badge-warn {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+}
+app-filtros-envio {
+  display: block;
+}

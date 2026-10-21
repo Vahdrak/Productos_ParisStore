@@ -39,6 +39,6 @@ public class VerifyServiceTests
 
         // Solo consulta los Enviados del target pedido, nunca pendientes ni todos.
         repo.Verify(r => r.LoadPendingProductsAsync(It.IsAny<SyncTarget>(), It.IsAny<CancellationToken>()), Times.Never);
-        repo.Verify(r => r.LoadAllProductsAsync(It.IsAny<CancellationToken>()), Times.Never);
+        repo.Verify(r => r.LoadAllProductsAsync(It.IsAny<SyncTarget>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 }

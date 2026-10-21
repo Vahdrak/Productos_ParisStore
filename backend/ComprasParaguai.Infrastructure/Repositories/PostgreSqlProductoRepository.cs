@@ -325,35 +325,35 @@ public class PostgreSqlProductoRepository : IProductoRepository
     };
 
     /// <summary>
-    /// Carga TODOS los productos de la BD (sin filtrar por estado).
+    /// Carga todos los productos enviables al destino (sin filtrar por estado; sin los retenidos por pausa/excepción).
     /// </summary>
-    public async Task<List<ProductoApi>> LoadAllProductsAsync(CancellationToken cancellationToken = default)
+    public async Task<List<ProductoApi>> LoadAllProductsAsync(SyncTarget target, CancellationToken cancellationToken = default)
     {
-        string query = $"SELECT {ProductoApiColumns} FROM {ProductoApiFrom} ORDER BY p.code";
+        string query = $"SELECT {ProductoApiColumns} FROM {ProductoApiFrom} WHERE NOT {EnvioSql.Retenido(target)} ORDER BY p.code";
 
         using (var connection = new NpgsqlConnection(_connectionString))
         {
             await connection.OpenAsync(cancellationToken);
             var result = (await connection.QueryAsync<ProductoApi>(query)).ToList();
 
-            _logger.LogInformation("Cargados {Count} productos totales", result.Count);
+            _logger.LogInformation("Cargados {Count} productos enviables a {Target}", result.Count, target);
             return result;
         }
     }
 
     /// <summary>
-    /// Carga N productos al azar (envíos de prueba).
+    /// Carga N productos enviables al azar (envíos de prueba).
     /// </summary>
-    public async Task<List<ProductoApi>> LoadRandomProductsAsync(int count, CancellationToken cancellationToken = default)
+    public async Task<List<ProductoApi>> LoadRandomProductsAsync(int count, SyncTarget target, CancellationToken cancellationToken = default)
     {
-        string query = $"SELECT {ProductoApiColumns} FROM {ProductoApiFrom} ORDER BY random() LIMIT @count";
+        string query = $"SELECT {ProductoApiColumns} FROM {ProductoApiFrom} WHERE NOT {EnvioSql.Retenido(target)} ORDER BY random() LIMIT @count";
 
         using (var connection = new NpgsqlConnection(_connectionString))
         {
             await connection.OpenAsync(cancellationToken);
             var result = (await connection.QueryAsync<ProductoApi>(query, new { count })).ToList();
 
-            _logger.LogInformation("Cargados {Count} productos al azar", result.Count);
+            _logger.LogInformation("Cargados {Count} productos al azar para {Target}", result.Count, target);
             return result;
         }
     }
@@ -377,35 +377,134 @@ public class PostgreSqlProductoRepository : IProductoRepository
     }
 
     /// <summary>
-    /// Carga productos Pendiente (status = 0) del destino.
+    /// Carga productos Pendiente (status = 0) del destino que se pueden enviar (sin los retenidos).
     /// </summary>
     public async Task<List<ProductoApi>> LoadPendingProductsAsync(SyncTarget target = SyncTarget.ComprasParaguai, CancellationToken cancellationToken = default)
     {
         var c = Cols(target);
-        string query = $"SELECT {ProductoApiColumns} FROM {ProductoApiFrom} WHERE p.{c.Status} = 0 ORDER BY p.code";
+        string query = $"SELECT {ProductoApiColumns} FROM {ProductoApiFrom} WHERE p.{c.Status} = 0 AND NOT {EnvioSql.Retenido(target)} ORDER BY p.code";
 
         using (var connection = new NpgsqlConnection(_connectionString))
         {
             await connection.OpenAsync(cancellationToken);
             var result = (await connection.QueryAsync<ProductoApi>(query)).ToList();
 
-            _logger.LogInformation("Cargados {Count} productos Pendiente para {Target}", result.Count, target);
+            _logger.LogInformation("Cargados {Count} productos Pendiente enviables para {Target}", result.Count, target);
             return result;
         }
     }
 
     /// <summary>
-    /// Cuenta productos Pendiente (status = 0) del destino.
+    /// Cuenta productos Pendiente (status = 0) enviables del destino (sin los retenidos).
     /// </summary>
     public async Task<int> CountPendingProductsAsync(SyncTarget target = SyncTarget.ComprasParaguai, CancellationToken cancellationToken = default)
     {
         var c = Cols(target);
-        string query = $"SELECT COUNT(*) FROM productos WHERE {c.Status} = 0";
+        string query = $"SELECT COUNT(*) FROM {ProductoApiFrom} WHERE p.{c.Status} = 0 AND NOT {EnvioSql.Retenido(target)}";
 
         using (var connection = new NpgsqlConnection(_connectionString))
         {
             await connection.OpenAsync(cancellationToken);
             return await connection.ExecuteScalarAsync<int>(query);
+        }
+    }
+
+    /// <summary>
+    /// Todos los pendientes del destino con su estado de retención (para la pestaña Pendientes).
+    /// </summary>
+    public async Task<List<ProductoPendiente>> LoadPendientesConRetencionAsync(SyncTarget target = SyncTarget.ComprasParaguai, CancellationToken cancellationToken = default)
+    {
+        var c = Cols(target);
+        string query = $@"
+            SELECT {ProductoApiColumns},
+                   {EnvioSql.RetenidoPor(target)} AS RetenidoPor,
+                   ({EnvioSql.RetenidoPor(target)} IS NOT NULL) AS Retenido
+            FROM {ProductoApiFrom}
+            WHERE p.{c.Status} = 0
+            ORDER BY p.code";
+
+        using (var connection = new NpgsqlConnection(_connectionString))
+        {
+            await connection.OpenAsync(cancellationToken);
+            var result = (await connection.QueryAsync<ProductoPendiente>(query)).ToList();
+
+            _logger.LogInformation("Cargados {Count} pendientes de {Target} ({Held} retenidos)", result.Count, target, result.Count(p => p.Retenido));
+            return result;
+        }
+    }
+
+    /// <summary>
+    /// Productos publicados en el destino (alguna vez enviados) que una pausa con "retirar del destino" cubre
+    /// y que todavía no se retiraron.
+    /// </summary>
+    public async Task<List<ProductoApi>> LoadParaRetirarAsync(SyncTarget target, CancellationToken cancellationToken = default)
+    {
+        var c = Cols(target);
+        string query = $@"
+            SELECT {ProductoApiColumns}
+            FROM {ProductoApiFrom}
+            WHERE p.{c.SentAt} IS NOT NULL
+              AND {EnvioSql.Retirable(target)}
+              AND NOT EXISTS (SELECT 1 FROM envio_retirados r WHERE r.producto_id = p.id AND r.target = '{EnvioSql.Destino(target)}')
+            ORDER BY p.code";
+
+        using (var connection = new NpgsqlConnection(_connectionString))
+        {
+            await connection.OpenAsync(cancellationToken);
+            var result = (await connection.QueryAsync<ProductoApi>(query)).ToList();
+
+            _logger.LogInformation("{Count} productos para retirar de {Target}", result.Count, target);
+            return result;
+        }
+    }
+
+    /// <summary>
+    /// Registra como retirados del destino (se les envió stock 0) los productos indicados.
+    /// </summary>
+    public async Task MarkRetiradosAsync(IEnumerable<string> codes, SyncTarget target, CancellationToken cancellationToken = default)
+    {
+        var codeList = codes.ToList();
+        if (codeList.Count == 0)
+            return;
+
+        string query = $@"
+            INSERT INTO envio_retirados (producto_id, target)
+            SELECT id, '{EnvioSql.Destino(target)}' FROM productos WHERE code = ANY(@codes)
+            ON CONFLICT DO NOTHING";
+
+        using (var connection = new NpgsqlConnection(_connectionString))
+        {
+            await connection.OpenAsync(cancellationToken);
+            int n = await connection.ExecuteAsync(query, new { codes = codeList.ToArray() });
+            _logger.LogInformation("Registrados {Count} productos retirados de {Target}", n, target);
+        }
+    }
+
+    /// <summary>
+    /// Los retirados que ya no están retenidos vuelven a Pendiente (se reenvían con su stock real).
+    /// </summary>
+    public async Task<int> LiberarRetiradosAsync(SyncTarget target, CancellationToken cancellationToken = default)
+    {
+        var c = Cols(target);
+        string query = $@"
+            WITH liberados AS (
+                DELETE FROM envio_retirados r
+                USING productos p LEFT JOIN categorias c ON c.id = p.categoria_id
+                WHERE r.producto_id = p.id
+                  AND r.target = '{EnvioSql.Destino(target)}'
+                  AND NOT {EnvioSql.Retenido(target)}
+                RETURNING r.producto_id
+            )
+            UPDATE productos SET {c.Status} = 0, updated_at = now()
+            WHERE id IN (SELECT producto_id FROM liberados)";
+
+        using (var connection = new NpgsqlConnection(_connectionString))
+        {
+            await connection.OpenAsync(cancellationToken);
+            int n = await connection.ExecuteAsync(query);
+            if (n > 0)
+                _logger.LogInformation("{Count} productos retirados de {Target} se liberan y vuelven a Pendiente", n, target);
+            return n;
         }
     }
 
@@ -642,17 +741,26 @@ public class PostgreSqlProductoRepository : IProductoRepository
     /// </summary>
     public async Task<List<TargetStatusCounts>> GetStatusCountsAsync(CancellationToken cancellationToken = default)
     {
-        const string query = @"
+        // Pendiente = enviable; Held = pendiente pero retenido por pausa/excepción; Retired = ya retirado del destino.
+        string retCompras = EnvioSql.Retenido(SyncTarget.ComprasParaguai);
+        string retCompara = EnvioSql.Retenido(SyncTarget.ComparaParaguai);
+
+        string query = $@"
             SELECT
-                COUNT(*) FILTER (WHERE sync_status = 0)         AS compras_pending,
-                COUNT(*) FILTER (WHERE sync_status = 1)         AS compras_sent,
-                COUNT(*) FILTER (WHERE sync_status = 2)         AS compras_error,
-                MAX(last_sent_at)                               AS compras_last_sent,
-                COUNT(*) FILTER (WHERE sync_compara_status = 0) AS compara_pending,
-                COUNT(*) FILTER (WHERE sync_compara_status = 1) AS compara_sent,
-                COUNT(*) FILTER (WHERE sync_compara_status = 2) AS compara_error,
-                MAX(last_sent_compara_at)                       AS compara_last_sent
-            FROM productos";
+                COUNT(*) FILTER (WHERE p.sync_status = 0 AND NOT {retCompras})         AS compras_pending,
+                COUNT(*) FILTER (WHERE p.sync_status = 0 AND {retCompras})             AS compras_held,
+                COUNT(*) FILTER (WHERE p.sync_status = 1)                              AS compras_sent,
+                COUNT(*) FILTER (WHERE p.sync_status = 2)                              AS compras_error,
+                MAX(p.last_sent_at)                                                    AS compras_last_sent,
+                COUNT(*) FILTER (WHERE p.sync_compara_status = 0 AND NOT {retCompara}) AS compara_pending,
+                COUNT(*) FILTER (WHERE p.sync_compara_status = 0 AND {retCompara})     AS compara_held,
+                COUNT(*) FILTER (WHERE p.sync_compara_status = 1)                      AS compara_sent,
+                COUNT(*) FILTER (WHERE p.sync_compara_status = 2)                      AS compara_error,
+                MAX(p.last_sent_compara_at)                                            AS compara_last_sent,
+                (SELECT COUNT(*) FROM envio_retirados WHERE target = 'compras')        AS compras_retired,
+                (SELECT COUNT(*) FROM envio_retirados WHERE target = 'compara')        AS compara_retired
+            FROM productos p
+            LEFT JOIN categorias c ON c.id = p.categoria_id";
 
         using (var connection = new NpgsqlConnection(_connectionString))
         {
@@ -661,8 +769,8 @@ public class PostgreSqlProductoRepository : IProductoRepository
 
             return new List<TargetStatusCounts>
             {
-                new(SyncTarget.ComprasParaguai, (int)row.compras_pending, (int)row.compras_sent, (int)row.compras_error, (DateTime?)row.compras_last_sent),
-                new(SyncTarget.ComparaParaguai, (int)row.compara_pending, (int)row.compara_sent, (int)row.compara_error, (DateTime?)row.compara_last_sent)
+                new(SyncTarget.ComprasParaguai, (int)row.compras_pending, (int)row.compras_sent, (int)row.compras_error, (DateTime?)row.compras_last_sent, (int)row.compras_held, (int)row.compras_retired),
+                new(SyncTarget.ComparaParaguai, (int)row.compara_pending, (int)row.compara_sent, (int)row.compara_error, (DateTime?)row.compara_last_sent, (int)row.compara_held, (int)row.compara_retired)
             };
         }
     }

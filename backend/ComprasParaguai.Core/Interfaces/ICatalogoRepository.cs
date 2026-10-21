@@ -32,6 +32,14 @@ public class CategoriaNodoDto
     public int PendientesCompras { get; set; }
     public int PendientesCompara { get; set; }
 
+    /// <summary>Id de la pausa activa de ESTE nodo (solo categoría) por destino; null si no está pausado.</summary>
+    public int? PausaIdCompras { get; set; }
+    public int? PausaIdCompara { get; set; }
+
+    /// <summary>Está pausado porque un ancestro tiene una pausa de categoría activa.</summary>
+    public bool HeredadaCompras { get; set; }
+    public bool HeredadaCompara { get; set; }
+
     public List<CategoriaNodoDto> Hijos { get; set; } = new();
 }
 
@@ -43,6 +51,10 @@ public class MarcaDto
     public int Productos { get; set; }
     public int PendientesCompras { get; set; }
     public int PendientesCompara { get; set; }
+
+    /// <summary>Id de la pausa activa de ESTA marca (sola, sin categoría) por destino; null si no está pausada.</summary>
+    public int? PausaIdCompras { get; set; }
+    public int? PausaIdCompara { get; set; }
 }
 
 public class MarcaListDto

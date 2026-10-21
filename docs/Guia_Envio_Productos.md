@@ -99,6 +99,41 @@ Cada columna de estado vale `0 = Pendiente`, `1 = Enviado`, `2 = Error`.
 
 Los dos workers de envío no se pisan: cada uno solo toca su columna.
 
+
+## Pausar el envío por marca o categoría (panel → pestaña "Filtros de envío")
+
+Sirve para **no enviar** ciertos productos a un destino (por temporada, por ejemplo) sin apagar ningún worker.
+Los workers siguen corriendo igual: lo único que cambia es que sus consultas de pendientes **excluyen lo retenido**
+(`--check-pending`, `--send-pending`, `--send-all` y `--test-batch` solo ven lo enviable).
+
+- **Se sigue actualizando.** `Worker.Sync` actualiza precios y stock de todo, pausado o no. Los productos retenidos
+  quedan en estado Pendiente y **no se envían mientras dure la pausa**.
+- **Al reactivar** se envían en el siguiente ciclo, con los datos más recientes.
+- **Por destino.** Compras y Compara tienen reglas independientes.
+- **Cómo se decide.** Un producto se envía salvo que alguna pausa activa del destino lo cubra:
+
+  | Pausa | Retiene |
+  |---|---|
+  | solo marca (`LACOSTE`) | todos los productos de la marca, en cualquier categoría |
+  | solo categoría (`PERFUMERIA`) | todo lo de esa categoría **y sus subcategorías**, de cualquier marca (también las que aparezcan después) |
+  | marca en categoría (`LACOSTE` en `INDUMENTARIA`) | solo la ropa de LACOSTE; sus perfumes se siguen enviando |
+
+  Si dos pausas cubren el mismo producto, sigue retenido hasta apagar las dos.
+- **Excepción por producto (SKU).** En la pestaña Productos, al elegir un producto, cada destino permite
+  *Forzar envío* (se envía aunque su marca o categoría esté pausada) o *Retener este SKU* (no se envía aunque nada lo
+  pause). **La excepción gana sobre las pausas.**
+- **Retirar del destino (opcional, por pausa).** Con esa casilla, además de dejar de actualizarlo, se envía **stock 0**
+  a lo que ya estaba publicado, para que deje de mostrarse como disponible. El worker lo hace al inicio de su ciclo,
+  una sola vez por producto. Al reactivar la pausa, esos productos vuelven a Pendiente y se reenvían con su stock real.
+  *Compras* documenta que stock 0 = no disponible; *Compara* no tiene especificación en el repo: **probar con
+  `--test-batch` antes de usar "retirar" en serio**.
+- **Quién y cuándo.** Cada alta, edición, activación, desactivación o borrado queda en `envio_reglas_historial` con el
+  usuario que lo hizo (se ve al final de la pestaña Filtros de envío).
+- **Login.** Ver las reglas es libre; crearlas, cambiarlas o borrarlas exige iniciar sesión (ver README-DESPLIEGUE.md).
+
+En el Dashboard cada destino muestra **Pendientes** (se enviarán), **Retenidos** (pendientes por pausa o excepción) y
+**Retirados** (ya con stock 0 en el destino). La pestaña Pendientes marca cuáles están retenidos y por qué regla.
+
 ## Monitoreo
 
 ```sql

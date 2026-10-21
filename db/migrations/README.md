@@ -10,6 +10,7 @@ una vez ejecutados: cualquier cambio va en una migración nueva (`NNN_descripcio
 | 009 | `009_normalizar_categorias_marcas.sql` | `categorias` pasa a árbol (`parent_id`, `ruta`), nuevas tablas `marcas` y `categoria_alias`, `productos.brand` → `marca_id`, recrea el trigger de auditoría |
 | 010 | `010_historial_cambios.sql` | Historial con diff por campo (`cambios`), `origen`/`usuario`, índices de búsqueda (trigram) y archivo de historial viejo |
 | 011 | `011_usuarios.sql` | Tabla `usuarios` (login del panel; contraseña con hash) |
+| 012 | `012_envio_reglas.sql` | Pausas de envío por marca/categoría, excepciones por SKU, productos retirados e historial de reglas |
 
 ## Cómo aplicarlas
 
