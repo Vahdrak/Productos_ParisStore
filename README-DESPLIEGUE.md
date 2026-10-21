@@ -337,6 +337,25 @@ docker compose up -d db backend frontend worker-sync
 
 ---
 
+---
+
+## 🔁 Actualizar un despliegue existente (migración 009 en adelante)
+
+La migración **009** cambia el esquema (`productos.brand` pasa a `marca_id`, `categorias` pasa a árbol).
+Cualquier imagen **vieja** contra la BD migrada falla con `column "brand" does not exist`, así que:
+
+1. **Respaldo** antes de nada:
+   ```bash
+   docker exec <contenedor-db> pg_dump -U postgres catalogosdb > backup_pre009.sql
+   ```
+2. **Reconstruir y subir las imágenes de TODOS los servicios** (API y los 4 workers, más el front), no solo algunos.
+3. `docker compose pull && docker compose up -d`. La API (o cualquier worker) aplica las migraciones al arrancar.
+4. **Ojo con `worker-compara`:** al cambiar la descripción de los productos, el primer sync deja casi todo
+   pendiente y Compara enviará el catálogo completo (~110k productos, ~1,5 h con lotes de 1000 y pausa de 46 s).
+   Si no quieres ese envío ahora, deja `worker-compara` detenido hasta la ventana elegida.
+
+**Migraciones nuevas:** 009 (catálogo normalizado). Las siguientes partes del trabajo agregan 010 a 012 y variables
+de entorno; se documentan aquí al cerrarlas.
 **Última actualización:** 2026-09-18  
 **Servidor:** 172.16.249.94  
 **Usuario Docker:** proyectsoft

@@ -9,7 +9,7 @@ Write-Host ""
 
 Write-Host "Iniciando API en ventana separada..." -ForegroundColor Green
 Start-Process powershell -ArgumentList @"
-    Set-Location 'C:\Users\MARIO\Documents\ComprasParaguai\src\ComprasParaguai.Api'
+    Set-Location 'C:\Users\MARIO\Documents\ComprasParaguai\backend\ComprasParaguai.Api'
     Write-Host 'Compras Paraguai - API' -ForegroundColor Cyan
     Write-Host 'Puerto: http://localhost:5000' -ForegroundColor Yellow
     Write-Host '---' -ForegroundColor Gray
@@ -20,7 +20,7 @@ Start-Sleep -Seconds 5
 
 Write-Host "Iniciando Worker en ventana separada..." -ForegroundColor Green
 Start-Process powershell -ArgumentList @"
-    Set-Location 'C:\Users\MARIO\Documents\ComprasParaguai\src\ComprasParaguai.Worker'
+    Set-Location 'C:\Users\MARIO\Documents\ComprasParaguai\workers\Worker.Sync'
     Write-Host 'Worker.Sync (Oracle -> PostgreSQL)' -ForegroundColor Cyan
     Write-Host 'Sincronizando cada 2 horas' -ForegroundColor Yellow
     Write-Host '---' -ForegroundColor Gray

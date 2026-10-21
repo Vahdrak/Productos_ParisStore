@@ -8,7 +8,7 @@ echo Iniciando API - Compras Paraguai
 echo ====================================
 echo.
 
-cd /d "C:\Users\MARIO\Documents\ComprasParaguai\src\ComprasParaguai.Api"
+cd /d "C:\Users\MARIO\Documents\ComprasParaguai\backend\ComprasParaguai.Api"
 
 echo Compilando en Release mode...
 dotnet build -c Release

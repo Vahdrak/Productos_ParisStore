@@ -22,7 +22,7 @@ if ($dotnetProcs) {
 
 # 2. Limpiar carpetas de build
 Write-Host "🧹 Limpiando carpetas de compilación..." -ForegroundColor Yellow
-$apiPath = "C:\Users\MARIO\Documents\ComprasParaguai\src\ComprasParaguai.Api"
+$apiPath = "C:\Users\MARIO\Documents\ComprasParaguai\backend\ComprasParaguai.Api"
 Remove-Item -Path "$apiPath\bin" -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item -Path "$apiPath\obj" -Recurse -Force -ErrorAction SilentlyContinue
 Write-Host "✅ Carpetas limpias" -ForegroundColor Green
