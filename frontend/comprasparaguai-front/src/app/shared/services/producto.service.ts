@@ -221,6 +221,8 @@ export class ProductoService {
     if (filters?.name) url += `&name=${encodeURIComponent(filters.name)}`;
     if (filters?.syncStatus !== null && filters?.syncStatus !== undefined) url += `&syncStatus=${filters.syncStatus}`;
     if (filters?.target) url += `&target=${filters.target}`;
+    if (filters?.marcaId) url += `&marcaId=${filters.marcaId}`;
+    if (filters?.categoriaId) url += `&categoriaId=${filters.categoriaId}`;
     return this.http.get<ProductList>(url);
   }
 

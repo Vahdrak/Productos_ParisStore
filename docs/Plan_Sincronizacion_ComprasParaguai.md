@@ -175,6 +175,25 @@ configuren. La reconciliación diaria recalcula `activo` (con productos o sin el
 `CLASIFICACION_PRODUCTOS_TOKU_VIEW`) en `PARAGUAY_COMPRAS_VIEW` o dar `SELECT` sobre esa vista, y corregir la
 codificación de la columna `CATEGORIAS`. Con eso el árbol podría copiarse tal cual y enlazar por código en lugar de por texto.
 
+### Historial de cambios con diff, origen y usuario (migración 010)
+
+`productos_historial` guarda **una fila por cambio real** de un producto, con el detalle por campo en `cambios` (JSONB):
+`{"price": {"antes": "45.00", "despues": "46.00"}, "stock": {...}}`.
+
+- **Qué se sigue:** nombre (es/pt), marca, categoría, precio, precio exenta, régimen turismo, stock e imagen.
+  Cambios de solo descripción o de solo estado de envío **no** escriben historial (así el reenvío masivo no lo infla).
+  La baja por reconciliación (stock → 0) sí queda registrada.
+- **Quién lo hizo:** `origen` (`sync`, `reconciliacion`, `api`, `manual`, `historico` para lo anterior a la 010) y `usuario`.
+  El repositorio los fija por transacción (`set_config('app.origen' / 'app.usuario', ..., true)`) y los lee el trigger.
+- **Altas:** un producto nuevo escribe una fila `operation = 'I'`.
+- **Consulta:** `GET /api/cambios?code=&q=&marcaId=&categoriaId=&campo=&origen=&desde=&hasta=&page=&pageSize=`;
+  el front la usa en la pestaña **Cambios** y en el panel "Últimos cambios" de **Productos**.
+- **Índices:** historial por `(code, changed_at)`, `(marca_id, changed_at)`, `changed_at` y GIN sobre `cambios`;
+  `productos` con trigram (`pg_trgm`) en `code`, `name_es` y `name_pt` para búsquedas `ILIKE '%texto%'`.
+- **Retención:** la reconciliación diaria llama a `fn_archivar_historial(N)`: lo más viejo que N meses
+  (`Sync:HistorialMesesRetencion`, 6 por defecto; 0 = no archivar) pasa a `productos_historial_archivo`.
+  Si se agregan columnas a `productos_historial`, hay que agregarlas también al archivo.
+
 ### Tabla `sync_runs` (bitácora)
 ```sql
 CREATE TABLE sync_runs (

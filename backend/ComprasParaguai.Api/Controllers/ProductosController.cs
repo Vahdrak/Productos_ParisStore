@@ -20,7 +20,8 @@ public class ProductosController : ControllerBase
 
     /// <summary>
     /// Lista todos los productos con filtros opcionales.
-    /// GET /api/productos?syncStatus=0&target=compras&page=1&pageSize=50
+    /// GET /api/productos?syncStatus=0&target=compras&marcaId=12&categoriaId=34&page=1&pageSize=50
+    /// (categoriaId incluye todo el subárbol de esa categoría)
     /// </summary>
     [HttpGet]
     public async Task<ActionResult<ProductListDto>> GetAll(
@@ -28,6 +29,8 @@ public class ProductosController : ControllerBase
         [FromQuery] string? code = null,
         [FromQuery] string? name = null,
         [FromQuery] string? target = null,
+        [FromQuery] int? marcaId = null,
+        [FromQuery] int? categoriaId = null,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 50,
         CancellationToken cancellationToken = default)
@@ -35,7 +38,8 @@ public class ProductosController : ControllerBase
         try
         {
             var syncTarget = ParseTarget(target);
-            var result = await _repository.SearchProductsAsync(code, name, syncStatus, page, pageSize, syncTarget, cancellationToken);
+            var result = await _repository.SearchProductsAsync(
+                code, name, syncStatus, page, pageSize, syncTarget, marcaId, categoriaId, cancellationToken);
             return Ok(result);
         }
         catch (Exception ex)
@@ -185,7 +189,9 @@ public class ProductosController : ControllerBase
                 current.SourceHash = Convert.ToHexString(hashBytes).ToLower();
             }
 
-            await _repository.UpsertProductsAsync(new List<ProductoApi> { current }, DateTime.UtcNow, cancellationToken);
+            // Queda en el historial con origen "api" y, cuando haya login, el usuario.
+            var contexto = new CambioContexto(OrigenCambio.Api, User.Identity?.Name);
+            await _repository.UpsertProductsAsync(new List<ProductoApi> { current }, DateTime.UtcNow, contexto, cancellationToken);
             return Ok(current);
         }
         catch (Exception ex)

@@ -47,7 +47,7 @@ public class PostgreSqlProductoRepository : IProductoRepository
     /// Más rápido que fila por fila.
     /// Marca todos como Pendiente (0) en sync_status y sync_compara_status.
     /// </summary>
-    public async Task UpsertProductsAsync(IEnumerable<ProductoApi> products, DateTime now, CancellationToken cancellationToken = default)
+    public async Task UpsertProductsAsync(IEnumerable<ProductoApi> products, DateTime now, CambioContexto contexto, CancellationToken cancellationToken = default)
     {
         var productList = products.ToList();
         if (!productList.Any())
@@ -61,8 +61,11 @@ public class PostgreSqlProductoRepository : IProductoRepository
             await connection.OpenAsync(cancellationToken);
 
             // Para loguear cuántas categorías/marcas nuevas aprendió esta corrida.
-            int categoriasAntes = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM categorias");
-            int marcasAntes = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM marcas");
+            await using var tx = await connection.BeginTransactionAsync(cancellationToken);
+            await AuditoriaSesion.ConfigurarAsync(connection, tx, contexto, cancellationToken);
+
+            int categoriasAntes = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM categorias", transaction: tx);
+            int marcasAntes = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM marcas", transaction: tx);
 
             // Crear tabla staging temporal.
             const string createStaging = @"
@@ -90,7 +93,7 @@ public class PostgreSqlProductoRepository : IProductoRepository
                 );
             ";
 
-            await connection.ExecuteAsync(createStaging);
+            await connection.ExecuteAsync(createStaging, transaction: tx);
             _logger.LogInformation("Tabla staging creada");
 
             // COPY: escribir filas a staging en bulk.
@@ -144,7 +147,7 @@ public class PostgreSqlProductoRepository : IProductoRepository
                 FROM categoria_alias a
                 WHERE a.ruta_origen = s.categoria_ruta;
             ";
-            await connection.ExecuteAsync(resolveCategorias);
+            await connection.ExecuteAsync(resolveCategorias, transaction: tx);
 
             // Marcas: las nuevas se agregan a la tabla; vacío/NULL = BRANDLESS.
             const string resolveMarcas = @"
@@ -160,10 +163,10 @@ public class PostgreSqlProductoRepository : IProductoRepository
                 FROM marcas m
                 WHERE upper(m.nombre) = upper(fn_normalizar_marca(s.marca_nombre));
             ";
-            await connection.ExecuteAsync(resolveMarcas);
+            await connection.ExecuteAsync(resolveMarcas, transaction: tx);
 
-            int categoriasDespues = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM categorias");
-            int marcasDespues = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM marcas");
+            int categoriasDespues = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM categorias", transaction: tx);
+            int marcasDespues = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM marcas", transaction: tx);
             _logger.LogInformation("Categorías nuevas: {Categorias}, marcas nuevas: {Marcas}",
                 categoriasDespues - categoriasAntes, marcasDespues - marcasAntes);
 
@@ -207,7 +210,8 @@ public class PostgreSqlProductoRepository : IProductoRepository
                     updated_at = @now;
             ";
 
-            int affected = await connection.ExecuteAsync(upsert, new { now });
+            int affected = await connection.ExecuteAsync(upsert, new { now }, transaction: tx);
+            await tx.CommitAsync(cancellationToken);
             _logger.LogInformation("Upsert completado: {AffectedRows} filas insertadas/actualizadas", affected);
         }
     }
@@ -215,7 +219,7 @@ public class PostgreSqlProductoRepository : IProductoRepository
     /// <summary>
     /// Marca productos como no disponibles (baja detectada en reconciliación).
     /// </summary>
-    public async Task MarkAsUnavailableAsync(IEnumerable<string> codes, DateTime now, CancellationToken cancellationToken = default)
+    public async Task MarkAsUnavailableAsync(IEnumerable<string> codes, DateTime now, CambioContexto contexto, CancellationToken cancellationToken = default)
     {
         var codeList = codes.ToList();
         if (!codeList.Any())
@@ -230,8 +234,25 @@ public class PostgreSqlProductoRepository : IProductoRepository
         using (var connection = new NpgsqlConnection(_connectionString))
         {
             await connection.OpenAsync(cancellationToken);
-            int affected = await connection.ExecuteAsync(query, new { codes = codeList.ToArray(), now });
+            await using var tx = await connection.BeginTransactionAsync(cancellationToken);
+            await AuditoriaSesion.ConfigurarAsync(connection, tx, contexto, cancellationToken);
+            int affected = await connection.ExecuteAsync(query, new { codes = codeList.ToArray(), now }, transaction: tx);
+            await tx.CommitAsync(cancellationToken);
             _logger.LogInformation("Marcados {Count} productos como no disponibles (baja)", affected);
+        }
+    }
+
+    /// <summary>
+    /// Mueve al archivo el historial más viejo que N meses (fn_archivar_historial).
+    /// </summary>
+    public async Task<long> ArchivarHistorialAsync(int meses, CancellationToken cancellationToken = default)
+    {
+        using (var connection = new NpgsqlConnection(_connectionString))
+        {
+            await connection.OpenAsync(cancellationToken);
+            long movidas = await connection.ExecuteScalarAsync<long>("SELECT fn_archivar_historial(@meses)", new { meses });
+            _logger.LogInformation("Historial: {Movidas} filas con más de {Meses} meses movidas al archivo", movidas, meses);
+            return movidas;
         }
     }
 
@@ -537,27 +558,45 @@ public class PostgreSqlProductoRepository : IProductoRepository
     /// Busca y pagina productos en la BD.
     /// </summary>
     public async Task<ProductListDto> SearchProductsAsync(
-        string? code, string? name, int? syncStatus, int page, int pageSize, SyncTarget target = SyncTarget.ComprasParaguai, CancellationToken cancellationToken = default)
+        string? code, string? name, int? syncStatus, int page, int pageSize, SyncTarget target = SyncTarget.ComprasParaguai,
+        int? marcaId = null, int? categoriaId = null, CancellationToken cancellationToken = default)
     {
         var conditions = new List<string>();
         var parameters = new DynamicParameters();
 
         if (!string.IsNullOrEmpty(code))
         {
-            conditions.Add("code ILIKE @code");
+            conditions.Add("p.code ILIKE @code");
             parameters.Add("code", $"%{code}%");
         }
 
         if (!string.IsNullOrEmpty(name))
         {
-            conditions.Add("(name_pt ILIKE @name OR name_es ILIKE @name)");
+            conditions.Add("(p.name_pt ILIKE @name OR p.name_es ILIKE @name)");
             parameters.Add("name", $"%{name}%");
         }
 
         if (syncStatus.HasValue)
         {
-            conditions.Add($"{Cols(target).Status} = @syncStatus");
+            conditions.Add($"p.{Cols(target).Status} = @syncStatus");
             parameters.Add("syncStatus", syncStatus.Value);
+        }
+
+        if (marcaId.HasValue)
+        {
+            conditions.Add("p.marca_id = @marcaId");
+            parameters.Add("marcaId", marcaId.Value);
+        }
+
+        if (categoriaId.HasValue)
+        {
+            // La categoría incluye todo su subárbol: la propia ruta o cualquiera que cuelgue de ella ("ruta>...").
+            conditions.Add(@"p.categoria_id IN (
+                    SELECT sub.id
+                    FROM categorias raiz
+                    JOIN categorias sub ON sub.ruta = raiz.ruta OR left(sub.ruta, length(raiz.ruta) + 1) = raiz.ruta || '>'
+                    WHERE raiz.id = @categoriaId)");
+            parameters.Add("categoriaId", categoriaId.Value);
         }
 
         string whereClause = conditions.Count > 0 ? "WHERE " + string.Join(" AND ", conditions) : "";
@@ -571,7 +610,7 @@ public class PostgreSqlProductoRepository : IProductoRepository
         ";
 
         string countQuery = $@"
-            SELECT COUNT(*) FROM productos {whereClause}
+            SELECT COUNT(*) FROM productos p {whereClause}
         ";
 
         var offset = (page - 1) * pageSize;

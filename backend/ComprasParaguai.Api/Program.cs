@@ -53,6 +53,9 @@ builder.Services.AddTransient<IProductoRepository>(sp =>
 builder.Services.AddTransient<ICatalogoRepository>(sp =>
     new PostgreSqlCatalogoRepository(postgresConnStr));
 
+builder.Services.AddTransient<IHistorialRepository>(sp =>
+    new PostgreSqlHistorialRepository(postgresConnStr));
+
 builder.Services.AddTransient<ISyncRunRepository>(sp =>
     new PostgreSqlSyncRunRepository(postgresConnStr));
 

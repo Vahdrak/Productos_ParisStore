@@ -371,3 +371,6 @@ li {
 app-dashboard, app-productos, app-pendientes, app-sync, app-compras, app-compara, app-api {
   display: block;
 }
+app-cambios {
+  display: block;
+}

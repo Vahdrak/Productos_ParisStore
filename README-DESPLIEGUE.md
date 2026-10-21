@@ -354,7 +354,7 @@ Cualquier imagen **vieja** contra la BD migrada falla con `column "brand" does n
    pendiente y Compara enviará el catálogo completo (~110k productos, ~1,5 h con lotes de 1000 y pausa de 46 s).
    Si no quieres ese envío ahora, deja `worker-compara` detenido hasta la ventana elegida.
 
-**Migraciones nuevas:** 009 (catálogo normalizado). Las siguientes partes del trabajo agregan 010 a 012 y variables
+**Migraciones nuevas:** 009 (catálogo normalizado) y 010 (historial con diff y búsqueda; variable opcional `Sync__HistorialMesesRetencion`, 6 por defecto). Las siguientes partes del trabajo agregan 011 y 012 y variables
 de entorno; se documentan aquí al cerrarlas.
 **Última actualización:** 2026-09-18  
 **Servidor:** 172.16.249.94  

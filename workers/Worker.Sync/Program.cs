@@ -36,13 +36,15 @@ var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings {
     var imagenPorDefecto = config["Sync:ImagenPorDefecto"] ?? throw new InvalidOperationException("Sync:ImagenPorDefecto no configurada");
     var linkPattern = config["Sync:LinkPattern"] ?? throw new InvalidOperationException("Sync:LinkPattern no configurada");
     var syncIntervalMinutes = config.GetValue<int>("Sync:IntervalMinutes", 120);
+    var historialMesesRetencion = config.GetValue<int>("Sync:HistorialMesesRetencion", 6);
 
     builder.Services.AddSingleton(new ProductoMapperService(imageBaseUrl, imagenPorDefecto, linkPattern));
     builder.Services.AddTransient<ISyncService>(sp =>
         new SyncService(
             sp.GetRequiredService<IViewReader>(),
             sp.GetRequiredService<IProductoRepository>(),
-            sp.GetRequiredService<ProductoMapperService>()));
+            sp.GetRequiredService<ProductoMapperService>(),
+            historialMesesRetencion));
     builder.Services.AddTransient<IWorkerService>(sp =>
         new WorkerService(
             sp.GetRequiredService<ISyncService>(),

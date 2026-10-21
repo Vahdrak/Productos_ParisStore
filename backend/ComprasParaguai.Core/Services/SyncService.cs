@@ -17,15 +17,18 @@ public class SyncService : ISyncService
     private readonly IViewReader _viewReader;
     private readonly IProductoRepository _repository;
     private readonly ProductoMapperService _mapper;
+    private readonly int _historialMesesRetencion;
 
     public SyncService(
         IViewReader viewReader,
         IProductoRepository repository,
-        ProductoMapperService mapper)
+        ProductoMapperService mapper,
+        int historialMesesRetencion = 6)
     {
         _viewReader = viewReader ?? throw new ArgumentNullException(nameof(viewReader));
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _mapper = mapper ?? throw new ArgumentNullException(nameof(mapper));
+        _historialMesesRetencion = historialMesesRetencion;
     }
 
     /// <summary>
@@ -80,7 +83,7 @@ public class SyncService : ISyncService
         if (productsToSave.Any())
         {
             var now = DateTime.UtcNow;
-            await _repository.UpsertProductsAsync(productsToSave, now, cancellationToken);
+            await _repository.UpsertProductsAsync(productsToSave, now, CambioContexto.Sync, cancellationToken);
         }
 
         int total = newCount + updatedCount + unchangedCount + invalidCount;
@@ -111,10 +114,14 @@ public class SyncService : ISyncService
         if (codesToMarkAsUnavailable.Any())
         {
             var now = DateTime.UtcNow;
-            await _repository.MarkAsUnavailableAsync(codesToMarkAsUnavailable, now, cancellationToken);
+            await _repository.MarkAsUnavailableAsync(codesToMarkAsUnavailable, now, CambioContexto.Reconciliacion, cancellationToken);
         }
 
         // Marcas y categorías sin productos pasan a inactivas (no se borran: conservan sus flags).
         await _repository.RefreshCatalogoActivoAsync(cancellationToken);
+
+        // Historial de cambios: lo más viejo que N meses pasa al archivo (0 o menos = no archivar).
+        if (_historialMesesRetencion > 0)
+            await _repository.ArchivarHistorialAsync(_historialMesesRetencion, cancellationToken);
     }
 }

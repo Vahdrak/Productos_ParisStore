@@ -21,13 +21,19 @@ public interface IProductoRepository
     /// </summary>
     /// <param name="products">Productos a insertar/actualizar.</param>
     /// <param name="now">Timestamp para last_changed_at (en UPDATE) y created_at (en INSERT).</param>
-    Task UpsertProductsAsync(IEnumerable<ProductoApi> products, DateTime now, CancellationToken cancellationToken = default);
+    /// <param name="contexto">Origen y usuario del cambio; quedan en productos_historial.</param>
+    Task UpsertProductsAsync(IEnumerable<ProductoApi> products, DateTime now, CambioContexto contexto, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Marca productos como no disponibles (baja): stock=0, Pendiente en ambas columnas de estado.
     /// Usado en reconciliación diaria para bajas detectadas.
     /// </summary>
-    Task MarkAsUnavailableAsync(IEnumerable<string> codes, DateTime now, CancellationToken cancellationToken = default);
+    Task MarkAsUnavailableAsync(IEnumerable<string> codes, DateTime now, CambioContexto contexto, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Mueve al archivo el historial de cambios más viejo que N meses. Devuelve cuántas filas movió.
+    /// </summary>
+    Task<long> ArchivarHistorialAsync(int meses, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Recalcula marcas.activo y categorias.activo (una marca/nodo está activo si tiene productos,
@@ -94,9 +100,9 @@ public interface IProductoRepository
     Task<ProductHistorialDto?> GetLastHistorialAsync(string code, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Busca y pagina productos en la BD.
+    /// Busca y pagina productos en la BD. <paramref name="categoriaId"/> incluye todo el subárbol de esa categoría.
     /// </summary>
-    Task<ProductListDto> SearchProductsAsync(string? code, string? name, int? syncStatus, int page, int pageSize, SyncTarget target = SyncTarget.ComprasParaguai, CancellationToken cancellationToken = default);
+    Task<ProductListDto> SearchProductsAsync(string? code, string? name, int? syncStatus, int page, int pageSize, SyncTarget target = SyncTarget.ComprasParaguai, int? marcaId = null, int? categoriaId = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Cuenta productos por estado (Pendiente/Enviado/Error) para cada destino, con fecha del último envío.
