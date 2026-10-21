@@ -1,312 +1,172 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { BtnComponent, InputComponent, CardComponent } from '../../shared/components';
-import { ProductoService, Producto, ProductDiff, ProductHistorial } from '../../shared/services/producto.service';
+import { ProductoService } from '../../shared/services/producto.service';
+import { ErrorService } from '../../shared/services/error.service';
+import { isDateInRange, quickRange } from '../../shared/utils/fechas';
+import { statusClass, statusLabel, statusField } from '../../shared/utils/estado';
+import { QuickRangeComponent } from '../../shared/ui/quick-range.component';
 
 @Component({
-  selector: 'app-productos-page',
+  selector: 'app-productos',
   standalone: true,
-  imports: [CommonModule, FormsModule, BtnComponent, InputComponent, CardComponent],
+  imports: [CommonModule, FormsModule, QuickRangeComponent],
   template: `
-    <div class="productos">
-      <h2>Buscar Producto</h2>
-      <p class="subtitle">Edita y visualiza cambios</p>
-
-      <app-card title="Búsqueda" [elevated]="true">
-        <div class="search-box">
-          <app-input
-            label="Código del producto"
-            placeholder="Ej: PROD-001847"
-            [(ngModel)]="searchCode"
-            hint="Ingresa el código para buscar" />
-          <app-btn label="Buscar" variant="primary" (onClick)="search()" />
-        </div>
-
-        <div *ngIf="loading" class="msg loading">Buscando...</div>
-        <div *ngIf="error" class="msg error">⚠️ {{ error }}</div>
-      </app-card>
-
-      <!-- Resultado -->
-      <div *ngIf="product">
-        <app-card [title]="product.code" [elevated]="true">
-          <div class="product-info">
-            <div><strong>Nombre:</strong> {{ product.namePt }}</div>
-            <div><strong>Precio:</strong> {{ product.price | currency }}</div>
-            <div><strong>Precio con IVA:</strong> {{ product.priceIva | currency }}</div>
-            <div *ngIf="product.regimenTurismo">
-              <strong style="color: var(--text-accent)">🎫 Régimen Turismo:</strong> Sí
-              <div style="margin-left: 16px; margin-top: 4px;">
-                <strong>Precio Exenta:</strong> {{ product.precioExenta | currency }}
-              </div>
-            </div>
-            <div *ngIf="!product.regimenTurismo"><strong>Régimen Turismo:</strong> No</div>
-            <div><strong>Stock:</strong> {{ product.stock }}</div>
-            <div *ngIf="product.brand"><strong>Marca:</strong> {{ product.brand }}</div>
-          </div>
-
-          <div class="actions">
-            <app-btn label="Editar" (onClick)="toggleEdit()" />
-            <app-btn label="Ver Diff" variant="primary" (onClick)="loadDiff()" />
-            <app-btn label="Historial" (onClick)="loadHistory()" />
-          </div>
-        </app-card>
+    <div class="fade-in">
+      <div class="search-bar">
+        <input type="text" placeholder="Buscar código..." [(ngModel)]="filterCode" class="form-input" />
+        <select [(ngModel)]="filterTarget" (ngModelChange)="search()" class="form-input" style="width: 120px;">
+          <option value="">Destino: Todos</option>
+          <option value="compras">Compras</option>
+          <option value="compara">Compara</option>
+        </select>
+        <select [(ngModel)]="filterRegimen" (ngModelChange)="search()" class="form-input" style="width: 140px;">
+          <option value="">Régimen: Todos</option>
+          <option value="true">🎫 Con régimen turismo</option>
+          <option value="false">Normal (sin régimen)</option>
+        </select>
+        <select [(ngModel)]="filterState" (ngModelChange)="search()" class="form-input" style="width: 140px;">
+          <option value="">Estado: Todos</option>
+          <option value="0">⏳ Pendiente</option>
+          <option value="1">✅ Enviado</option>
+          <option value="2">❌ Error</option>
+        </select>
+        <button (click)="search()" class="btn btn-primary">Buscar</button>
       </div>
 
-      <!-- Edición -->
-      <div *ngIf="editing && product">
-        <app-card title="Editar" [elevated]="true">
-          <div class="form">
-            <app-input label="Nombre" [(ngModel)]="edited.namePt" />
-            <app-input label="Precio" type="number" [(ngModel)]="edited.price" />
-            <app-input label="Stock" type="number" [(ngModel)]="edited.stock" />
-          </div>
-
-          <div class="actions">
-            <app-btn label="Guardar" variant="primary" (onClick)="save()" />
-            <app-btn label="Cancelar" (onClick)="toggleEdit()" />
-          </div>
-        </app-card>
+      <div class="search-bar">
+        <label class="label-dim">📅 Rango de fechas:</label>
+        <input type="date" [(ngModel)]="fechaDesde" (ngModelChange)="search()" class="form-input" style="width: 120px;" />
+        <span style="color: #8f8f8f;">hasta</span>
+        <input type="date" [(ngModel)]="fechaHasta" (ngModelChange)="search()" class="form-input" style="width: 120px;" />
+        <app-quick-range (pick)="setQuickRange($event)" (clear)="fechaDesde = ''; fechaHasta = ''; search();"></app-quick-range>
       </div>
 
-      <!-- Diff -->
-      <div *ngIf="diff && !showHistory">
-        <app-card [title]="'Cambios: ' + diff.code" [elevated]="true">
-          <div *ngIf="diff.hasChanges; else noDiff" class="diff">
-            <div class="diff-col">
-              <h4>Antes</h4>
-              <div *ngIf="diff.previous">
-                <div>Precio: {{ diff.previous.price | currency }}</div>
-                <div>Stock: {{ diff.previous.stock }}</div>
-              </div>
-            </div>
-            <div class="diff-col">
-              <h4>Ahora</h4>
-              <div>Precio: {{ diff.current.price | currency }}</div>
-              <div>Stock: {{ diff.current.stock }}</div>
-            </div>
-          </div>
-          <ng-template #noDiff>
-            <p class="info">Sin cambios registrados</p>
-          </ng-template>
-        </app-card>
+      <div class="search-bar" *ngIf="productList && productList.items.length > 0">
+        <select [(ngModel)]="pageSize" (ngModelChange)="search()" class="form-input" style="width: 140px;">
+          <option [ngValue]="10">10 por página</option>
+          <option [ngValue]="25">25 por página</option>
+          <option [ngValue]="50">50 por página</option>
+          <option [ngValue]="100">100 por página</option>
+        </select>
       </div>
 
-      <!-- Historial -->
-      <div *ngIf="showHistory">
-        <app-card title="Historial" [elevated]="true">
-          <div *ngIf="history.length > 0; else noHistory" class="history">
-            <div *ngFor="let h of history" class="hist-row">
-              <div class="hist-date">{{ h.changedAt | date:'short' }}</div>
-              <div>Precio: {{ h.price | currency }} | Stock: {{ h.stock }}</div>
-            </div>
-          </div>
-          <ng-template #noHistory>
-            <p class="info">Sin historial</p>
-          </ng-template>
+      <div class="table-container mt-6" *ngIf="pagedProducts.length > 0">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Código</th>
+              <th>Nombre (ES)</th>
+              <th>Régimen</th>
+              <th>Precio (IVA)</th>
+              <th>Precio Exenta</th>
+              <th>Stock</th>
+              <th>Compras</th>
+              <th>Compara</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let p of pagedProducts">
+              <td class="text-bold">{{ p.code }}</td>
+              <td>{{ p.nameEs }}</td>
+              <td><span class="badge" [class.badge-success]="p.regimenTurismo" [class.badge-secondary]="!p.regimenTurismo">{{ p.regimenTurismo ? '🎫 Sí' : 'No' }}</span></td>
+              <td>{{ p.price | currency:'':'symbol-narrow' }}</td>
+              <td>{{ (p.precioExenta || 0) | currency:'':'symbol-narrow' }}</td>
+              <td class="text-center">{{ p.stock }}</td>
+              <td>
+                <span class="badge" [ngClass]="statusClass(p.syncStatus)">
+                  {{ statusLabel(p.syncStatus) }}
+                </span>
+              </td>
+              <td>
+                <span class="badge" [ngClass]="statusClass(p.syncComparaStatus)">
+                  {{ statusLabel(p.syncComparaStatus) }}
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
-          <div class="actions">
-            <app-btn label="Volver" (onClick)="showHistory = false" />
-          </div>
-        </app-card>
+      <div *ngIf="totalPages > 1" class="pagination">
+        <button [disabled]="page === 1" (click)="goToPage(1)">«</button>
+        <button [disabled]="page === 1" (click)="goToPage(page - 1)">‹</button>
+        <span class="page-info">Pág {{ page }}/{{ totalPages }}</span>
+        <button [disabled]="page === totalPages" (click)="goToPage(page + 1)">›</button>
+        <button [disabled]="page === totalPages" (click)="goToPage(totalPages)">»</button>
+      </div>
+
+      <div *ngIf="!productList || productList.items.length === 0" class="text-center py-8 text-dim">
+        No hay productos
       </div>
     </div>
-  `,
-  styles: [`
-    .productos {
-      max-width: 900px;
-    }
-
-    h2 {
-      margin: 0 0 4px 0;
-      font-size: 24px;
-      font-weight: 500;
-    }
-
-    .subtitle {
-      margin: 0 0 20px 0;
-      color: var(--text-secondary);
-      font-size: 14px;
-    }
-
-    .search-box {
-      display: flex;
-      gap: 12px;
-      align-items: flex-end;
-      margin-bottom: 12px;
-    }
-
-    .search-box app-input {
-      flex: 1;
-    }
-
-    .product-info {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      padding: 12px 0;
-      font-size: 14px;
-    }
-
-    .form {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      margin-bottom: 12px;
-    }
-
-    .actions {
-      display: flex;
-      gap: 8px;
-      margin-top: 16px;
-      padding-top: 12px;
-      border-top: 0.5px solid var(--border);
-    }
-
-    .diff {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 24px;
-      padding: 12px 0;
-    }
-
-    .diff-col {
-      font-size: 13px;
-    }
-
-    .diff-col h4 {
-      margin: 0 0 8px 0;
-      color: var(--text-secondary);
-      font-size: 13px;
-    }
-
-    .diff-col div {
-      margin: 4px 0;
-    }
-
-    .history {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      padding: 12px 0;
-    }
-
-    .hist-row {
-      padding: 12px;
-      border-left: 2px solid var(--fill-accent);
-      background: var(--surface-1);
-      border-radius: var(--radius);
-      font-size: 13px;
-    }
-
-    .hist-date {
-      font-size: 12px;
-      color: var(--text-secondary);
-      margin-bottom: 4px;
-    }
-
-    .msg {
-      padding: 12px;
-      border-radius: var(--radius);
-      font-size: 13px;
-      margin-top: 12px;
-    }
-
-    .loading {
-      background: var(--bg-accent);
-      color: var(--text-accent);
-    }
-
-    .error {
-      background: var(--bg-danger);
-      color: var(--text-danger);
-    }
-
-    .info {
-      padding: 12px;
-      text-align: center;
-      color: var(--text-secondary);
-      font-size: 13px;
-    }
-  `],
-  providers: [ProductoService]
+  `
 })
-export class ProductosPageComponent {
-  searchCode = '';
-  product: Producto | null = null;
-  edited: Partial<Producto> = {};
-  editing = false;
-  loading = false;
-  error = '';
-  diff: ProductDiff | null = null;
-  history: ProductHistorial[] = [];
-  showHistory = false;
+export class ProductosComponent implements OnInit {
+  readonly statusClass = statusClass;
+  readonly statusLabel = statusLabel;
 
-  constructor(private service: ProductoService) {}
+  productList: any = null;
+  pagedProducts: any[] = [];
 
+  filterCode = '';
+  filterTarget = '';
+  filterRegimen = '';
+  filterState = '';
+  fechaDesde = '';
+  fechaHasta = '';
+
+  pageSize = 25;
+  page = 1;
+  totalPages = 1;
+
+  constructor(private productoService: ProductoService, private errors: ErrorService) {}
+
+  ngOnInit() {
+    this.search();
+  }
+
+  /** Nueva búsqueda (cambió un filtro): vuelve a la página 1. */
   search() {
-    if (!this.searchCode.trim()) {
-      this.error = 'Ingresa código';
-      return;
-    }
+    this.goToPage(1);
+  }
 
-    this.loading = true;
-    this.error = '';
-    this.product = null;
-
-    this.service.getProductByCode(this.searchCode).subscribe({
-      next: (p) => {
-        this.product = p;
-        this.edited = { ...p };
-        this.loading = false;
+  /** Pide la página al servidor; el régimen y las fechas se filtran sobre la página recibida. */
+  goToPage(page: number) {
+    this.page = Math.max(1, page);
+    this.productoService.getProductos({
+      code: this.filterCode,
+      target: this.filterTarget,
+      syncStatus: this.filterState ? parseInt(this.filterState) : undefined
+    }, this.page, this.pageSize).subscribe(
+      list => {
+        if (!list || !list.items) return;
+        let items: any[] = list.items;
+        if (this.filterRegimen === 'true') {
+          items = items.filter(p => p.regimenTurismo === true);
+        } else if (this.filterRegimen === 'false') {
+          items = items.filter(p => !p.regimenTurismo);
+        }
+        if (this.filterState) {
+          const field = statusField(this.filterTarget || 'compras');
+          items = items.filter(p => p[field]?.toString() === this.filterState);
+        }
+        // Fecha: usa lastSentAt de Compras como referencia
+        if (this.fechaDesde || this.fechaHasta) {
+          items = items.filter(p => isDateInRange(p.lastSentAt, this.fechaDesde, this.fechaHasta));
+        }
+        this.totalPages = list.totalPages || 1;
+        this.pagedProducts = items;
+        this.productList = list;
       },
-      error: (e) => {
-        this.error = e.message;
-        this.loading = false;
-      }
-    });
+      () => this.errors.show('Error cargando productos')
+    );
   }
 
-  toggleEdit() {
-    this.editing = !this.editing;
-    if (!this.editing) {
-      this.edited = { ...this.product };
-    }
-  }
-
-  save() {
-    if (!this.product) return;
-    this.loading = true;
-    this.service.updateProduct(this.product.code, this.edited).subscribe({
-      next: (p) => {
-        this.product = p;
-        this.editing = false;
-        this.loading = false;
-      },
-      error: (e) => {
-        this.error = e.message;
-        this.loading = false;
-      }
-    });
-  }
-
-  loadDiff() {
-    if (!this.product) return;
-    this.service.getProductDiff(this.product.code).subscribe({
-      next: (d) => {
-        this.diff = d;
-        this.showHistory = false;
-      },
-      error: (e) => (this.error = e.message)
-    });
-  }
-
-  loadHistory() {
-    if (!this.product) return;
-    this.showHistory = true;
-    this.service.getProductHistorial(this.product.code).subscribe({
-      next: (h) => (this.history = h),
-      error: (e) => (this.error = e.message)
-    });
+  setQuickRange(range: string) {
+    const { desde, hasta } = quickRange(range);
+    this.fechaDesde = desde;
+    this.fechaHasta = hasta;
+    this.search();
   }
 }
