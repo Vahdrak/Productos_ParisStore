@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Net.Http.Json;
 
@@ -60,6 +61,7 @@ public class ComprasParaguaiController : ControllerBase
     /// Proxy a la API de Compras Paraguai para importar/sincronizar productos.
     /// </summary>
     [HttpPost("import")]
+    [Authorize]
     public async Task<IActionResult> ImportProducts([FromQuery] string token, [FromBody] object payload, CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(token))

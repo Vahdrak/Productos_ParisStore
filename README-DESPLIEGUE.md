@@ -354,8 +354,16 @@ Cualquier imagen **vieja** contra la BD migrada falla con `column "brand" does n
    pendiente y Compara enviará el catálogo completo (~110k productos, ~1,5 h con lotes de 1000 y pausa de 46 s).
    Si no quieres ese envío ahora, deja `worker-compara` detenido hasta la ventana elegida.
 
-**Migraciones nuevas:** 009 (catálogo normalizado) y 010 (historial con diff y búsqueda; variable opcional `Sync__HistorialMesesRetencion`, 6 por defecto). Las siguientes partes del trabajo agregan 011 y 012 y variables
-de entorno; se documentan aquí al cerrarlas.
+**Migraciones nuevas:** 009 (catálogo normalizado), 010 (historial con diff y búsqueda; variable opcional `Sync__HistorialMesesRetencion`, 6 por defecto) y 011 (usuarios del panel). La 012 (pausas de envío) se documenta al cerrarla.
+
+**Variables nuevas del servicio `backend` (login del panel; ver datos sigue siendo libre, modificar exige sesión):**
+
+| Variable | Qué es |
+|---|---|
+| `AUTH_JWT_SECRET` | Clave de firma del token (≥ 32 caracteres, p. ej. `openssl rand -hex 32`). Sin ella la API usa una temporal y las sesiones se pierden al reiniciar. |
+| `AUTH_ADMIN_USUARIO` / `AUTH_ADMIN_PASSWORD` | Primer usuario; se crea solo si la tabla `usuarios` está vacía. Cambia la contraseña. |
+
+Agrégalas al `.env` del servidor (ver `.env.example`).
 **Última actualización:** 2026-09-18  
 **Servidor:** 172.16.249.94  
 **Usuario Docker:** proyectsoft

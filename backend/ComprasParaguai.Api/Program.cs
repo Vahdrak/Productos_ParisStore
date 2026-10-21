@@ -1,3 +1,7 @@
+using ComprasParaguai.Api.Auth;
+using ComprasParaguai.Core.Models;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
 using ComprasParaguai.Infrastructure.Repositories;
 using ComprasParaguai.Infrastructure.Readers;
 using ComprasParaguai.Infrastructure;
@@ -50,6 +54,32 @@ builder.Services.AddTransient<IProductoRepository>(sp =>
     return new PostgreSqlProductoRepository(postgresConnStr, logger);
 });
 
+// ---- Autenticación: JWT para las operaciones de escritura (los GET siguen abiertos) ----
+var authOptions = builder.Configuration.GetSection("Auth").Get<AuthOptions>() ?? new AuthOptions();
+var jwtKey = AuthService.CrearClave(authOptions.JwtSecret, out var jwtTemporal);
+if (jwtTemporal)
+    Console.WriteLine("ADVERTENCIA: Auth__JwtSecret no está configurado; se usa una clave temporal (las sesiones se pierden al reiniciar la API).");
+
+builder.Services.AddSingleton(new AuthService(jwtKey, TimeSpan.FromHours(Math.Max(1, authOptions.TokenHoras))));
+builder.Services.AddTransient<IUsuarioRepository>(sp => new PostgreSqlUsuarioRepository(postgresConnStr));
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.MapInboundClaims = false;   // se usan los nombres de claim tal cual ("name", "nombre")
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = false,
+            ValidateAudience = false,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = jwtKey,
+            NameClaimType = "name",
+            ClockSkew = TimeSpan.FromMinutes(1)
+        };
+    });
+builder.Services.AddAuthorization();
+
 builder.Services.AddTransient<ICatalogoRepository>(sp =>
     new PostgreSqlCatalogoRepository(postgresConnStr));
 
@@ -73,7 +103,31 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+// Primer usuario: si la tabla está vacía y hay Auth__AdminUsuario / Auth__AdminPassword, se crea.
+try
+{
+    var adminLogin = builder.Configuration["Auth:AdminUsuario"];
+    var adminPassword = builder.Configuration["Auth:AdminPassword"];
+    if (!string.IsNullOrWhiteSpace(adminLogin) && !string.IsNullOrEmpty(adminPassword))
+    {
+        var usuarios = app.Services.GetRequiredService<IUsuarioRepository>();
+        if (await usuarios.CountAsync() == 0)
+        {
+            var admin = new Usuario { Login = adminLogin.Trim(), Nombre = adminLogin.Trim() };
+            admin.PasswordHash = app.Services.GetRequiredService<AuthService>().HashPassword(admin, adminPassword);
+            await usuarios.CreateAsync(admin);
+            Console.WriteLine($"Usuario inicial '{admin.Login}' creado.");
+        }
+    }
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"No se pudo crear el usuario inicial: {ex.Message}");
+}
+
 app.UseCors("AllowAngular");
+app.UseAuthentication();
+app.UseAuthorization();
 app.MapControllers();
 
 app.Run();

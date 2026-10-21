@@ -1,5 +1,6 @@
 using ComprasParaguai.Core.Interfaces;
 using ComprasParaguai.Core.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using static ComprasParaguai.Core.Interfaces.IProductoRepository;
 
@@ -150,6 +151,7 @@ public class ProductosController : ControllerBase
     /// PUT /api/productos/{code}
     /// </summary>
     [HttpPut("{code}")]
+    [Authorize]
     public async Task<ActionResult<ProductoApi>> UpdateProduct(string code, [FromBody] ProductoApi updatedProduct, CancellationToken cancellationToken)
     {
         try
