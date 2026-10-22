@@ -7,7 +7,7 @@ import { Cambio, CambiosService } from '../../shared/services/cambios.service';
 import { ErrorService } from '../../shared/services/error.service';
 import { AuthService } from '../../shared/services/auth.service';
 import { Destino, EnvioEstadoProducto, EnvioService } from '../../shared/services/envio.service';
-import { statusClass, statusLabel, statusField } from '../../shared/utils/estado';
+import { statusClass, statusLabel } from '../../shared/utils/estado';
 import { MarcaPickerComponent, MarcaSeleccion } from '../../shared/ui/marca-picker.component';
 import { CambiosListaComponent } from '../../shared/ui/cambios-lista.component';
 
@@ -58,6 +58,21 @@ import { CambiosListaComponent } from '../../shared/ui/cambios-lista.component';
         <span class="label-dim" *ngIf="productList">{{ productList.totalCount }} productos</span>
       </div>
 
+      <!-- Reenviar: vuelve a Pendiente lo ya enviado o con error, para que el worker lo envíe de nuevo -->
+      <div class="search-bar" *ngIf="productList && productList.items.length > 0">
+        <span class="label-dim">↻ Reenviar a:</span>
+        <select [(ngModel)]="destinoReenvio" class="form-input" style="width: 150px;">
+          <option value="compras">Compras</option>
+          <option value="compara">Compara</option>
+          <option value="ambos">Ambos destinos</option>
+        </select>
+        <button class="btn btn-primary" [disabled]="seleccion.size === 0" (click)="reenviarSeleccion()"
+                [title]="auth.logueado ? '' : 'Inicia sesión para modificar'">↻ Reenviar seleccionados ({{ seleccion.size }})</button>
+        <button class="btn btn-ghost" (click)="reenviarFiltrados()"
+                [title]="auth.logueado ? '' : 'Inicia sesión para modificar'">↻ Reenviar todo lo filtrado ({{ productList.totalCount }})</button>
+        <span *ngIf="mensaje" class="text-small" style="color: #4ade80;">✅ {{ mensaje }}</span>
+      </div>
+
       <!-- Últimos cambios del producto elegido -->
       <div id="panel-cambios" class="section-card" *ngIf="seleccionado">
         <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -93,6 +108,7 @@ import { CambiosListaComponent } from '../../shared/ui/cambios-lista.component';
         <table class="data-table">
           <thead>
             <tr>
+              <th style="width: 36px;"><input type="checkbox" [checked]="todosDeLaPaginaElegidos" (change)="alternarPagina($any($event.target).checked)" /></th>
               <th style="width: 12%;">Código</th>
               <th style="width: 24%;">Nombre (ES)</th>
               <th>Marca</th>
@@ -107,6 +123,7 @@ import { CambiosListaComponent } from '../../shared/ui/cambios-lista.component';
           <tbody>
             <tr *ngFor="let p of pagedProducts" (click)="verCambios(p)" style="cursor: pointer;"
                 [style.background]="seleccionado?.code === p.code ? 'rgba(37, 99, 235, 0.15)' : ''" title="Ver últimos cambios">
+              <td (click)="$event.stopPropagation()"><input type="checkbox" [checked]="seleccion.has(p.code)" (change)="alternarProducto(p.code, $any($event.target).checked)" /></td>
               <td class="text-bold">{{ p.code }}</td>
               <td>{{ p.nameEs }}</td>
               <td>{{ p.brand }}</td>
@@ -164,6 +181,11 @@ export class ProductosComponent implements OnInit {
 
   seleccionado: any = null;
   cambiosProducto: Cambio[] = [];
+
+  // Reenviar
+  seleccion = new Set<string>();
+  destinoReenvio: 'compras' | 'compara' | 'ambos' = 'compras';
+  mensaje = '';
   estadoEnvio: EnvioEstadoProducto[] = [];
   excepciones: Record<Destino, { accion: string; motivo: string }> = {
     compras: { accion: '', motivo: '' },
@@ -199,34 +221,102 @@ export class ProductosComponent implements OnInit {
     this.goToPage(1);
   }
 
-  /** Pide la página al servidor; el régimen se filtra sobre la página recibida. */
+  /** Pide la página al servidor con todos los filtros (el régimen y el estado también se filtran allí). */
   goToPage(page: number) {
     this.page = Math.max(1, page);
+    this.limpiarSeleccion();
     this.productoService.getProductos({
       code: this.filterCode,
       target: this.filterTarget,
       syncStatus: this.filterState ? parseInt(this.filterState) : undefined,
       marcaId: this.filterMarcaId,
-      categoriaId: this.filterCategoriaId
+      categoriaId: this.filterCategoriaId,
+      regimen: this.filterRegimen
     }, this.page, this.pageSize).subscribe(
       list => {
         if (!list || !list.items) return;
-        let items: any[] = list.items;
-        if (this.filterRegimen === 'true') {
-          items = items.filter(p => p.regimenTurismo === true);
-        } else if (this.filterRegimen === 'false') {
-          items = items.filter(p => !p.regimenTurismo);
-        }
-        if (this.filterState) {
-          const field = statusField(this.filterTarget || 'compras');
-          items = items.filter(p => p[field]?.toString() === this.filterState);
-        }
+        const items: any[] = list.items;
         this.totalPages = list.totalPages || 1;
         this.pagedProducts = items;
         this.productList = list;
       },
       () => this.errors.show('Error cargando productos')
     );
+  }
+
+  // ------------------------------------------------------- reenviar
+
+  /** Cualquier cambio de filtro o de página deja sin efecto la selección anterior. */
+  private limpiarSeleccion() {
+    this.seleccion.clear();
+    this.mensaje = '';
+  }
+
+  get todosDeLaPaginaElegidos(): boolean {
+    return this.pagedProducts.length > 0 && this.pagedProducts.every(p => this.seleccion.has(p.code));
+  }
+
+  alternarProducto(code: string, marcado: boolean) {
+    if (marcado) this.seleccion.add(code); else this.seleccion.delete(code);
+  }
+
+  alternarPagina(marcado: boolean) {
+    for (const p of this.pagedProducts) {
+      if (marcado) this.seleccion.add(p.code); else this.seleccion.delete(p.code);
+    }
+  }
+
+  private get nombreDestinoReenvio(): string {
+    return this.destinoReenvio === 'ambos' ? 'Compras y Compara' : this.destinoReenvio === 'compras' ? 'Compras' : 'Compara';
+  }
+
+  reenviarSeleccion() {
+    if (!this.requiereSesion() || this.seleccion.size === 0) return;
+    if (!confirm(`¿Reenviar ${this.seleccion.size} productos a ${this.nombreDestinoReenvio}?\n\n` +
+        'Los que ya estaban enviados o con error vuelven a Pendiente y el worker los envía en su próximo ciclo. ' +
+        'Los retenidos por una pausa seguirán sin enviarse.')) return;
+    this.enviarReenvio([...this.seleccion]);
+  }
+
+  reenviarFiltrados() {
+    if (!this.requiereSesion() || !this.productList) return;
+    const total = this.productList.totalCount;
+    const hayFiltros = !!(this.filterCode || this.filterMarcaId || this.filterCategoriaId || this.filterRegimen || this.filterState);
+    const estado = this.filterState
+      ? `\nSolo los que están "${this.filterState === '1' ? 'Enviado' : this.filterState === '2' ? 'Error' : 'Pendiente'}" según la columna de ${this.filterTarget === 'compara' ? 'Compara' : 'Compras'}.`
+      : '';
+    if (!confirm(`¿Reenviar a ${this.nombreDestinoReenvio} ${hayFiltros ? `los ${total} productos del filtro actual` : `TODOS los productos (${total})`}?${estado}\n\n` +
+        'Los que ya estaban enviados o con error vuelven a Pendiente. Los que ya están Pendientes no cambian.')) return;
+    this.enviarReenvio(undefined, !hayFiltros);
+  }
+
+  private enviarReenvio(codes?: string[], todos = false) {
+    this.productoService.reenviar({
+      target: this.destinoReenvio,
+      codes,
+      code: this.filterCode || undefined,
+      syncStatus: this.filterState ? parseInt(this.filterState) : undefined,
+      filtroTarget: this.filterTarget || undefined,
+      marcaId: this.filterMarcaId,
+      categoriaId: this.filterCategoriaId,
+      regimen: this.filterRegimen === '' ? undefined : this.filterRegimen === 'true',
+      todos
+    }).subscribe(
+      r => {
+        this.seleccion.clear();
+        this.goToPage(this.page);
+        this.mensaje = `${r.reiniciados} productos vuelven a Pendiente para ${this.nombreDestinoReenvio}.`;
+      },
+      e => {
+        if (!String(e?.message ?? '').includes('401')) this.errors.show('No se pudo marcar para reenviar');
+      }
+    );
+  }
+
+  private requiereSesion(): boolean {
+    if (this.auth.logueado) return true;
+    this.auth.pedirLogin = true;
+    return false;
   }
 
   /** Carga cómo se envía el SKU a cada destino (excepción propia, si está retenido y por qué). */

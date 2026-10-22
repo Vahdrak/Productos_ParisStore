@@ -135,6 +135,18 @@ En el Dashboard cada destino muestra **Pendientes** (se enviarán), **Retenidos*
 **Retirados** (ya con stock 0 en el destino). La pestaña Pendientes marca cuáles están retenidos y por qué regla.
 
 
+## Reenviar productos (panel → pestaña "Productos")
+
+Vuelve a **Pendiente** productos que ya estaban Enviados o en Error, para que el worker del destino los envíe de nuevo en su
+próximo ciclo (requiere iniciar sesión):
+
+- **Seleccionados:** marca las casillas de la lista y pulsa *Reenviar seleccionados*.
+- **Todo lo filtrado:** con los filtros de la lista (código, marca, departamento, régimen, estado) pulsa *Reenviar todo lo filtrado*.
+- **Destino:** Compras, Compara o ambos. El filtro *Estado* se mira en la columna del destino elegido en *Destino* del filtro (Compras por defecto).
+- Siempre pide confirmación y dice cuántos productos son. Los que ya están Pendientes no cambian; los **retenidos por una pausa**
+  quedan Pendientes pero no se envían mientras la pausa esté activa. El historial de errores se conserva.
+- Para los que **fallaron** también está *Reintentar* en la pestaña **Errores** (agrupa por tipo, marca y departamento).
+
 ## Cuando un producto da error (panel → pestaña "Errores")
 
 Un envío que el destino rechaza deja el producto en **Error** (estado 2, con el mensaje del destino). **Un producto en Error no se

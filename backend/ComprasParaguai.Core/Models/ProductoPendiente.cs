@@ -39,3 +39,23 @@ public class ProductoPendienteListDto
     public int ConRegimen { get; set; }
     public int Retenidos { get; set; }
 }
+
+/// <summary>Filtro de la lista de productos (el mismo que usa la búsqueda y el "reenviar todo lo filtrado").</summary>
+public class ProductosFiltro
+{
+    public string? Code { get; set; }
+    public string? Name { get; set; }
+
+    /// <summary>Estado de envío (0 pendiente, 1 enviado, 2 error) en la columna del destino <see cref="Target"/>.</summary>
+    public int? SyncStatus { get; set; }
+    public SyncTarget Target { get; set; } = SyncTarget.ComprasParaguai;
+    public int? MarcaId { get; set; }
+
+    /// <summary>Categoría; incluye todo su subárbol.</summary>
+    public int? CategoriaId { get; set; }
+    public bool? Regimen { get; set; }
+
+    /// <summary>True si no restringe nada.</summary>
+    public bool SinFiltros => string.IsNullOrWhiteSpace(Code) && string.IsNullOrWhiteSpace(Name) && SyncStatus is null
+        && MarcaId is null && CategoriaId is null && Regimen is null;
+}

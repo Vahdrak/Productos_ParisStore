@@ -32,6 +32,7 @@ public class ProductosController : ControllerBase
         [FromQuery] string? target = null,
         [FromQuery] int? marcaId = null,
         [FromQuery] int? categoriaId = null,
+        [FromQuery] bool? regimen = null,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 50,
         CancellationToken cancellationToken = default)
@@ -40,12 +41,57 @@ public class ProductosController : ControllerBase
         {
             var syncTarget = ParseTarget(target);
             var result = await _repository.SearchProductsAsync(
-                code, name, syncStatus, page, pageSize, syncTarget, marcaId, categoriaId, cancellationToken);
+                code, name, syncStatus, page, pageSize, syncTarget, marcaId, categoriaId, regimen, cancellationToken);
             return Ok(result);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error cargando productos");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    public record ReenviarBody(
+        string? Target, string[]? Codes, string? Code, string? Name, int? SyncStatus, string? FiltroTarget,
+        int? MarcaId, int? CategoriaId, bool? Regimen, bool Todos = false);
+
+    /// <summary>
+    /// Marca para reenviar: vuelve a Pendiente los productos Enviados o en Error del destino ("compras", "compara" o "ambos").
+    /// Se indican códigos, o el filtro de la lista (code, name, syncStatus + filtroTarget, marcaId, categoriaId, regimen);
+    /// sin códigos ni filtro hay que pedir <c>todos: true</c>. Los retenidos por una pausa quedan Pendientes pero no se envían.
+    /// POST /api/productos/reenviar
+    /// </summary>
+    [HttpPost("reenviar")]
+    [Authorize]
+    public async Task<IActionResult> Reenviar([FromBody] ReenviarBody body, CancellationToken cancellationToken)
+    {
+        var destinos = new List<SyncTarget>();
+        switch (body.Target?.ToLowerInvariant())
+        {
+            case "compras": destinos.Add(SyncTarget.ComprasParaguai); break;
+            case "compara": destinos.Add(SyncTarget.ComparaParaguai); break;
+            case "ambos": destinos.Add(SyncTarget.ComprasParaguai); destinos.Add(SyncTarget.ComparaParaguai); break;
+            default: return BadRequest(new { error = "target debe ser 'compras', 'compara' o 'ambos'" });
+        }
+
+        var filtro = new ProductosFiltro
+        {
+            Code = body.Code, Name = body.Name, SyncStatus = body.SyncStatus, Target = ParseTarget(body.FiltroTarget),
+            MarcaId = body.MarcaId, CategoriaId = body.CategoriaId, Regimen = body.Regimen
+        };
+        bool hayCodigos = body.Codes is { Length: > 0 };
+        if (!hayCodigos && filtro.SinFiltros && !body.Todos)
+            return BadRequest(new { error = "Indica códigos, un filtro, o todos=true para reenviar todo" });
+
+        try
+        {
+            int n = await _repository.ReenviarAsync(destinos, filtro, hayCodigos ? body.Codes : null, cancellationToken);
+            _logger.LogInformation("{Usuario} marcó {N} productos para reenviar a {Destinos}", User.Identity?.Name ?? "?", n, body.Target);
+            return Ok(new { reiniciados = n });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error marcando productos para reenviar");
             return StatusCode(500, new { error = ex.Message });
         }
     }

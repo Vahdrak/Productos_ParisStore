@@ -188,6 +188,27 @@ export class ProductoService {
     return this.http.get<PendientesLista>(`/productos/pending?${params.join('&')}`);
   }
 
+  /**
+   * Marca para reenviar: vuelve a Pendiente lo ya Enviado o con Error del destino. Se indican códigos o el filtro
+   * de la lista; sin ninguno de los dos hay que pasar todos = true. Exige sesión.
+   */
+  reenviar(p: {
+    target: 'compras' | 'compara' | 'ambos'; codes?: string[]; code?: string; syncStatus?: number; filtroTarget?: string;
+    marcaId?: number | null; categoriaId?: number | null; regimen?: boolean; todos?: boolean;
+  }): Observable<{ reiniciados: number }> {
+    return this.http.post<{ reiniciados: number }>('/productos/reenviar', {
+      target: p.target,
+      codes: p.codes?.length ? p.codes : null,
+      code: p.code ?? null,
+      syncStatus: p.syncStatus ?? null,
+      filtroTarget: p.filtroTarget ?? null,
+      marcaId: p.marcaId ?? null,
+      categoriaId: p.categoriaId ?? null,
+      regimen: p.regimen ?? null,
+      todos: !!p.todos
+    });
+  }
+
   getErrorProducts(target?: string): Observable<any[]> {
     let url = '/productos/errors';
     if (target) url += `?target=${target}`;
@@ -230,6 +251,7 @@ export class ProductoService {
     if (filters?.target) url += `&target=${filters.target}`;
     if (filters?.marcaId) url += `&marcaId=${filters.marcaId}`;
     if (filters?.categoriaId) url += `&categoriaId=${filters.categoriaId}`;
+    if (filters?.regimen) url += `&regimen=${filters.regimen}`;
     return this.http.get<ProductList>(url);
   }
 

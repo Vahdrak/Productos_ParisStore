@@ -757,11 +757,10 @@ public class PostgreSqlProductoRepository : IProductoRepository
     }
 
     /// <summary>
-    /// Busca y pagina productos en la BD.
+    /// Condiciones del filtro de productos (alias p). El mismo filtro sirve para buscar y para reenviar "todo lo filtrado".
     /// </summary>
-    public async Task<ProductListDto> SearchProductsAsync(
-        string? code, string? name, int? syncStatus, int page, int pageSize, SyncTarget target = SyncTarget.ComprasParaguai,
-        int? marcaId = null, int? categoriaId = null, CancellationToken cancellationToken = default)
+    private static (List<string> Conditions, DynamicParameters Parameters) FiltroProductos(
+        string? code, string? name, int? syncStatus, SyncTarget target, int? marcaId, int? categoriaId, bool? regimen)
     {
         var conditions = new List<string>();
         var parameters = new DynamicParameters();
@@ -800,6 +799,58 @@ public class PostgreSqlProductoRepository : IProductoRepository
                     WHERE raiz.id = @categoriaId)");
             parameters.Add("categoriaId", categoriaId.Value);
         }
+
+        if (regimen.HasValue)
+        {
+            conditions.Add("p.regimen_turismo = @regimen");
+            parameters.Add("regimen", regimen.Value);
+        }
+
+        return (conditions, parameters);
+    }
+
+    /// <summary>
+    /// Vuelve a Pendiente (para reenviar) los productos ya Enviados o en Error de los destinos indicados: los códigos
+    /// dados, o todos los que cumplan el filtro. Los que ya están Pendientes no se tocan; los retenidos por una pausa
+    /// quedan Pendientes pero no se envían mientras dure. El historial de errores se conserva. Devuelve cuántos cambió.
+    /// </summary>
+    public async Task<int> ReenviarAsync(IReadOnlyCollection<SyncTarget> targets, ProductosFiltro filtro, IReadOnlyCollection<string>? codes, CancellationToken cancellationToken = default)
+    {
+        var (conditions, parameters) = FiltroProductos(filtro.Code, filtro.Name, filtro.SyncStatus, filtro.Target, filtro.MarcaId, filtro.CategoriaId, filtro.Regimen);
+        if (codes is { Count: > 0 })
+        {
+            conditions.Add("p.code = ANY(@codes)");
+            parameters.Add("codes", codes.ToArray());
+        }
+
+        string where = conditions.Count > 0 ? " AND " + string.Join(" AND ", conditions) : "";
+
+        using (var connection = new NpgsqlConnection(_connectionString))
+        {
+            await connection.OpenAsync(cancellationToken);
+            await using var tx = await connection.BeginTransactionAsync(cancellationToken);
+            int total = 0;
+            foreach (var target in targets.Distinct())
+            {
+                var c = Cols(target);
+                total += await connection.ExecuteAsync(
+                    $"UPDATE productos p SET {c.Status} = 0, updated_at = now() WHERE p.{c.Status} <> 0{where}", parameters, tx);
+            }
+
+            await tx.CommitAsync(cancellationToken);
+            _logger.LogInformation("{Total} productos marcados para reenviar a {Targets}", total, string.Join(", ", targets));
+            return total;
+        }
+    }
+
+    /// <summary>
+    /// Busca y pagina productos en la BD.
+    /// </summary>
+    public async Task<ProductListDto> SearchProductsAsync(
+        string? code, string? name, int? syncStatus, int page, int pageSize, SyncTarget target = SyncTarget.ComprasParaguai,
+        int? marcaId = null, int? categoriaId = null, bool? regimen = null, CancellationToken cancellationToken = default)
+    {
+        var (conditions, parameters) = FiltroProductos(code, name, syncStatus, target, marcaId, categoriaId, regimen);
 
         string whereClause = conditions.Count > 0 ? "WHERE " + string.Join(" AND ", conditions) : "";
 

@@ -131,7 +131,13 @@ public interface IProductoRepository
     /// <summary>
     /// Busca y pagina productos en la BD. <paramref name="categoriaId"/> incluye todo el subárbol de esa categoría.
     /// </summary>
-    Task<ProductListDto> SearchProductsAsync(string? code, string? name, int? syncStatus, int page, int pageSize, SyncTarget target = SyncTarget.ComprasParaguai, int? marcaId = null, int? categoriaId = null, CancellationToken cancellationToken = default);
+    Task<ProductListDto> SearchProductsAsync(string? code, string? name, int? syncStatus, int page, int pageSize, SyncTarget target = SyncTarget.ComprasParaguai, int? marcaId = null, int? categoriaId = null, bool? regimen = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Vuelve a Pendiente (para reenviar) los productos Enviados o en Error de los destinos indicados: los códigos dados
+    /// o todos los que cumplan el filtro. Devuelve cuántos cambió.
+    /// </summary>
+    Task<int> ReenviarAsync(IReadOnlyCollection<SyncTarget> targets, ProductosFiltro filtro, IReadOnlyCollection<string>? codes, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Cuenta productos por estado (Pendiente/Enviado/Error) para cada destino, con fecha del último envío.
