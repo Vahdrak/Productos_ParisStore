@@ -217,7 +217,8 @@ public class PostgreSqlProductoRepository : IProductoRepository
     }
 
     /// <summary>
-    /// Marca productos como no disponibles (baja detectada en reconciliación).
+    /// Marca productos como no disponibles (baja detectada en reconciliación): solo los que todavía tienen stock;
+    /// los que ya están en 0 no vuelven a Pendiente (antes se reenviaban miles de productos en cada reconciliación).
     /// </summary>
     public async Task MarkAsUnavailableAsync(IEnumerable<string> codes, DateTime now, CambioContexto contexto, CancellationToken cancellationToken = default)
     {
@@ -229,6 +230,7 @@ public class PostgreSqlProductoRepository : IProductoRepository
             UPDATE productos
             SET stock = 0, sync_status = 0, sync_compara_status = 0, last_changed_at = @now, updated_at = @now
             WHERE code = ANY(@codes)
+              AND stock <> 0   -- los que ya están en stock 0 no se vuelven a enviar en cada reconciliación
         ";
 
         using (var connection = new NpgsqlConnection(_connectionString))
