@@ -1,3 +1,4 @@
+import { FechaPyPipe } from '../../shared/utils/fecha-py.pipe';
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -8,7 +9,7 @@ import { ErrorService } from '../../shared/services/error.service';
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FechaPyPipe],
   template: `
     <div class="fade-in">
       <div class="section-card">
@@ -16,7 +17,7 @@ import { ErrorService } from '../../shared/services/error.service';
         <div class="dashboard-grid">
           <div class="stat-card">
             <span class="stat-title">Fecha</span>
-            <span class="stat-val">{{ dashboard?.lastSyncRun?.startedAt | date:'yyyy-MM-dd HH:mm:ss' }}</span>
+            <span class="stat-val">{{ dashboard?.lastSyncRun?.startedAt | fechaPy:'yyyy-MM-dd HH:mm:ss' }}</span>
           </div>
           <div class="stat-card">
             <span class="stat-title">🆕 Nuevos</span>
@@ -63,7 +64,7 @@ import { ErrorService } from '../../shared/services/error.service';
           </div>
           <div class="stat-card">
             <span class="stat-title">⏱️ Último envío</span>
-            <span class="stat-val val-small">{{ target.lastSentAt | date:'yyyy-MM-dd HH:mm:ss' }}</span>
+            <span class="stat-val val-small">{{ target.lastSentAt | fechaPy:'yyyy-MM-dd HH:mm:ss' }}</span>
           </div>
         </div>
       </div>

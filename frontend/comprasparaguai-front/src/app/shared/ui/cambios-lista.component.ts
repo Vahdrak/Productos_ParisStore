@@ -1,3 +1,4 @@
+import { FechaPyPipe } from '../utils/fecha-py.pipe';
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Cambio } from '../services/cambios.service';
@@ -26,7 +27,7 @@ const ORIGENES: Record<string, string> = {
 @Component({
   selector: 'app-cambios-lista',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FechaPyPipe],
   template: `
     <div class="table-container" *ngIf="items.length > 0">
       <table class="data-table">
@@ -40,7 +41,7 @@ const ORIGENES: Record<string, string> = {
         </thead>
         <tbody>
           <tr *ngFor="let c of items">
-            <td>{{ c.changedAt | date:'yyyy-MM-dd HH:mm' }}</td>
+            <td>{{ c.changedAt | fechaPy:'yyyy-MM-dd HH:mm' }}</td>
             <td *ngIf="mostrarProducto">
               <div class="text-bold">{{ c.code }}</div>
               <div class="text-small text-dim">{{ c.nombre }}<span *ngIf="c.marca"> · {{ c.marca }}</span></div>

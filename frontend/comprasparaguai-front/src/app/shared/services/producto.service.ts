@@ -179,10 +179,13 @@ export interface VerifyResult {
 export class ProductoService {
   constructor(private http: HttpService) {}
 
-  getPendingProducts(target?: string): Observable<Producto[]> {
-    let url = '/productos/pending';
-    if (target) url += `?target=${target}`;
-    return this.http.get<Producto[]>(url);
+  /** Pendientes de un destino, paginados en el servidor (hay más de 100.000). */
+  getPendientes(target: string, filtro: PendientesFiltro, page: number, pageSize: number): Observable<PendientesLista> {
+    const params = [`target=${target}`, `page=${page}`, `pageSize=${pageSize}`];
+    if (filtro.code) params.push(`code=${encodeURIComponent(filtro.code)}`);
+    if (filtro.regimen) params.push(`regimen=${filtro.regimen}`);
+    if (filtro.retencion) params.push(`retencion=${filtro.retencion}`);
+    return this.http.get<PendientesLista>(`/productos/pending?${params.join('&')}`);
   }
 
   getErrorProducts(target?: string): Observable<any[]> {
@@ -285,4 +288,28 @@ export class ProductoService {
       img.src = imageUrl;
     });
   }
+}
+
+export interface PendientesFiltro {
+  code?: string;
+  /** 'true' = solo con régimen turismo, 'false' = solo sin régimen, '' = todos. */
+  regimen?: string;
+  /** 'retenidos', 'enviables' o '' (todos). */
+  retencion?: string;
+}
+
+export interface ProductoPendiente extends Producto {
+  retenido: boolean;
+  retenidoPor?: string | null;
+}
+
+export interface PendientesLista {
+  items: ProductoPendiente[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  /** Del filtro completo (no solo de la página). */
+  conRegimen: number;
+  retenidos: number;
 }

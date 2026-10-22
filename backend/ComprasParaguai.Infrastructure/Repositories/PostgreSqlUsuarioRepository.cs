@@ -51,4 +51,11 @@ public class PostgreSqlUsuarioRepository : IUsuarioRepository
         await connection.OpenAsync(cancellationToken);
         await connection.ExecuteAsync("UPDATE usuarios SET last_login_at = now() WHERE id = @id", new { id });
     }
+
+    public async Task CambiarPasswordAsync(int id, string passwordHash, CancellationToken cancellationToken = default)
+    {
+        using var connection = new NpgsqlConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await connection.ExecuteAsync("UPDATE usuarios SET password_hash = @passwordHash WHERE id = @id", new { id, passwordHash });
+    }
 }

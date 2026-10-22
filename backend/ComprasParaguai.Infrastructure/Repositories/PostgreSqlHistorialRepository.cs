@@ -83,14 +83,14 @@ public class PostgreSqlHistorialRepository : IHistorialRepository
         if (filtro.Desde.HasValue)
         {
             conditions.Add("h.changed_at >= @desde");
-            parameters.Add("desde", filtro.Desde.Value.ToDateTime(TimeOnly.MinValue));
+            parameters.Add("desde", InicioDiaParaguay(filtro.Desde.Value));
         }
 
         if (filtro.Hasta.HasValue)
         {
             // Inclusive: hasta el final del día indicado.
             conditions.Add("h.changed_at < @hasta");
-            parameters.Add("hasta", filtro.Hasta.Value.AddDays(1).ToDateTime(TimeOnly.MinValue));
+            parameters.Add("hasta", InicioDiaParaguay(filtro.Hasta.Value.AddDays(1)));
         }
 
         string where = "WHERE " + string.Join(" AND ", conditions);
@@ -137,6 +137,13 @@ public class PostgreSqlHistorialRepository : IHistorialRepository
             TotalPages = (int)Math.Ceiling(total / (double)pageSize)
         };
     }
+
+    /// <summary>
+    /// Medianoche de un día de Paraguay (UTC-3 fijo desde octubre de 2024) como instante UTC: el día "2026-10-22" del panel
+    /// empieza a las 03:00 UTC. El historial guarda timestamptz.
+    /// </summary>
+    private static DateTime InicioDiaParaguay(DateOnly dia) =>
+        DateTime.SpecifyKind(dia.ToDateTime(TimeOnly.MinValue).AddHours(3), DateTimeKind.Utc);
 
     private static CambioDto ToDto(CambioRow row) => new()
     {

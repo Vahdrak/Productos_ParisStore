@@ -51,20 +51,31 @@ public class ProductosController : ControllerBase
     }
 
     /// <summary>
-    /// Lista todos los productos Pendiente de envío, indicando cuáles están retenidos por una pausa o excepción.
-    /// GET /api/productos/pending?target=compras
+    /// Pendientes de envío paginados, indicando cuáles están retenidos por una pausa o excepción.
+    /// GET /api/productos/pending?target=compras&amp;page=1&amp;pageSize=50&amp;code=&amp;regimen=true&amp;retencion=retenidos
     /// </summary>
     [HttpGet("pending")]
-    public async Task<ActionResult<List<ProductoPendiente>>> GetPending(
+    public async Task<ActionResult<ProductoPendienteListDto>> GetPending(
         [FromQuery] string? target = null,
+        [FromQuery] string? code = null,
+        [FromQuery] bool? regimen = null,
+        [FromQuery] string? retencion = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
         CancellationToken cancellationToken = default)
     {
         try
         {
             var syncTarget = ParseTarget(target);
-            // Todos los pendientes, con "retenido" / "retenidoPor" (los retenidos no se envían mientras dure la pausa).
-            var products = await _repository.LoadPendientesConRetencionAsync(syncTarget, cancellationToken);
-            return Ok(products);
+            var result = await _repository.BuscarPendientesAsync(syncTarget, new PendientesFiltro
+            {
+                Code = code,
+                Regimen = regimen,
+                Retencion = retencion,
+                Page = page,
+                PageSize = pageSize
+            }, cancellationToken);
+            return Ok(result);
         }
         catch (Exception ex)
         {
@@ -72,6 +83,7 @@ public class ProductosController : ControllerBase
             return StatusCode(500, new { error = ex.Message });
         }
     }
+
 
     /// <summary>
     /// Obtiene un producto por código.

@@ -1,16 +1,14 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ProductoService } from '../../shared/services/producto.service';
+import { PendientesFiltro, PendientesLista, ProductoPendiente, ProductoService } from '../../shared/services/producto.service';
 import { ErrorService } from '../../shared/services/error.service';
-import { isDateInRange, quickRange } from '../../shared/utils/fechas';
-import { statusField, statusLabel } from '../../shared/utils/estado';
-import { QuickRangeComponent } from '../../shared/ui/quick-range.component';
+import { statusLabel } from '../../shared/utils/estado';
 
 @Component({
   selector: 'app-pendientes',
   standalone: true,
-  imports: [CommonModule, FormsModule, QuickRangeComponent],
+  imports: [CommonModule, FormsModule],
   template: `
     <div class="fade-in">
       <div class="section-card">
@@ -23,45 +21,33 @@ import { QuickRangeComponent } from '../../shared/ui/quick-range.component';
       <div class="section-card">
         <h3 class="section-title">Filtros</h3>
         <div class="filters-grid">
-          <input type="text" placeholder="Código..." [(ngModel)]="filterCode" (ngModelChange)="resetPage()" class="form-input" />
-          <select [(ngModel)]="filterRegimen" (ngModelChange)="resetPage()" class="form-input">
+          <input type="text" placeholder="Código..." [(ngModel)]="filtro.code" (keyup.enter)="buscar()" class="form-input" />
+          <select [(ngModel)]="filtro.regimen" (ngModelChange)="buscar()" class="form-input">
             <option value="">Régimen: Todos</option>
             <option value="true">🎫 Con régimen turismo</option>
             <option value="false">Normal (sin régimen)</option>
           </select>
-          <select [(ngModel)]="filterStatus" (ngModelChange)="resetPage()" class="form-input">
-            <option value="">Estado: Todos</option>
-            <option value="0">⏳ Pendiente</option>
-            <option value="1">✅ Enviado</option>
-            <option value="2">❌ Error</option>
-          </select>
-          <select [(ngModel)]="filterRetencion" (ngModelChange)="resetPage()" class="form-input">
+          <select [(ngModel)]="filtro.retencion" (ngModelChange)="buscar()" class="form-input">
             <option value="">Envío: Todos</option>
             <option value="enviables">✅ Solo enviables</option>
             <option value="retenidos">🚫 Solo retenidos</option>
           </select>
-          <select [(ngModel)]="pageSize" (ngModelChange)="resetPage()" class="form-input">
-            <option [ngValue]="10">10 por página</option>
+          <select [(ngModel)]="pageSize" (ngModelChange)="buscar()" class="form-input">
             <option [ngValue]="25">25 por página</option>
             <option [ngValue]="50">50 por página</option>
             <option [ngValue]="100">100 por página</option>
           </select>
-        </div>
-        <div class="filters-grid" style="margin-top: 12px;">
-          <label class="label-dim" style="grid-column: 1 / -1;">📅 Rango de envíos:</label>
-          <input type="date" [(ngModel)]="fechaDesde" (ngModelChange)="resetPage()" class="form-input" />
-          <input type="date" [(ngModel)]="fechaHasta" (ngModelChange)="resetPage()" class="form-input" />
-          <app-quick-range (pick)="setQuickRange($event)" (clear)="fechaDesde = ''; fechaHasta = ''; resetPage();"></app-quick-range>
+          <button class="btn btn-primary" (click)="buscar()">Buscar</button>
         </div>
       </div>
 
       <div class="section-card">
-        <h3 class="section-title">Productos ({{ filtered.length }} resultados)</h3>
-        <div class="table-container" *ngIf="pagedProducts.length > 0">
+        <h3 class="section-title">Productos ({{ lista?.totalCount ?? 0 }} resultados)</h3>
+        <div class="table-container" *ngIf="lista && lista.items.length > 0">
           <table class="data-table">
             <thead><tr><th>Código</th><th>Nombre</th><th>Régimen</th><th>Precio (IVA)</th><th>Precio Exenta</th><th>Stock</th><th>Estado</th></tr></thead>
             <tbody>
-              <tr *ngFor="let p of pagedProducts">
+              <tr *ngFor="let p of lista.items">
                 <td class="text-bold">{{ p.code }}</td>
                 <td>{{ p.namePt | slice:0:35 }}</td>
                 <td><span class="badge" [class.badge-success]="p.regimenTurismo" [class.badge-secondary]="!p.regimenTurismo">{{ p.regimenTurismo ? '🎫 Sí' : 'No' }}</span></td>
@@ -69,7 +55,7 @@ import { QuickRangeComponent } from '../../shared/ui/quick-range.component';
                 <td>{{ (p.precioExenta || 0) | currency:'':'symbol-narrow' }}</td>
                 <td class="text-center">{{ p.stock }}</td>
                 <td>
-                  <span class="badge" [ngClass]="getStatusBadgeClass(p)">{{ getStatusLabel(p) }}</span>
+                  <span class="badge">{{ estado(p) }}</span>
                   <div *ngIf="p.retenido" class="text-small" style="margin-top: 4px;">
                     <span class="badge badge-warn" title="No se envía mientras dure la pausa">🚫 Retenido</span>
                     <span class="text-dim">{{ p.retenidoPor }}</span>
@@ -79,21 +65,21 @@ import { QuickRangeComponent } from '../../shared/ui/quick-range.component';
             </tbody>
           </table>
         </div>
-        <div *ngIf="filtered.length === 0" class="text-center py-8 text-dim">No hay productos que coincidan</div>
+        <div *ngIf="lista && lista.items.length === 0" class="text-center py-8 text-dim">No hay productos que coincidan</div>
 
-        <div *ngIf="totalPages > 1" class="pagination">
-          <button [disabled]="page === 1" (click)="goToPage(1)">«</button>
-          <button [disabled]="page === 1" (click)="goToPage(page - 1)">‹</button>
-          <span class="page-info">Pág {{ page }}/{{ totalPages }}</span>
-          <button [disabled]="page === totalPages" (click)="goToPage(page + 1)">›</button>
-          <button [disabled]="page === totalPages" (click)="goToPage(totalPages)">»</button>
+        <div *ngIf="lista && lista.totalPages > 1" class="pagination">
+          <button [disabled]="page === 1" (click)="irAPagina(1)">«</button>
+          <button [disabled]="page === 1" (click)="irAPagina(page - 1)">‹</button>
+          <span class="page-info">Pág {{ page }}/{{ lista.totalPages }}</span>
+          <button [disabled]="page === lista.totalPages" (click)="irAPagina(page + 1)">›</button>
+          <button [disabled]="page === lista.totalPages" (click)="irAPagina(lista.totalPages)">»</button>
         </div>
 
-        <div *ngIf="products.length > 0" class="summary-bar">
-          <div class="summary-item"><span class="summary-label">🎫 Con régimen:</span><span class="summary-value">{{ countRegimen() }}</span></div>
-          <div class="summary-item"><span class="summary-label">🚫 Retenidos:</span><span class="summary-value">{{ countRetenidos() }}</span></div>
-          <div class="summary-item"><span class="summary-label">Normal:</span><span class="summary-value">{{ products.length - countRegimen() }}</span></div>
-          <div class="summary-item"><span class="summary-label">Total:</span><span class="summary-value">{{ products.length }}</span></div>
+        <div *ngIf="lista && lista.totalCount > 0" class="summary-bar">
+          <div class="summary-item"><span class="summary-label">🎫 Con régimen:</span><span class="summary-value">{{ lista.conRegimen }}</span></div>
+          <div class="summary-item"><span class="summary-label">🚫 Retenidos:</span><span class="summary-value">{{ lista.retenidos }}</span></div>
+          <div class="summary-item"><span class="summary-label">Normal:</span><span class="summary-value">{{ lista.totalCount - lista.conRegimen }}</span></div>
+          <div class="summary-item"><span class="summary-label">Total:</span><span class="summary-value">{{ lista.totalCount }}</span></div>
         </div>
       </div>
     </div>
@@ -101,102 +87,46 @@ import { QuickRangeComponent } from '../../shared/ui/quick-range.component';
 })
 export class PendientesComponent implements OnInit {
   target = 'compras';
-  products: any[] = [];
-  filtered: any[] = [];
-  pagedProducts: any[] = [];
-
-  filterCode = '';
-  filterRegimen = '';
-  filterStatus = '';
-  filterRetencion = '';
-  fechaDesde = '';
-  fechaHasta = '';
+  lista: PendientesLista | null = null;
+  filtro: PendientesFiltro = { code: '', regimen: '', retencion: '' };
 
   pageSize = 50;
   page = 1;
-  totalPages = 1;
 
   constructor(private productoService: ProductoService, private errors: ErrorService) {}
 
   ngOnInit() {
-    this.load();
+    this.cargar();
   }
 
-  load() {
-    this.productoService.getPendingProducts(this.target).subscribe(
-      products => {
-        this.products = products;
-        this.applyFilters();
+  /** Cada filtro nuevo vuelve a la página 1. */
+  buscar() {
+    this.page = 1;
+    this.cargar();
+  }
+
+  irAPagina(p: number) {
+    this.page = Math.max(1, p);
+    this.cargar();
+  }
+
+  /** Pide solo la página actual: hay más de 100.000 pendientes y no se cargan juntos. */
+  private cargar() {
+    this.productoService.getPendientes(this.target, this.filtro, this.page, this.pageSize).subscribe(
+      lista => {
+        this.lista = lista;
+        this.page = lista.page;
       },
       () => this.errors.show('Error cargando productos pendientes')
     );
   }
 
-  applyFilters() {
-    const field = statusField(this.target);
-    const dateField = this.target === 'compras' ? 'lastSentAt' : 'lastSentComparaAt';
-
-    this.filtered = this.products.filter((p: any) => {
-      const matchCode = !this.filterCode || p.code.toLowerCase().includes(this.filterCode.toLowerCase());
-      const matchRegimen = !this.filterRegimen ||
-        (this.filterRegimen === 'true' && p.regimenTurismo) ||
-        (this.filterRegimen === 'false' && !p.regimenTurismo);
-      const matchStatus = !this.filterStatus || p[field]?.toString() === this.filterStatus;
-      const matchDate = isDateInRange(p[dateField], this.fechaDesde, this.fechaHasta);
-      const matchRetencion = !this.filterRetencion ||
-        (this.filterRetencion === 'retenidos' && p.retenido) ||
-        (this.filterRetencion === 'enviables' && !p.retenido);
-      return matchCode && matchRegimen && matchStatus && matchDate && matchRetencion;
-    });
-
-    if (this.page < 1) this.page = 1;
-    this.totalPages = Math.ceil(this.filtered.length / this.pageSize) || 1;
-    if (this.page > this.totalPages) this.page = this.totalPages;
-
-    const start = (this.page - 1) * this.pageSize;
-    this.pagedProducts = this.filtered.slice(start, start + this.pageSize);
-  }
-
-  resetPage() {
-    this.goToPage(1);
-  }
-
-  goToPage(page: number) {
-    this.page = Math.min(Math.max(1, page), this.totalPages);
-    this.applyFilters();
-  }
-
   switchTarget(target: string) {
     this.target = target;
-    this.page = 1;
-    this.load();
+    this.buscar();
   }
 
-  setQuickRange(range: string) {
-    const { desde, hasta } = quickRange(range);
-    this.fechaDesde = desde;
-    this.fechaHasta = hasta;
-    this.resetPage();
-  }
-
-  countRetenidos(): number {
-    return this.products.filter(p => p.retenido).length;
-  }
-
-  countRegimen(): number {
-    return this.products.filter(p => p.regimenTurismo).length;
-  }
-
-  getStatusLabel(p: any): string {
-    return statusLabel(p[statusField(this.target)]);
-  }
-
-  getStatusBadgeClass(p: any): any {
-    const status = p[statusField(this.target)];
-    return {
-      'badge-success': status === 1,
-      'badge-error': status === 2,
-      'badge': status === 0
-    };
+  estado(p: ProductoPendiente): string {
+    return statusLabel(0);
   }
 }

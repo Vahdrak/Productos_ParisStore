@@ -420,30 +420,76 @@ public class PostgreSqlProductoRepository : IProductoRepository
     }
 
     /// <summary>
-    /// Todos los pendientes del destino con su estado de retención (para la pestaña Pendientes).
+    /// Pendientes del destino paginados en el servidor (para la pestaña Pendientes), con su estado de retención.
+    /// Los totales (con régimen, retenidos) son los del filtro completo, no solo los de la página.
     /// </summary>
-    public async Task<List<ProductoPendiente>> LoadPendientesConRetencionAsync(SyncTarget target = SyncTarget.ComprasParaguai, CancellationToken cancellationToken = default)
+    public async Task<ProductoPendienteListDto> BuscarPendientesAsync(SyncTarget target, PendientesFiltro filtro, CancellationToken cancellationToken = default)
     {
+        int page = Math.Max(1, filtro.Page);
+        int pageSize = Math.Clamp(filtro.PageSize, 1, 200);
         var c = Cols(target);
+        string retenidoPor = EnvioSql.RetenidoPor(target);
+
+        var condiciones = new List<string> { $"p.{c.Status} = 0" };
+        var parametros = new DynamicParameters();
+
+        if (!string.IsNullOrWhiteSpace(filtro.Code))
+        {
+            condiciones.Add("p.code ILIKE @code");
+            parametros.Add("code", $"%{filtro.Code.Trim()}%");
+        }
+
+        if (filtro.Regimen.HasValue)
+        {
+            condiciones.Add("p.regimen_turismo = @regimen");
+            parametros.Add("regimen", filtro.Regimen.Value);
+        }
+
+        if (string.Equals(filtro.Retencion, "retenidos", StringComparison.OrdinalIgnoreCase))
+            condiciones.Add($"{retenidoPor} IS NOT NULL");
+        else if (string.Equals(filtro.Retencion, "enviables", StringComparison.OrdinalIgnoreCase))
+            condiciones.Add($"{retenidoPor} IS NULL");
+
+        string where = "WHERE " + string.Join(" AND ", condiciones);
+
         string query = $@"
             SELECT {ProductoApiColumns},
-                   {EnvioSql.RetenidoPor(target)} AS RetenidoPor,
-                   ({EnvioSql.RetenidoPor(target)} IS NOT NULL) AS Retenido
+                   {retenidoPor} AS RetenidoPor,
+                   ({retenidoPor} IS NOT NULL) AS Retenido
             FROM {ProductoApiFrom}
-            WHERE p.{c.Status} = 0
-            ORDER BY p.code";
+            {where}
+            ORDER BY p.code
+            LIMIT @pageSize OFFSET @offset";
+
+        string resumen = $@"
+            SELECT COUNT(*)::int AS Total,
+                   (COUNT(*) FILTER (WHERE p.regimen_turismo))::int AS ConRegimen,
+                   (COUNT(*) FILTER (WHERE {retenidoPor} IS NOT NULL))::int AS Retenidos
+            FROM {ProductoApiFrom}
+            {where}";
+
+        parametros.Add("pageSize", pageSize);
+        parametros.Add("offset", (page - 1) * pageSize);
 
         using (var connection = new NpgsqlConnection(_connectionString))
         {
             await connection.OpenAsync(cancellationToken);
-            var result = (await connection.QueryAsync<ProductoPendiente>(query)).ToList();
+            var items = (await connection.QueryAsync<ProductoPendiente>(query, parametros)).ToList();
+            var totales = await connection.QuerySingleAsync<(int Total, int ConRegimen, int Retenidos)>(resumen, parametros);
 
-            _logger.LogInformation("Cargados {Count} pendientes de {Target} ({Held} retenidos)", result.Count, target, result.Count(p => p.Retenido));
-            return result;
+            return new ProductoPendienteListDto
+            {
+                Items = items,
+                TotalCount = totales.Total,
+                ConRegimen = totales.ConRegimen,
+                Retenidos = totales.Retenidos,
+                Page = page,
+                PageSize = pageSize,
+                TotalPages = (int)Math.Ceiling(totales.Total / (double)pageSize)
+            };
         }
     }
 
-    /// <summary>
     /// Productos publicados en el destino (alguna vez enviados) que una pausa con "retirar del destino" cubre
     /// y que todavía no se retiraron.
     /// </summary>

@@ -1,3 +1,4 @@
+import { FechaPyPipe } from '../../shared/utils/fecha-py.pipe';
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -5,13 +6,13 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { interval } from 'rxjs';
 import { ProductoService } from '../../shared/services/producto.service';
 import { ErrorService } from '../../shared/services/error.service';
-import { isDateInRange, quickRange } from '../../shared/utils/fechas';
+import { isDateInRange, parseFecha, quickRange } from '../../shared/utils/fechas';
 import { QuickRangeComponent } from '../../shared/ui/quick-range.component';
 
 @Component({
   selector: 'app-sync',
   standalone: true,
-  imports: [CommonModule, FormsModule, QuickRangeComponent],
+  imports: [CommonModule, FechaPyPipe, FormsModule, QuickRangeComponent],
   template: `
     <div class="fade-in">
       <div class="section-card">
@@ -38,8 +39,8 @@ import { QuickRangeComponent } from '../../shared/ui/quick-range.component';
             </thead>
             <tbody>
               <tr *ngFor="let run of syncRuns">
-                <td>{{ run.startedAt | date:'yyyy-MM-dd HH:mm:ss' }}</td>
-                <td>{{ run.finishedAt | date:'yyyy-MM-dd HH:mm:ss' }}</td>
+                <td>{{ run.startedAt | fechaPy:'yyyy-MM-dd HH:mm:ss' }}</td>
+                <td>{{ run.finishedAt | fechaPy:'yyyy-MM-dd HH:mm:ss' }}</td>
                 <td>{{ getDuration(run) }}</td>
                 <td>{{ run.rowsInView ?? 0 }}</td>
                 <td>{{ run.newCount }}</td>
@@ -55,6 +56,13 @@ import { QuickRangeComponent } from '../../shared/ui/quick-range.component';
               </tr>
             </tbody>
           </table>
+        </div>
+        <div *ngIf="totalPages > 1" class="pagination">
+          <button [disabled]="page === 1" (click)="irAPagina(1)">«</button>
+          <button [disabled]="page === 1" (click)="irAPagina(page - 1)">‹</button>
+          <span class="page-info">Pág {{ page }}/{{ totalPages }} · {{ filtered.length }} corridas</span>
+          <button [disabled]="page === totalPages" (click)="irAPagina(page + 1)">›</button>
+          <button [disabled]="page === totalPages" (click)="irAPagina(totalPages)">»</button>
         </div>
       </div>
     </div>
@@ -99,6 +107,11 @@ export class SyncComponent implements OnInit {
     this.syncRuns = this.filtered.slice(start, start + this.pageSize);
   }
 
+  irAPagina(p: number) {
+    this.page = Math.min(Math.max(1, p), this.totalPages);
+    this.applyFilters();
+  }
+
   setQuickRange(range: string) {
     const { desde, hasta } = quickRange(range);
     this.fechaDesde = desde;
@@ -108,8 +121,8 @@ export class SyncComponent implements OnInit {
 
   getDuration(run: any): string {
     if (!run.startedAt || !run.finishedAt) return '—';
-    const start = new Date(run.startedAt).getTime();
-    const end = new Date(run.finishedAt).getTime();
+    const start = (parseFecha(run.startedAt) as Date).getTime();
+    const end = (parseFecha(run.finishedAt) as Date).getTime();
     const secs = Math.round((end - start) / 1000);
     return secs < 60 ? `${secs}s` : `${Math.round(secs / 60)}m`;
   }

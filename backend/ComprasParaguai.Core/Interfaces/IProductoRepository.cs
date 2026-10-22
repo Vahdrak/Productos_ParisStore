@@ -70,10 +70,10 @@ public interface IProductoRepository
     Task<int> CountPendingProductsAsync(SyncTarget target = SyncTarget.ComprasParaguai, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// TODOS los productos Pendiente del destino, indicando cuáles están retenidos y por qué regla.
+    /// Pendientes del destino paginados en el servidor, indicando cuáles están retenidos y por qué regla.
     /// Es lo que muestra la pestaña Pendientes (no se usa para enviar).
     /// </summary>
-    Task<List<ProductoPendiente>> LoadPendientesConRetencionAsync(SyncTarget target = SyncTarget.ComprasParaguai, CancellationToken cancellationToken = default);
+    Task<ProductoPendienteListDto> BuscarPendientesAsync(SyncTarget target, PendientesFiltro filtro, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Productos ya publicados en el destino que una pausa con "retirar del destino" cubre y que todavía

@@ -7,16 +7,14 @@ import { Cambio, CambiosService } from '../../shared/services/cambios.service';
 import { ErrorService } from '../../shared/services/error.service';
 import { AuthService } from '../../shared/services/auth.service';
 import { Destino, EnvioEstadoProducto, EnvioService } from '../../shared/services/envio.service';
-import { isDateInRange, quickRange } from '../../shared/utils/fechas';
 import { statusClass, statusLabel, statusField } from '../../shared/utils/estado';
-import { QuickRangeComponent } from '../../shared/ui/quick-range.component';
 import { MarcaPickerComponent, MarcaSeleccion } from '../../shared/ui/marca-picker.component';
 import { CambiosListaComponent } from '../../shared/ui/cambios-lista.component';
 
 @Component({
   selector: 'app-productos',
   standalone: true,
-  imports: [CommonModule, FormsModule, QuickRangeComponent, MarcaPickerComponent, CambiosListaComponent],
+  imports: [CommonModule, FormsModule, MarcaPickerComponent, CambiosListaComponent],
   template: `
     <div class="fade-in">
       <div class="search-bar">
@@ -49,12 +47,6 @@ import { CambiosListaComponent } from '../../shared/ui/cambios-lista.component';
       </div>
 
       <div class="search-bar">
-        <label class="label-dim">📅 Rango de fechas:</label>
-        <input type="date" [(ngModel)]="fechaDesde" (ngModelChange)="search()" class="form-input" style="width: 120px;" />
-        <span style="color: #8f8f8f;">hasta</span>
-        <input type="date" [(ngModel)]="fechaHasta" (ngModelChange)="search()" class="form-input" style="width: 120px;" />
-        <app-quick-range (pick)="setQuickRange($event)" (clear)="fechaDesde = ''; fechaHasta = ''; search();"></app-quick-range>
-      </div>
 
       <div class="search-bar" *ngIf="productList && productList.items.length > 0">
         <select [(ngModel)]="pageSize" (ngModelChange)="search()" class="form-input" style="width: 140px;">
@@ -165,8 +157,6 @@ export class ProductosComponent implements OnInit {
   filterTarget = '';
   filterRegimen = '';
   filterState = '';
-  fechaDesde = '';
-  fechaHasta = '';
 
   pageSize = 25;
   page = 1;
@@ -209,7 +199,7 @@ export class ProductosComponent implements OnInit {
     this.goToPage(1);
   }
 
-  /** Pide la página al servidor; el régimen y las fechas se filtran sobre la página recibida. */
+  /** Pide la página al servidor; el régimen se filtra sobre la página recibida. */
   goToPage(page: number) {
     this.page = Math.max(1, page);
     this.productoService.getProductos({
@@ -231,23 +221,12 @@ export class ProductosComponent implements OnInit {
           const field = statusField(this.filterTarget || 'compras');
           items = items.filter(p => p[field]?.toString() === this.filterState);
         }
-        // Fecha: usa lastSentAt de Compras como referencia
-        if (this.fechaDesde || this.fechaHasta) {
-          items = items.filter(p => isDateInRange(p.lastSentAt, this.fechaDesde, this.fechaHasta));
-        }
         this.totalPages = list.totalPages || 1;
         this.pagedProducts = items;
         this.productList = list;
       },
       () => this.errors.show('Error cargando productos')
     );
-  }
-
-  setQuickRange(range: string) {
-    const { desde, hasta } = quickRange(range);
-    this.fechaDesde = desde;
-    this.fechaHasta = hasta;
-    this.search();
   }
 
   /** Carga cómo se envía el SKU a cada destino (excepción propia, si está retenido y por qué). */

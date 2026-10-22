@@ -103,6 +103,68 @@ builder.Services.AddTransient<IVerifyRunRepository>(sp =>
 
 var app = builder.Build();
 
+// ---- Comando: crear un usuario del panel (o cambiarle la contraseña) y salir, sin levantar el servidor ----
+//   dotnet run --project backend/ComprasParaguai.Api -- crear-usuario <usuario> ["Nombre para mostrar"]
+//   docker exec -it backend_api_prod dotnet ComprasParaguai.Api.dll crear-usuario <usuario>
+// La contraseña se pide por consola (o, para automatizar, de la variable CP_NEW_PASSWORD) y se guarda con hash.
+if (args.Length >= 2 && args[0].Equals("crear-usuario", StringComparison.OrdinalIgnoreCase))
+{
+    Console.OutputEncoding = System.Text.Encoding.UTF8;
+    var login = args[1].Trim();
+    var nombre = args.Length > 2 ? args[2].Trim() : login;
+    var password = Environment.GetEnvironmentVariable("CP_NEW_PASSWORD");
+    if (string.IsNullOrEmpty(password))
+    {
+        password = LeerSecreto("Contraseña (mínimo 8 caracteres): ");
+        if (password != LeerSecreto("Repite la contraseña: "))
+        {
+            Console.WriteLine("Las contraseñas no coinciden. No se hizo nada.");
+            return;
+        }
+    }
+
+    if (login.Length == 0 || password.Length < 8)
+    {
+        Console.WriteLine("Usuario vacío o contraseña de menos de 8 caracteres. No se hizo nada.");
+        return;
+    }
+
+    var usuarios = app.Services.GetRequiredService<IUsuarioRepository>();
+    var auth = app.Services.GetRequiredService<AuthService>();
+    var existente = await usuarios.GetByLoginAsync(login);
+    if (existente is null)
+    {
+        var nuevo = new Usuario { Login = login, Nombre = nombre };
+        nuevo.PasswordHash = auth.HashPassword(nuevo, password);
+        await usuarios.CreateAsync(nuevo);
+        Console.WriteLine($"Usuario '{login}' creado.");
+    }
+    else
+    {
+        await usuarios.CambiarPasswordAsync(existente.Id, auth.HashPassword(existente, password));
+        Console.WriteLine($"Contraseña de '{existente.Login}' actualizada.");
+    }
+
+    return;
+}
+
+static string LeerSecreto(string pregunta)
+{
+    Console.Write(pregunta);
+    if (Console.IsInputRedirected)          // sin terminal interactiva (docker exec sin -t, tuberías)
+        return Console.ReadLine() ?? string.Empty;
+
+    var sb = new System.Text.StringBuilder();
+    ConsoleKeyInfo tecla;
+    while ((tecla = Console.ReadKey(intercept: true)).Key != ConsoleKey.Enter)
+    {
+        if (tecla.Key == ConsoleKey.Backspace) { if (sb.Length > 0) sb.Length--; }
+        else if (!char.IsControl(tecla.KeyChar)) sb.Append(tecla.KeyChar);
+    }
+    Console.WriteLine();
+    return sb.ToString();
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();

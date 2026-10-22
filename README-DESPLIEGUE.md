@@ -366,6 +366,18 @@ Cualquier imagen **vieja** contra la BD migrada falla con `column "brand" does n
 | `AUTH_ADMIN_USUARIO` / `AUTH_ADMIN_PASSWORD` | Primer usuario; se crea solo si la tabla `usuarios` está vacía. Cambia la contraseña. |
 
 Agrégalas al `.env` del servidor (ver `.env.example`).
+
+**Crear (o cambiar la contraseña de) un usuario del panel** — alternativa a las variables `AUTH_ADMIN_*`, sirve en cualquier momento y pide la contraseña por consola (mínimo 8 caracteres; se guarda con hash):
+
+```bash
+# en tu máquina
+dotnet run --project backend/ComprasParaguai.Api -- crear-usuario mario "Mario B"
+
+# en el servidor (Docker)
+docker exec -it backend_api_prod dotnet ComprasParaguai.Api.dll crear-usuario mario "Mario B"
+```
+
+Si el usuario ya existe, el mismo comando le cambia la contraseña. No se puede crear con un `INSERT` a mano porque el hash lo genera ASP.NET.
 ---
 
 **Última actualización:** 2026-09-18  

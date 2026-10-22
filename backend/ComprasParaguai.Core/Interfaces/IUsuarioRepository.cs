@@ -13,4 +13,7 @@ public interface IUsuarioRepository
     Task CreateAsync(Usuario usuario, CancellationToken cancellationToken = default);
 
     Task RegistrarLoginAsync(int id, CancellationToken cancellationToken = default);
+
+    /// <summary>Reemplaza el hash de la contraseña del usuario.</summary>
+    Task CambiarPasswordAsync(int id, string passwordHash, CancellationToken cancellationToken = default);
 }

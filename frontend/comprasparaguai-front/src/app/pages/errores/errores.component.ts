@@ -1,3 +1,4 @@
+import { FechaPyPipe } from '../../shared/utils/fecha-py.pipe';
 import { Component, OnInit, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -10,7 +11,7 @@ import { MarcaPickerComponent, MarcaSeleccion } from '../../shared/ui/marca-pick
 @Component({
   selector: 'app-errores',
   standalone: true,
-  imports: [CommonModule, FormsModule, MarcaPickerComponent],
+  imports: [CommonModule, FechaPyPipe, FormsModule, MarcaPickerComponent],
   template: `
     <div class="fade-in">
       <div class="section-card">
@@ -137,7 +138,7 @@ import { MarcaPickerComponent, MarcaSeleccion } from '../../shared/ui/marca-pick
                   <span *ngIf="e.etapa === 'retiro'" class="badge badge-warn" title="Falló al retirarlo del destino (stock 0)">📦 retiro</span>
                 </td>
                 <td class="text-small" style="white-space: normal; word-break: break-word;" [title]="e.mensaje || ''">{{ recortar(e.mensaje) }}</td>
-                <td class="text-small">{{ e.updatedAt | date:'yyyy-MM-dd HH:mm' }}</td>
+                <td class="text-small">{{ e.updatedAt | fechaPy:'yyyy-MM-dd HH:mm' }}</td>
               </tr>
             </tbody>
           </table>

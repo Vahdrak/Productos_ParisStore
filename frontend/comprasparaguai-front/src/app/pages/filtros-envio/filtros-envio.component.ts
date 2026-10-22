@@ -1,3 +1,4 @@
+import { FechaPyPipe } from '../../shared/utils/fecha-py.pipe';
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -28,7 +29,7 @@ interface Dialogo {
 @Component({
   selector: 'app-filtros-envio',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FechaPyPipe, FormsModule],
   template: `
     <div class="fade-in">
       <div class="section-card">
@@ -71,7 +72,7 @@ interface Dialogo {
                 <td class="text-small" style="white-space: normal;">{{ p.motivo || '—' }}</td>
                 <td class="text-center">{{ p.productos }}</td>
                 <td class="text-center">{{ p.retirarDelDestino ? '📦 Sí' : 'No' }}</td>
-                <td class="text-small">{{ p.createdBy || '—' }}<div class="text-dim">{{ p.createdAt | date:'yyyy-MM-dd' }}</div></td>
+                <td class="text-small">{{ p.createdBy || '—' }}<div class="text-dim">{{ p.createdAt | fechaPy:'yyyy-MM-dd' }}</div></td>
                 <td>
                   <button class="pill" [class.off]="p.activo" [class.on]="!p.activo" (click)="alternarPausa(p)"
                           [title]="p.activo ? 'Reactivar el envío' : 'Volver a pausar'">
@@ -213,7 +214,7 @@ interface Dialogo {
             </thead>
             <tbody>
               <tr *ngFor="let h of historial">
-                <td>{{ h.changedAt | date:'yyyy-MM-dd HH:mm:ss' }}</td>
+                <td>{{ h.changedAt | fechaPy:'yyyy-MM-dd HH:mm:ss' }}</td>
                 <td>{{ h.usuario || '—' }}</td>
                 <td><span class="badge" [ngClass]="claseAccion(h.accion)">{{ h.accion }}</span></td>
                 <td style="white-space: normal;">

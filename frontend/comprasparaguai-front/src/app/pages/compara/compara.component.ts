@@ -1,8 +1,10 @@
+import { FechaPyPipe } from '../../shared/utils/fecha-py.pipe';
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { interval } from 'rxjs';
+import { ErroresService } from '../../shared/services/errores.service';
 import { ProductoService, SendRun } from '../../shared/services/producto.service';
 import { ErrorService } from '../../shared/services/error.service';
 import { isDateInRange, quickRange } from '../../shared/utils/fechas';
@@ -11,7 +13,7 @@ import { QuickRangeComponent } from '../../shared/ui/quick-range.component';
 @Component({
   selector: 'app-compara',
   standalone: true,
-  imports: [CommonModule, FormsModule, QuickRangeComponent],
+  imports: [CommonModule, FechaPyPipe, FormsModule, QuickRangeComponent],
   template: `
     <div class="fade-in">
       <div class="section-card">
@@ -38,8 +40,8 @@ import { QuickRangeComponent } from '../../shared/ui/quick-range.component';
             </thead>
             <tbody>
               <tr *ngFor="let run of sendRuns">
-                <td>{{ run.startedAt | date:'yyyy-MM-dd HH:mm:ss' }}</td>
-                <td>{{ run.finishedAt | date:'yyyy-MM-dd HH:mm:ss' }}</td>
+                <td>{{ run.startedAt | fechaPy:'yyyy-MM-dd HH:mm:ss' }}</td>
+                <td>{{ run.finishedAt | fechaPy:'yyyy-MM-dd HH:mm:ss' }}</td>
                 <td>{{ run.mode }}</td>
                 <td>{{ run.total }}</td>
                 <td style="color: #4ade80;">{{ run.sent }}</td>
@@ -52,11 +54,18 @@ import { QuickRangeComponent } from '../../shared/ui/quick-range.component';
             </tbody>
           </table>
         </div>
+        <div *ngIf="totalPages > 1" class="pagination">
+          <button [disabled]="page === 1" (click)="irAPagina(1)">«</button>
+          <button [disabled]="page === 1" (click)="irAPagina(page - 1)">‹</button>
+          <span class="page-info">Pág {{ page }}/{{ totalPages }} · {{ filtered.length }} corridas</span>
+          <button [disabled]="page === totalPages" (click)="irAPagina(page + 1)">›</button>
+          <button [disabled]="page === totalPages" (click)="irAPagina(totalPages)">»</button>
+        </div>
       </div>
 
       <!-- Errores -->
       <div class="section-card mt-6">
-        <h3 class="section-title">❌ Productos con Error</h3>
+        <h3 class="section-title">❌ Productos con Error ({{ erroresTotal }})</h3>
         <div class="table-container">
           <table class="data-table" *ngIf="errorProducts.length > 0">
             <thead>
@@ -69,11 +78,18 @@ import { QuickRangeComponent } from '../../shared/ui/quick-range.component';
             <tbody>
               <tr *ngFor="let e of errorProducts">
                 <td>{{ e.code }}</td>
-                <td>{{ e.namePt }}</td>
-                <td class="text-small">{{ e.lastError }}</td>
+                <td>{{ e.nombre }}</td>
+                <td class="text-small" style="white-space: normal; word-break: break-word;">{{ e.mensaje }}</td>
               </tr>
             </tbody>
           </table>
+          <div *ngIf="erroresTotalPages > 1" class="pagination">
+            <button [disabled]="erroresPage === 1" (click)="cargarErrores(1)">«</button>
+            <button [disabled]="erroresPage === 1" (click)="cargarErrores(erroresPage - 1)">‹</button>
+            <span class="page-info">Pág {{ erroresPage }}/{{ erroresTotalPages }} · {{ erroresTotal }} productos</span>
+            <button [disabled]="erroresPage === erroresTotalPages" (click)="cargarErrores(erroresPage + 1)">›</button>
+            <button [disabled]="erroresPage === erroresTotalPages" (click)="cargarErrores(erroresTotalPages)">»</button>
+          </div>
           <div *ngIf="errorProducts.length === 0" class="text-center py-8 text-dim">
             Sin errores ✅
           </div>
@@ -87,6 +103,9 @@ export class ComparaComponent implements OnInit {
   original: SendRun[] = [];
   filtered: SendRun[] = [];
   errorProducts: any[] = [];
+  erroresPage = 1;
+  erroresTotalPages = 1;
+  erroresTotal = 0;
 
   fechaDesde = '';
   fechaHasta = '';
@@ -95,7 +114,7 @@ export class ComparaComponent implements OnInit {
   page = 1;
   totalPages = 1;
 
-  constructor(private productoService: ProductoService, private errors: ErrorService) {
+  constructor(private productoService: ProductoService, private erroresService: ErroresService, private errors: ErrorService) {
     interval(30000).pipe(takeUntilDestroyed()).subscribe(() => this.load());
   }
 
@@ -111,8 +130,19 @@ export class ComparaComponent implements OnInit {
       },
       () => this.errors.show('Error cargando send runs')
     );
-    this.productoService.getErrorProducts('compara').subscribe(
-      errors => this.errorProducts = errors
+    this.cargarErrores(this.erroresPage);
+  }
+
+  /** Productos en Error de este destino, una página por vez (pueden ser miles). */
+  cargarErrores(page: number) {
+    this.erroresPage = Math.max(1, page);
+    this.erroresService.getErrores('compara', {}, this.erroresPage, 15).subscribe(
+      r => {
+        this.errorProducts = r.items;
+        this.erroresTotal = r.totalCount;
+        this.erroresTotalPages = r.totalPages || 1;
+      },
+      () => this.errors.show('Error cargando los productos con error')
     );
   }
 
@@ -123,6 +153,11 @@ export class ComparaComponent implements OnInit {
     if (this.page > this.totalPages) this.page = this.totalPages;
     const start = (this.page - 1) * this.pageSize;
     this.sendRuns = this.filtered.slice(start, start + this.pageSize);
+  }
+
+  irAPagina(p: number) {
+    this.page = Math.min(Math.max(1, p), this.totalPages);
+    this.applyFilters();
   }
 
   setQuickRange(range: string) {
