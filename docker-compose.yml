@@ -61,7 +61,7 @@ services:
     container_name: worker_sync_prod
     environment:
       - ConnectionStrings__PostgreSQL=Host=db;Port=5432;Database=${DB_NAME:-catalogosdb};Username=${DB_USER:-postgres};Password=${DB_PASSWORD:-postgres}
-      - OracleConnection__ConnectionString=${ORACLE_CONNECTION_STRING}
+      - ConnectionStrings__Oracle=${ORACLE_CONNECTION_STRING}
     depends_on:
       db:
         condition: service_healthy

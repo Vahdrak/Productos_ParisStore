@@ -42,6 +42,11 @@ public static class DbMigrator
                 Console.WriteLine($"Base de datos '{dbName}' creada correctamente.");
             }
         }
+        catch (PostgresException ex) when (ex.SqlState is "42P04" or "23505")
+        {
+            // Otro contenedor (API o worker) creó la base de datos al mismo tiempo: no es un error.
+            Console.WriteLine($"La base de datos '{dbName}' ya la creó otro servicio.");
+        }
         catch (Exception ex)
         {
             Console.WriteLine($"Error al verificar/crear la base de datos '{dbName}': {ex.Message}");
@@ -65,8 +70,18 @@ public static class DbMigrator
 
         try
         {
-            using var connection = new NpgsqlConnection(connectionString);
+            // Conexión propia sin pool: al cerrarla se libera el candado de inmediato (con pool se liberaría recién al reusarla).
+            var sinPool = new NpgsqlConnectionStringBuilder(connectionString) { Pooling = false };
+            using var connection = new NpgsqlConnection(sinPool.ConnectionString);
             connection.Open();
+
+            // Candado de sesión: si la API y varios workers arrancan a la vez (Docker), migra uno solo y los demás esperan.
+            // Se libera al terminar (y, de todos modos, al cerrar la conexión); las migraciones ya aplicadas se leen DESPUÉS de tomarlo.
+            using (var lockCmd = new NpgsqlCommand("SELECT pg_advisory_lock(727001301)", connection))
+            {
+                lockCmd.CommandTimeout = 300;
+                lockCmd.ExecuteNonQuery();
+            }
 
             // Crear tabla de control de migraciones si no existe
             CreateMigrationsTable(connection);

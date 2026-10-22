@@ -26,4 +26,7 @@ FROM mcr.microsoft.com/dotnet/runtime:8.0
 WORKDIR /app
 COPY --from=publish /app/publish .
 
+# Migraciones: cada servicio las aplica al arrancar (DbMigrator, con candado en la BD)
+COPY db/migrations ./db/migrations
+
 ENTRYPOINT ["dotnet", "Worker.Compara.dll"]

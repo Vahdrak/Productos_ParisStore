@@ -367,6 +367,12 @@ Cualquier imagen **vieja** contra la BD migrada falla con `column "brand" does n
 
 Agrégalas al `.env` del servidor (ver `.env.example`).
 
+**Workers en Docker.** Los 4 Dockerfiles de workers (`Dockerfile.worker-sync|compras|compara|verify`) llevan las migraciones y
+cada servicio las aplica al arrancar con un candado en la BD (`pg_advisory_lock`): si la API y varios workers arrancan a la
+vez, migra uno solo y los demás esperan, así que no importa el orden. `worker-sync` lee `ConnectionStrings__Oracle`
+(el compose la arma desde `ORACLE_CONNECTION_STRING` del `.env`; antes pasaba un nombre que el worker no leía).
+Los tokens de Compras/Compara van en `COMPRAS_API_TOKEN` y `COMPARA_API_TOKEN`. `worker-verify` no está en el compose: se corre a mano.
+
 **Crear (o cambiar la contraseña de) un usuario del panel** — alternativa a las variables `AUTH_ADMIN_*`, sirve en cualquier momento y pide la contraseña por consola (mínimo 8 caracteres; se guarda con hash):
 
 ```bash
