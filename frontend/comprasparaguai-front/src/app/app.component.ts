@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ErrorService } from './shared/services/error.service';
@@ -27,8 +27,12 @@ import { ErroresComponent } from './pages/errores/errores.component';
       <!-- HEADER -->
       <header class="app-header">
         <div class="header-left">
-          <span class="logo-icon">📦</span>
-          <h1>Compras Paraguai</h1>
+          <svg class="logo-icon" aria-hidden="true" focusable="false" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 5h16v4H4z"></path>
+            <path d="M5 9v10h14V9"></path>
+            <path d="M10 13h4"></path>
+          </svg>
+          <h1>Catálogos Paris Store</h1>
         </div>
         <div class="header-right">
           <ng-container *ngIf="auth.logueado; else sinSesion">
@@ -43,12 +47,12 @@ import { ErroresComponent } from './pages/errores/errores.component';
 
       <!-- LOGIN (ver datos es libre; modificar exige sesión) -->
       <div *ngIf="mostrarLogin || auth.pedirLogin" class="modal-fondo" (click)="cerrarLogin()">
-        <form class="modal-caja" (click)="$event.stopPropagation()" (ngSubmit)="entrar()">
-          <h3 class="section-title">Iniciar sesión</h3>
+        <form class="modal-caja" role="dialog" aria-modal="true" aria-labelledby="login-titulo" (click)="$event.stopPropagation()" (ngSubmit)="entrar()">
+          <h3 id="login-titulo" class="section-title">Iniciar sesión</h3>
           <p class="text-dim text-small" *ngIf="auth.pedirLogin">Tu sesión venció o no existe: ingresa para modificar.</p>
-          <input name="usuario" class="form-input" placeholder="Usuario" [(ngModel)]="loginUsuario" autocomplete="username" autofocus />
-          <input name="password" type="password" class="form-input" placeholder="Contraseña" [(ngModel)]="loginPassword" autocomplete="current-password" />
-          <div *ngIf="loginError" class="text-small" style="color: #fca5a5;">{{ loginError }}</div>
+          <input name="usuario" class="form-input" placeholder="Usuario" aria-label="Usuario" [(ngModel)]="loginUsuario" autocomplete="username" autofocus />
+          <input name="password" type="password" class="form-input" placeholder="Contraseña" aria-label="Contraseña" [(ngModel)]="loginPassword" autocomplete="current-password" />
+          <div *ngIf="loginError" class="text-small text-err" role="alert">{{ loginError }}</div>
           <div class="modal-botones">
             <button type="button" class="btn btn-ghost" (click)="cerrarLogin()">Cancelar</button>
             <button type="submit" class="btn btn-primary" [disabled]="entrando">Entrar</button>
@@ -57,14 +61,14 @@ import { ErroresComponent } from './pages/errores/errores.component';
       </div>
 
       <!-- NAVIGATION TABS -->
-      <nav class="app-nav">
-        <button *ngFor="let t of tabs" [class.active]="page === t.id" (click)="setPage(t.id)" class="tab-btn">{{ t.label }}</button>
+      <nav class="app-nav" role="tablist" aria-label="Secciones">
+        <button *ngFor="let t of tabs" role="tab" [attr.aria-selected]="page === t.id" [class.active]="page === t.id" (click)="setPage(t.id)" class="tab-btn">{{ t.label }}</button>
       </nav>
 
       <!-- ERROR MESSAGE -->
-      <div *ngIf="errors.message" class="alert alert-error">
+      <div *ngIf="errors.message" class="alert alert-error" role="alert">
         <span>⚠️ {{ errors.message }}</span>
-        <button (click)="errors.clear()" class="close-btn">&times;</button>
+        <button (click)="errors.clear()" class="close-btn" aria-label="Cerrar aviso">&times;</button>
       </div>
 
       <!-- CONTENT AREA: cada pestaña es un componente propio (se crea al entrar y carga sus datos) -->
@@ -86,108 +90,96 @@ import { ErroresComponent } from './pages/errores/errores.component';
     :host {
       display: block;
       min-height: 100vh;
-      background-color: #0c0c0c;
-      color: #eaeaea;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
     }
 
     .app-container {
       max-width: 1300px;
       margin: 0 auto;
-      padding: 16px 24px;
+      padding: var(--space-4) var(--space-5);
     }
 
     .app-header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: var(--bg);
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 12px 0 20px 0;
+      padding: var(--space-3) 0;
     }
 
     .header-left {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: var(--space-3);
     }
 
     .logo-icon {
-      font-size: 24px;
+      color: var(--accent);
+      flex-shrink: 0;
     }
 
     .app-header h1 {
-      font-size: 22px;
+      font-size: var(--fs-xl);
       font-weight: 600;
-      color: #ffffff;
+      color: var(--text-strong);
       margin: 0;
     }
 
     .header-right {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: var(--space-3);
     }
 
     .usuario {
-      color: #b0b0b0;
-      font-size: 13px;
+      color: #b8b8b8;
+      font-size: var(--fs-sm);
     }
 
-    .modal-fondo {
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.6);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 100;
-    }
-
+    /* Login: mas angosto que el modal por defecto (.modal-fondo/.modal-caja son globales) */
     .modal-caja {
-      background: #131313;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 8px;
-      padding: 24px;
-      width: 340px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .modal-botones {
-      display: flex;
-      justify-content: flex-end;
-      gap: 8px;
+      width: min(340px, 92vw);
+      gap: var(--space-3);
     }
 
     .app-nav {
       display: flex;
-      gap: 8px;
-      margin-bottom: 24px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-      padding-bottom: 8px;
+      gap: var(--space-2);
+      margin-bottom: var(--space-5);
+      border-bottom: 1px solid var(--line);
+      padding-bottom: var(--space-2);
+      overflow-x: auto;
     }
 
     .tab-btn {
+      flex-shrink: 0;
+      white-space: nowrap;
       background: transparent;
       border: 1px solid transparent;
-      color: #8f8f8f;
-      padding: 8px 16px;
-      font-size: 14px;
+      color: var(--text-dim);
+      padding: var(--space-2) var(--space-4);
+      font-size: var(--fs-md);
       font-weight: 500;
-      border-radius: 6px;
+      border-radius: var(--radius-sm);
       cursor: pointer;
       transition: all 0.2s ease;
     }
 
     .tab-btn:hover {
-      color: #ffffff;
-      background: rgba(255, 255, 255, 0.03);
+      color: var(--text-strong);
+      background: var(--hover);
     }
 
     .tab-btn.active {
-      color: #ffffff;
-      background: #181818;
-      border-color: rgba(255, 255, 255, 0.12);
+      color: var(--text-strong);
+      background: var(--card-2);
+      border-color: var(--line-strong);
+      border-bottom: 2px solid var(--accent);
     }
 
     .app-content {
@@ -196,9 +188,9 @@ import { ErroresComponent } from './pages/errores/errores.component';
     }
 
     .alert {
-      padding: 12px 16px;
-      border-radius: 6px;
-      margin-bottom: 16px;
+      padding: var(--space-3) var(--space-4);
+      border-radius: var(--radius-sm);
+      margin-bottom: var(--space-4);
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -207,15 +199,21 @@ import { ErroresComponent } from './pages/errores/errores.component';
     .alert-error {
       background: rgba(239, 68, 68, 0.1);
       border: 1px solid rgba(239, 68, 68, 0.3);
-      color: #fca5a5;
+      color: var(--err-soft);
     }
 
     .close-btn {
       background: none;
       border: none;
-      color: #fca5a5;
+      color: var(--err-soft);
       cursor: pointer;
       font-size: 18px;
+    }
+
+    @media (max-width: 768px) {
+      .app-container {
+        padding: var(--space-3);
+      }
     }
   `]
 })
@@ -242,6 +240,13 @@ export class AppComponent {
   entrando = false;
 
   constructor(public errors: ErrorService, public auth: AuthService) {}
+
+  @HostListener('document:keydown.escape')
+  onEscape() {
+    if (this.mostrarLogin || this.auth.pedirLogin) {
+      this.cerrarLogin();
+    }
+  }
 
   setPage(p: string) {
     this.page = p;
