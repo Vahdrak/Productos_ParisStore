@@ -14,7 +14,7 @@ public record ErrorTipo(string Codigo, string Titulo, string QueHacer, bool Rein
 public static class ErrorClasificador
 {
     public static readonly ErrorTipo Duplicado = new("duplicado", "Duplicado en el destino (slug repetido)",
-        "El destino ya tiene otro producto con el mismo nombre/código y lo rechaza. Cambia el nombre o el código en Cangrejo, " +
+        "El destino ya tiene otro producto con el mismo nombre/código y lo rechaza. Cambia el nombre o el código en tu sistema (ERP), " +
         "o pide al comparador que lo corrija. Reintentar sin cambiar nada vuelve a fallar; si el dato cambia, el próximo sync lo reenvía solo.",
         false);
 
@@ -23,11 +23,11 @@ public static class ErrorClasificador
         true);
 
     public static readonly ErrorTipo Precio = new("precio", "Precio fuera de rango",
-        "El precio debe estar entre 0,05 y 99.999 (0,05 exacto también se rechaza). Corrige el precio en Cangrejo.",
+        "El precio debe estar entre 0,05 y 99.999 (0,05 exacto también se rechaza). Corrige el precio en tu sistema (ERP).",
         false);
 
     public static readonly ErrorTipo Codigo = new("codigo", "Código (SKU) de más de 20 caracteres",
-        "Compras acepta códigos de hasta 20 caracteres. Corrige el SKU en Cangrejo.",
+        "Compras acepta códigos de hasta 20 caracteres. Corrige el SKU en tu sistema (ERP).",
         false);
 
     public static readonly ErrorTipo Credenciales = new("credenciales", "Credenciales o token rechazados",

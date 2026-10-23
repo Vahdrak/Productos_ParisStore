@@ -22,7 +22,7 @@ import { PaginadorComponent } from '../../shared/ui/paginador.component';
           <button type="button" [class.active]="target === 'compara'" (click)="cambiarDestino('compara')">Compara Paraguai</button>
         </div>
         <p class="text-dim text-small" style="margin: 0;">
-          Productos que el destino rechazó. Los errores <b>no se reintentan solos</b>: un producto en Error se corrige en Cangrejo
+          Productos que el destino rechazó. Los errores <b>no se reintentan solos</b>: un producto en Error se corrige en tu sistema (ERP)
           (si el dato cambia, el próximo sync lo reenvía solo) o se vuelve a intentar desde aquí con <b>Reintentar</b>.
         </p>
         <p *ngIf="!auth.logueado" class="text-small text-warn" style="margin: 12px 0 0 0;">

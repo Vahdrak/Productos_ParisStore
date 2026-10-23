@@ -18,10 +18,19 @@ const CAMPOS: Record<string, string> = {
 
 const ORIGENES: Record<string, string> = {
   sync: 'Sync',
-  reconciliacion: 'Reconciliación',
-  api: 'API',
+  reconciliacion: 'Baja (ya no está en tu ERP)',
+  api: 'Panel',
   manual: 'Manual',
   historico: 'Histórico'
+};
+
+/** Qué significa cada origen (se muestra al pasar el mouse). */
+const AYUDA_ORIGEN: Record<string, string> = {
+  sync: 'Cambio detectado al leer tu sistema (ERP): precio, stock, nombre, etc.',
+  reconciliacion: 'El producto ya no aparece en lo que entrega tu ERP (se dio de baja, se desactivó o cambió de código), por eso su stock pasó a 0 y dejó de estar disponible en los comparadores.',
+  api: 'Cambio hecho desde este panel por un usuario.',
+  manual: 'Cambio hecho directamente en la base de datos.',
+  historico: 'Cambio anterior a que se registrara el origen.'
 };
 
 /** Tabla de cambios de productos: fecha, producto, origen y cada campo con su "antes → después". */
@@ -47,7 +56,7 @@ const ORIGENES: Record<string, string> = {
               <div class="text-bold">{{ c.code }}</div>
               <div class="text-small text-dim">{{ c.nombre }}<span *ngIf="c.marca"> · {{ c.marca }}</span></div>
             </td>
-            <td>
+            <td [title]="ayudaOrigen(c.origen)">
               {{ origen(c.origen) }}
               <div class="text-small text-dim" *ngIf="c.usuario">{{ c.usuario }}</div>
             </td>
@@ -75,6 +84,10 @@ export class CambiosListaComponent {
 
   campo(nombre: string): string {
     return CAMPOS[nombre] ?? nombre;
+  }
+
+  ayudaOrigen(valor?: string): string {
+    return valor ? (AYUDA_ORIGEN[valor] ?? '') : '';
   }
 
   origen(valor?: string): string {

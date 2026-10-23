@@ -33,8 +33,8 @@ import { IconComponent } from '../../shared/ui/icon.component';
           <select [(ngModel)]="origen" (ngModelChange)="search()" class="form-input w-md" aria-label="Filtrar por origen">
             <option value="">Origen: Todos</option>
             <option value="sync">Sync</option>
-            <option value="reconciliacion">Reconciliación (bajas)</option>
-            <option value="api">API</option>
+            <option value="reconciliacion">Baja: ya no está en tu ERP</option>
+            <option value="api">Panel</option>
             <option value="historico">Histórico</option>
           </select>
           <button type="button" (click)="search()" class="btn btn-primary">Buscar</button>
