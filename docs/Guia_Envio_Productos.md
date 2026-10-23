@@ -155,6 +155,21 @@ En el Dashboard cada destino muestra **Pendientes** (se enviarán), **Retenidos*
 **Retirados** (ya con stock 0 en el destino). La pestaña Pendientes marca cuáles están retenidos y por qué regla.
 
 
+## Retener en bloque y ver todo lo retenido
+
+**Retener (pestaña "Productos").** Filtra la lista (por nombre, marca, departamento, código, régimen o estado) y usa **Retener todo lo filtrado**, o marca filas y
+usa **Retener seleccionados**. Elige el destino (Compras, Compara o ambos) y, si quieres, un motivo. Es una excepción por SKU «retener» en cada producto:
+deja de enviarse, pero se sigue actualizando en la base. Ejemplo: nombre `IPHONE 18 PRO MAX` + marca `APPLE` retiene las 9 variantes del iPhone y no toca
+las fundas de otras marcas. Sin ningún filtro el botón está deshabilitado (no se puede retener todo el catálogo por error).
+
+**Ver y liberar (pestaña "Filtros de envío" → "Retenidos en …").** Lista todo lo que hoy **no** se envía al destino, en cualquier estado: lo que cubre una pausa y los
+productos con excepción «retener», con el motivo, su estado y qué los retiene. Se puede buscar, filtrar por origen (excepción / pausa) y **liberar** los que se elijan:
+a los de excepción se les quita la excepción; a los que retiene una pausa se les pone la excepción «enviar» (gana sobre la pausa, que sigue para el resto).
+Liberar en un destino no cambia el otro.
+
+Todo esto exige sesión iniciada (sin ella los botones piden iniciar sesión y la API responde 401) y cada cambio queda en el historial de reglas con el usuario y la hora.
+Las acciones en bloque son de un solo paso: no reescriben excepciones que ya están como se pidió, así que repetirlas no ensucia el historial.
+
 ## Reenviar productos (panel → pestaña "Productos")
 
 Vuelve a **Pendiente** productos que ya estaban Enviados o en Error, para que el worker del destino los envíe de nuevo en su

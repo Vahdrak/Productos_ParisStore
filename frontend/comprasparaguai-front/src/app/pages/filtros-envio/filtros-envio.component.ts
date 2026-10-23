@@ -11,6 +11,7 @@ import { ErrorService } from '../../shared/services/error.service';
 import { AuthService } from '../../shared/services/auth.service';
 import { IconComponent } from '../../shared/ui/icon.component';
 import { PaginadorComponent } from '../../shared/ui/paginador.component';
+import { RetenidosComponent } from './retenidos.component';
 
 interface FilaArbol {
   nodo: CategoriaNodo;
@@ -31,7 +32,7 @@ interface Dialogo {
 @Component({
   selector: 'app-filtros-envio',
   standalone: true,
-  imports: [CommonModule, FechaPyPipe, FormsModule, IconComponent, PaginadorComponent],
+  imports: [CommonModule, FechaPyPipe, FormsModule, IconComponent, PaginadorComponent, RetenidosComponent],
   template: `
     <div class="fade-in">
       <div class="section-card">
@@ -90,6 +91,9 @@ interface Dialogo {
         <div *ngIf="cargandoPausas && pausas.length === 0" class="empty-state"><span class="spinner" role="status" aria-label="Cargando"></span></div>
         <div *ngIf="!cargandoPausas && pausas.length === 0" class="empty-state">No hay pausas: se envía todo a {{ nombreDestino }}.</div>
       </div>
+
+      <!-- RETENIDOS: todo lo que hoy no se envía, para revisarlo y liberar algunos -->
+      <app-retenidos [target]="target"></app-retenidos>
 
       <!-- CATEGORÍAS -->
       <div class="section-card">

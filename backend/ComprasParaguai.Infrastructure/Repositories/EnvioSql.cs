@@ -21,6 +21,9 @@ internal static class EnvioSql
     private static string Excepcion(string t, string accion) =>
         $"EXISTS (SELECT 1 FROM envio_excepciones e WHERE e.producto_id = p.id AND e.target = '{t}' AND e.activo AND e.accion = '{accion}')";
 
+    /// <summary>Condición booleana: el producto tiene una excepción activa "retener" en el destino.</summary>
+    public static string ExcepcionRetener(SyncTarget target) => Excepcion(Destino(target), "retener");
+
     /// <summary>Alguna pausa activa del destino cubre al producto (opcionalmente solo las que retiran del destino).</summary>
     private static string PausaCubre(string t, bool soloRetirar) => $@"EXISTS (
             SELECT 1 FROM envio_pausas pa

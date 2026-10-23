@@ -761,7 +761,7 @@ public class PostgreSqlProductoRepository : IProductoRepository
     /// <summary>
     /// Condiciones del filtro de productos (alias p). El mismo filtro sirve para buscar y para reenviar "todo lo filtrado".
     /// </summary>
-    private static (List<string> Conditions, DynamicParameters Parameters) FiltroProductos(
+    internal static (List<string> Conditions, DynamicParameters Parameters) FiltroProductos(
         string? code, string? name, int? syncStatus, SyncTarget target, int? marcaId, int? categoriaId, bool? regimen)
     {
         var conditions = new List<string>();

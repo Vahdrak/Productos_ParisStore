@@ -62,6 +62,46 @@ export interface ReglaHistorialList {
   totalPages: number;
 }
 
+/** Un producto que hoy NO se envía al destino, y por qué. */
+export interface Retenido {
+  code: string;
+  namePt: string | null;
+  marca: string | null;
+  categoriaRuta: string | null;
+  stock: number;
+  /** Estado de envío al destino: 0 pendiente, 1 enviado, 2 error. */
+  estado: number;
+  retenidoPor: string | null;
+  /** True si lo retiene una excepción propia del SKU (se quita); false si lo retiene una pausa. */
+  porExcepcion: boolean;
+  motivo: string | null;
+}
+
+export interface RetenidosList {
+  items: Retenido[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  porPausa: number;
+  porExcepcion: number;
+}
+
+/** Lo que se aplica en bloque: los códigos dados o el filtro de la lista de productos. */
+export interface LoteExcepcion {
+  target: Destino | 'ambos';
+  accion: 'retener' | 'enviar' | 'quitar';
+  motivo?: string;
+  codes?: string[];
+  code?: string;
+  name?: string;
+  syncStatus?: number;
+  filtroTarget?: string;
+  marcaId?: number | null;
+  categoriaId?: number | null;
+  regimen?: boolean;
+}
+
 export interface MarcaCategoria {
   id: number;
   nombre: string;
@@ -116,6 +156,31 @@ export class EnvioService {
 
   guardarExcepcion(code: string, target: Destino, accion: 'enviar' | 'retener', motivo?: string): Observable<void> {
     return this.http.put<void>(`/productos/${encodeURIComponent(code)}/excepcion?target=${target}`, { accion, motivo });
+  }
+
+  /** Todo lo que hoy no se envía al destino (por pausa o por excepción). */
+  getRetenidos(target: Destino, origen: '' | 'pausa' | 'excepcion', q: string, page = 1, pageSize = 50): Observable<RetenidosList> {
+    let url = `/envio/retenidos?target=${target}&page=${page}&pageSize=${pageSize}`;
+    if (origen) url += `&origen=${origen}`;
+    if (q) url += `&q=${encodeURIComponent(q)}`;
+    return this.http.get<RetenidosList>(url);
+  }
+
+  /** Retener / forzar el envío / quitar la excepción de muchos productos a la vez. Exige sesión. */
+  excepcionesLote(p: LoteExcepcion): Observable<{ afectados: number }> {
+    return this.http.post<{ afectados: number }>("/envio/excepciones/lote", {
+      target: p.target,
+      accion: p.accion,
+      motivo: p.motivo ?? null,
+      codes: p.codes?.length ? p.codes : null,
+      code: p.code ?? null,
+      name: p.name ?? null,
+      syncStatus: p.syncStatus ?? null,
+      filtroTarget: p.filtroTarget ?? null,
+      marcaId: p.marcaId ?? null,
+      categoriaId: p.categoriaId ?? null,
+      regimen: p.regimen ?? null
+    });
   }
 
   borrarExcepcion(code: string, target: Destino): Observable<void> {

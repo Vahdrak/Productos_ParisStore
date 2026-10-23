@@ -21,6 +21,7 @@ import { PaginadorComponent } from '../../shared/ui/paginador.component';
     <div class="fade-in">
       <div class="search-bar">
         <input type="text" placeholder="Buscar código..." aria-label="Buscar por código" [(ngModel)]="filterCode" (keyup.enter)="search()" class="form-input" />
+        <input type="text" placeholder="Buscar nombre..." aria-label="Buscar por nombre" [(ngModel)]="filterName" (keyup.enter)="search()" class="form-input" />
         <app-marca-picker placeholder="Marca (ej. NIKE)..." (marcaChange)="onMarca($event)"></app-marca-picker>
         <select [(ngModel)]="filterCategoriaId" (ngModelChange)="search()" class="form-input w-md" aria-label="Filtrar por departamento">
           <option [ngValue]="null">Departamento: Todos</option>
@@ -71,6 +72,22 @@ import { PaginadorComponent } from '../../shared/ui/paginador.component';
         <button type="button" class="btn btn-ghost" (click)="reenviarFiltrados()"
                 [title]="auth.logueado ? '' : 'Inicia sesión para modificar'"><app-icon name="refresh"></app-icon> Reenviar todo lo filtrado ({{ productList.totalCount }})</button>
         <span *ngIf="mensaje" class="text-small text-ok" role="status"><app-icon name="check"></app-icon> {{ mensaje }}</span>
+      </div>
+
+      <!-- Retener: excepción por SKU en bloque (los elegidos o todo lo filtrado); lo retenido se ve y se libera en "Filtros de envío" -->
+      <div class="search-bar" *ngIf="productList && productList.items.length > 0">
+        <span class="label-dim"><app-icon name="ban"></app-icon> Retener en:</span>
+        <select [(ngModel)]="destinoRetencion" class="form-input w-md" aria-label="Destino de la retención">
+          <option value="compras">Compras</option>
+          <option value="compara">Compara</option>
+          <option value="ambos">Ambos destinos</option>
+        </select>
+        <input type="text" class="form-input w-md" placeholder="Motivo (opcional)" aria-label="Motivo de la retención" [(ngModel)]="motivoRetencion" maxlength="200" />
+        <button type="button" class="btn btn-primary" [disabled]="seleccion.size === 0" (click)="retenerSeleccion()"
+                [title]="auth.logueado ? '' : 'Inicia sesión para modificar'"><app-icon name="ban"></app-icon> Retener seleccionados ({{ seleccion.size }})</button>
+        <button type="button" class="btn btn-ghost" [disabled]="!hayFiltros" (click)="retenerFiltrados()"
+                [title]="!auth.logueado ? 'Inicia sesión para modificar' : hayFiltros ? '' : 'Aplica un filtro (nombre, marca, departamento, código, régimen o estado) para retener en bloque'"><app-icon name="ban"></app-icon> Retener todo lo filtrado ({{ productList.totalCount }})</button>
+        <span *ngIf="mensajeRetencion" class="text-small text-ok" role="status"><app-icon name="check"></app-icon> {{ mensajeRetencion }}</span>
       </div>
 
       <!-- Últimos cambios del producto elegido -->
@@ -180,6 +197,7 @@ export class ProductosComponent implements OnInit {
   cargando = false;
 
   filterCode = '';
+  filterName = '';
   filterMarcaId: number | null = null;
   filterCategoriaId: number | null = null;
   filterTarget = '';
@@ -195,6 +213,11 @@ export class ProductosComponent implements OnInit {
 
   /** Códigos que Compras marca como no disponibles aunque tengan stock (foto de Worker.Verify --disponibilidad). */
   noDisponibles = new Set<string>();
+
+  // Retener en bloque
+  destinoRetencion: 'compras' | 'compara' | 'ambos' = 'ambos';
+  motivoRetencion = '';
+  mensajeRetencion = '';
 
   // Reenviar
   seleccion = new Set<string>();
@@ -246,6 +269,7 @@ export class ProductosComponent implements OnInit {
     this.cargando = true;
     this.productoService.getProductos({
       code: this.filterCode,
+      name: this.filterName,
       target: this.filterTarget,
       syncStatus: this.filterState ? parseInt(this.filterState) : undefined,
       marcaId: this.filterMarcaId,
@@ -273,6 +297,55 @@ export class ProductosComponent implements OnInit {
   private limpiarSeleccion() {
     this.seleccion.clear();
     this.mensaje = '';
+    this.mensajeRetencion = '';
+  }
+
+  /** Hay al menos un filtro aplicado (sin filtro no se permite retener "todo lo filtrado": sería todo el catálogo). */
+  get hayFiltros(): boolean {
+    return !!(this.filterCode || this.filterName || this.filterMarcaId || this.filterCategoriaId || this.filterRegimen || this.filterState);
+  }
+
+  private get nombreDestinoRetencion(): string {
+    return this.destinoRetencion === 'ambos' ? 'Compras y Compara' : this.destinoRetencion === 'compras' ? 'Compras' : 'Compara';
+  }
+
+  retenerSeleccion() {
+    if (!this.requiereSesion() || this.seleccion.size === 0) return;
+    if (!confirm(`¿Retener ${this.seleccion.size} productos en ${this.nombreDestinoRetencion}?\n\n` +
+        'Dejan de enviarse (se siguen actualizando en la base). Los ves y los liberas en "Filtros de envío" → Retenidos.')) return;
+    this.aplicarRetencion([...this.seleccion]);
+  }
+
+  retenerFiltrados() {
+    if (!this.requiereSesion() || !this.productList || !this.hayFiltros) return;
+    const total = this.productList.totalCount;
+    if (!confirm(`¿Retener en ${this.nombreDestinoRetencion} los ${total} productos del filtro actual?\n\n` +
+        'Dejan de enviarse (se siguen actualizando en la base). Los ves y los liberas en "Filtros de envío" → Retenidos.')) return;
+    this.aplicarRetencion();
+  }
+
+  private aplicarRetencion(codes?: string[]) {
+    this.envio.excepcionesLote({
+      target: this.destinoRetencion,
+      accion: 'retener',
+      motivo: this.motivoRetencion || undefined,
+      codes,
+      code: this.filterCode || undefined,
+      name: this.filterName || undefined,
+      syncStatus: this.filterState ? parseInt(this.filterState) : undefined,
+      filtroTarget: this.filterTarget || undefined,
+      marcaId: this.filterMarcaId,
+      categoriaId: this.filterCategoriaId,
+      regimen: this.filterRegimen === '' ? undefined : this.filterRegimen === 'true'
+    }).subscribe(
+      r => {
+        this.seleccion.clear();
+        this.mensajeRetencion = `${r.afectados} retenciones aplicadas en ${this.nombreDestinoRetencion}.`;
+      },
+      e => {
+        if (!String(e?.message ?? '').includes('401')) this.errors.show('No se pudo retener');
+      }
+    );
   }
 
   get todosDeLaPaginaElegidos(): boolean {
@@ -304,7 +377,7 @@ export class ProductosComponent implements OnInit {
   reenviarFiltrados() {
     if (!this.requiereSesion() || !this.productList) return;
     const total = this.productList.totalCount;
-    const hayFiltros = !!(this.filterCode || this.filterMarcaId || this.filterCategoriaId || this.filterRegimen || this.filterState);
+    const hayFiltros = this.hayFiltros;
     const estado = this.filterState
       ? `\nSolo los que están "${this.filterState === '1' ? 'Enviado' : this.filterState === '2' ? 'Error' : 'Pendiente'}" según la columna de ${this.filterTarget === 'compara' ? 'Compara' : 'Compras'}.`
       : '';
@@ -318,6 +391,7 @@ export class ProductosComponent implements OnInit {
       target: this.destinoReenvio,
       codes,
       code: this.filterCode || undefined,
+      name: this.filterName || undefined,
       syncStatus: this.filterState ? parseInt(this.filterState) : undefined,
       filtroTarget: this.filterTarget || undefined,
       marcaId: this.filterMarcaId,

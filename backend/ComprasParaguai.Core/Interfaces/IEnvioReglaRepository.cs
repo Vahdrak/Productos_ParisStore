@@ -29,6 +29,20 @@ public interface IEnvioReglaRepository
 
     Task<bool> BorrarExcepcionAsync(string code, SyncTarget target, CambioContexto contexto, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Pone o quita la excepción de muchos productos a la vez: los códigos dados y/o los que cumplan el filtro de la lista.
+    /// <paramref name="accion"/> "retener" o "enviar"; null quita la excepción (vuelve a heredar las pausas).
+    /// Solo toca lo que cambia (no reescribe excepciones iguales). Devuelve cuántas excepciones cambió.
+    /// </summary>
+    Task<int> AplicarExcepcionLoteAsync(IReadOnlyCollection<SyncTarget> targets, ProductosFiltro filtro, IReadOnlyCollection<string>? codes,
+        string? accion, string? motivo, CambioContexto contexto, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Todo lo que hoy NO se envía al destino (por una pausa o por una excepción "retener"), en cualquier estado de envío.
+    /// <paramref name="origen"/>: "pausa", "excepcion" o null (todos).
+    /// </summary>
+    Task<RetenidosListDto> BuscarRetenidosAsync(SyncTarget target, string? origen, string? q, int page, int pageSize, CancellationToken cancellationToken = default);
+
     Task<ReglaHistorialListDto> HistorialAsync(SyncTarget? target, int page, int pageSize, CancellationToken cancellationToken = default);
 
     /// <summary>Departamentos y secciones donde la marca tiene productos (para pausar "marca en categoría").</summary>
@@ -82,6 +96,40 @@ public class EnvioExcepcionDto
     public string? Motivo { get; set; }
     public string? UpdatedBy { get; set; }
     public DateTime UpdatedAt { get; set; }
+}
+
+public class RetenidoDto
+{
+    public string Code { get; set; } = string.Empty;
+    public string? NamePt { get; set; }
+    public string? Marca { get; set; }
+    public string? CategoriaRuta { get; set; }
+    public int Stock { get; set; }
+
+    /// <summary>Estado de envío al destino: 0 pendiente, 1 enviado, 2 error.</summary>
+    public int Estado { get; set; }
+
+    /// <summary>Qué lo retiene: "LACOSTE en INDUMENTARIA" o "Excepción: retener SKU".</summary>
+    public string? RetenidoPor { get; set; }
+
+    /// <summary>True si lo retiene una excepción propia del SKU (se quita); false si lo retiene una pausa.</summary>
+    public bool PorExcepcion { get; set; }
+
+    /// <summary>Motivo de la excepción, si la hay.</summary>
+    public string? Motivo { get; set; }
+}
+
+public class RetenidosListDto
+{
+    public List<RetenidoDto> Items { get; set; } = new();
+    public int TotalCount { get; set; }
+    public int Page { get; set; }
+    public int PageSize { get; set; }
+    public int TotalPages { get; set; }
+
+    /// <summary>Del total del filtro de búsqueda (sin el de origen): cuántos retiene una pausa y cuántos una excepción.</summary>
+    public int PorPausa { get; set; }
+    public int PorExcepcion { get; set; }
 }
 
 public class EnvioEstadoProductoDto

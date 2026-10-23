@@ -234,13 +234,14 @@ export class ProductoService {
    * de la lista; sin ninguno de los dos hay que pasar todos = true. Exige sesión.
    */
   reenviar(p: {
-    target: 'compras' | 'compara' | 'ambos'; codes?: string[]; code?: string; syncStatus?: number; filtroTarget?: string;
+    target: 'compras' | 'compara' | 'ambos'; codes?: string[]; code?: string; name?: string; syncStatus?: number; filtroTarget?: string;
     marcaId?: number | null; categoriaId?: number | null; regimen?: boolean; todos?: boolean;
   }): Observable<{ reiniciados: number }> {
     return this.http.post<{ reiniciados: number }>('/productos/reenviar', {
       target: p.target,
       codes: p.codes?.length ? p.codes : null,
       code: p.code ?? null,
+      name: p.name ?? null,
       syncStatus: p.syncStatus ?? null,
       filtroTarget: p.filtroTarget ?? null,
       marcaId: p.marcaId ?? null,

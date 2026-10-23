@@ -257,6 +257,119 @@ public class PostgreSqlEnvioReglaRepository : IEnvioReglaRepository
         };
     }
 
+    // ---------------------------------------------------------- acciones masivas y lista de retenidos
+
+    public async Task<int> AplicarExcepcionLoteAsync(IReadOnlyCollection<SyncTarget> targets, ProductosFiltro filtro, IReadOnlyCollection<string>? codes,
+        string? accion, string? motivo, CambioContexto contexto, CancellationToken cancellationToken = default)
+    {
+        var (conditions, parameters) = PostgreSqlProductoRepository.FiltroProductos(
+            filtro.Code, filtro.Name, filtro.SyncStatus, filtro.Target, filtro.MarcaId, filtro.CategoriaId, filtro.Regimen);
+        if (codes is { Count: > 0 })
+        {
+            conditions.Add("p.code = ANY(@codes)");
+            parameters.Add("codes", codes.ToArray());
+        }
+        string where = conditions.Count > 0 ? " AND " + string.Join(" AND ", conditions) : "";
+
+        parameters.Add("accion", accion);
+        parameters.Add("motivo", string.IsNullOrWhiteSpace(motivo) ? null : motivo.Trim());
+        parameters.Add("usuario", contexto.Usuario);
+
+        using var connection = new NpgsqlConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var tx = await connection.BeginTransactionAsync(cancellationToken);
+        await AuditoriaSesion.ConfigurarAsync(connection, tx, contexto, cancellationToken);
+
+        int total = 0;
+        foreach (var target in targets.Distinct())
+        {
+            parameters.Add("target", Destino(target));
+            if (accion is null)
+            {
+                total += await connection.ExecuteAsync($@"
+                    DELETE FROM envio_excepciones e USING productos p
+                    WHERE e.producto_id = p.id AND e.target = @target{where}", parameters, tx);
+            }
+            else
+            {
+                // Solo escribe lo que cambia: una excepción igual a la pedida no se reescribe (así no ensucia el historial).
+                total += await connection.ExecuteAsync($@"
+                    INSERT INTO envio_excepciones (target, producto_id, accion, motivo, created_by, updated_by)
+                    SELECT @target, p.id, @accion, @motivo, @usuario, @usuario FROM productos p WHERE TRUE{where}
+                    ON CONFLICT (target, producto_id) DO UPDATE SET
+                        accion = EXCLUDED.accion, activo = TRUE, motivo = EXCLUDED.motivo,
+                        updated_by = EXCLUDED.updated_by, updated_at = now()
+                    WHERE envio_excepciones.accion IS DISTINCT FROM EXCLUDED.accion
+                       OR NOT envio_excepciones.activo
+                       OR envio_excepciones.motivo IS DISTINCT FROM EXCLUDED.motivo", parameters, tx);
+            }
+        }
+
+        await tx.CommitAsync(cancellationToken);
+        return total;
+    }
+
+    public async Task<RetenidosListDto> BuscarRetenidosAsync(SyncTarget target, string? origen, string? q, int page, int pageSize, CancellationToken cancellationToken = default)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 200);
+        var estado = Cols(target).Status;
+        string retenido = EnvioSql.Retenido(target);
+        string retenidoPor = EnvioSql.RetenidoPor(target);
+        string porExcepcion = EnvioSql.ExcepcionRetener(target);
+
+        var parameters = new DynamicParameters();
+        var baseConditions = new List<string> { retenido };
+        if (!string.IsNullOrWhiteSpace(q))
+        {
+            baseConditions.Add("(p.code ILIKE @q OR p.name_pt ILIKE @q OR p.name_es ILIKE @q OR m.nombre ILIKE @q)");
+            parameters.Add("q", $"%{q.Trim()}%");
+        }
+        string whereBase = "WHERE " + string.Join(" AND ", baseConditions);
+
+        var itemConditions = new List<string>(baseConditions);
+        if (string.Equals(origen, "excepcion", StringComparison.OrdinalIgnoreCase)) itemConditions.Add(porExcepcion);
+        else if (string.Equals(origen, "pausa", StringComparison.OrdinalIgnoreCase)) itemConditions.Add($"NOT {porExcepcion}");
+        string whereItems = "WHERE " + string.Join(" AND ", itemConditions);
+
+        const string from = "productos p JOIN marcas m ON m.id = p.marca_id LEFT JOIN categorias c ON c.id = p.categoria_id";
+        parameters.Add("t", Destino(target));
+        parameters.Add("pageSize", pageSize);
+        parameters.Add("offset", (page - 1) * pageSize);
+
+        string items = $@"
+            SELECT p.code AS Code, p.name_pt AS NamePt, m.nombre AS Marca, c.ruta AS CategoriaRuta, p.stock AS Stock,
+                   p.{estado} AS Estado, {retenidoPor} AS RetenidoPor, ({porExcepcion}) AS PorExcepcion,
+                   (SELECT e.motivo FROM envio_excepciones e
+                    WHERE e.producto_id = p.id AND e.target = @t AND e.activo AND e.accion = 'retener') AS Motivo
+            FROM {from} {whereItems}
+            ORDER BY p.code
+            LIMIT @pageSize OFFSET @offset";
+
+        string totalItems = $"SELECT COUNT(*)::int FROM {from} {whereItems}";
+        string resumen = $@"
+            SELECT (COUNT(*) FILTER (WHERE NOT {porExcepcion}))::int AS PorPausa,
+                   (COUNT(*) FILTER (WHERE {porExcepcion}))::int AS PorExcepcion
+            FROM {from} {whereBase}";
+
+        using var connection = new NpgsqlConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken);
+        var lista = (await connection.QueryAsync<RetenidoDto>(items, parameters)).ToList();
+        int total = await connection.ExecuteScalarAsync<int>(totalItems, parameters);
+        var (porPausa, porExc) = await connection.QuerySingleAsync<(int PorPausa, int PorExcepcion)>(resumen, parameters);
+
+        return new RetenidosListDto
+        {
+            Items = lista,
+            TotalCount = total,
+            Page = page,
+            PageSize = pageSize,
+            TotalPages = (int)Math.Ceiling(total / (double)pageSize),
+            PorPausa = porPausa,
+            PorExcepcion = porExc
+        };
+    }
+
     // ---------------------------------------------------------- marca/categoría
 
     public async Task<List<MarcaCategoriaDto>> CategoriasDeMarcaAsync(int marcaId, SyncTarget target, CancellationToken cancellationToken = default)
