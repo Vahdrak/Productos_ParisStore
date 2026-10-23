@@ -113,6 +113,29 @@ services:
         limits:
           memory: 1G
 
+  # Worker.Verify en modo servicio: atiende los pedidos "Revisar ahora" / "Verificar muestra" del panel (solo con sesión iniciada).
+  # Es el único contenedor, junto a worker-compras, que lleva el token de Compras: la API no lo tiene.
+  worker-verify:
+    image: proyectsoft/comprasparaguai-worker-verify:latest
+    container_name: worker_verify_prod
+    command: ["--servicio"]
+    environment:
+      - ConnectionStrings__PostgreSQL=Host=db;Port=5432;Database=${DB_NAME:-catalogosdb};Username=${DB_USER:-postgres};Password=${DB_PASSWORD:-postgres}
+      - Compras__ApiUrl=${COMPRAS_API_URL:-https://produtos.comprasparaguai.com.br}
+      - Compras__Token=${COMPRAS_API_TOKEN}
+      # 0 = solo corre cuando alguien lo pide en el panel; N = además revisa la disponibilidad solo cada N horas.
+      - Verify__AutoDisponibilidadHoras=${VERIFY_AUTO_HORAS:-0}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: always
+    networks:
+      - comprasparaguai-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
 volumes:
   postgres_data:
     driver: local

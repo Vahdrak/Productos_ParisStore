@@ -13,6 +13,7 @@ una vez ejecutados: cualquier cambio va en una migración nueva (`NNN_descripcio
 | 012 | `012_envio_reglas.sql` | Pausas de envío por marca/categoría, excepciones por SKU, productos retirados e historial de reglas |
 | 013 | `013_envio_errores.sql` | Errores de envío normalizados (`error_mensajes` + `envio_errores`); reemplaza `productos.last_error*` |
 | 014 | `014_compras_disponibilidad.sql` | Foto de los productos con stock que Compras marca como no disponibles (`compras_disponibilidad`) |
+| 015 | `015_verify_solicitudes.sql` | Cola de pedidos para `Worker.Verify` (`verify_solicitudes`): el panel pide, el worker ejecuta |
 
 ## Cómo aplicarlas
 

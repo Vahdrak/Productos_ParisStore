@@ -58,7 +58,13 @@ dotnet run --project workers/Worker.Verify -- --disponibilidad # foto de los no 
 la lista de productos **con stock que Compras marca como no disponibles** (`compras_disponibilidad`, se reemplaza completa en cada corrida).
 El panel la muestra en **Compras → "No disponibles en Compras"** (con botón *Descargar CSV*), en el **Dashboard** y como insignia *No disp.* en **Productos**.
 
-Es una foto: el panel indica cuándo se tomó. Se puede repetir las veces que haga falta (son pocas peticiones) o programar.
+Es una foto: el panel indica cuándo se tomó. Se puede repetir las veces que haga falta (son pocas peticiones).
+
+**Desde el panel (producción).** En Docker corre `worker-verify` con `--servicio`: queda encendido y, cuando alguien con sesión iniciada aprieta
+**Revisar ahora** (pestaña Compras → "No disponibles en Compras") o **Verificar muestra** (Compras → "Verificaciones"), toma el pedido de la tabla
+`verify_solicitudes` y lo ejecuta; el panel muestra "esperando al worker / consultando / listo" y se actualiza solo. Sin sesión los botones están
+deshabilitados y la API responde 401. Si ya hay un pedido abierto del mismo tipo, un segundo clic no crea otro. Con `VERIFY_AUTO_HORAS=N` el worker
+además pide solo la revisión de disponibilidad cada N horas (0 = nunca).
 
 > **`available` lo decide Compras, no nosotros.** El envío no lo manda y el spec del import no lo acepta. Si un producto llegó con su stock y precio
 > al día pero figura *no disponible*, no es un fallo del envío: hay que preguntarle a Compras por qué. El CSV del panel sirve para mandarles la lista.

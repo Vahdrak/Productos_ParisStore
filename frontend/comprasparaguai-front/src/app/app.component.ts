@@ -9,7 +9,6 @@ import { PendientesComponent } from './pages/pendientes/pendientes.component';
 import { SyncComponent } from './pages/sync/sync.component';
 import { ComprasComponent } from './pages/compras/compras.component';
 import { ComparaComponent } from './pages/compara/compara.component';
-import { ApiComponent } from './pages/api/api.component';
 import { CambiosComponent } from './pages/cambios/cambios.component';
 import { FiltrosEnvioComponent } from './pages/filtros-envio/filtros-envio.component';
 import { ErroresComponent } from './pages/errores/errores.component';
@@ -21,7 +20,7 @@ import { IconComponent } from './shared/ui/icon.component';
   imports: [
     CommonModule, FormsModule, IconComponent,
     DashboardComponent, ProductosComponent, PendientesComponent,
-    SyncComponent, ComprasComponent, ComparaComponent, ApiComponent, CambiosComponent, FiltrosEnvioComponent, ErroresComponent
+    SyncComponent, ComprasComponent, ComparaComponent, CambiosComponent, FiltrosEnvioComponent, ErroresComponent
   ],
   template: `
     <div class="app-container">
@@ -83,7 +82,6 @@ import { IconComponent } from './shared/ui/icon.component';
         <app-sync *ngIf="page === 'sync'"></app-sync>
         <app-compras *ngIf="page === 'compras'"></app-compras>
         <app-compara *ngIf="page === 'compara'"></app-compara>
-        <app-api *ngIf="page === 'api'"></app-api>
       </main>
     </div>
   `,
@@ -228,8 +226,7 @@ export class AppComponent {
     { id: 'cambios', label: 'Cambios' },
     { id: 'sync', label: 'Sync' },
     { id: 'compras', label: 'Compras' },
-    { id: 'compara', label: 'Compara' },
-    { id: 'api', label: 'Probar API' }
+    { id: 'compara', label: 'Compara' }
   ];
 
   page = 'dashboard';

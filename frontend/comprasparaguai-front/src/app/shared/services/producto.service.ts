@@ -101,6 +101,20 @@ export interface NoDisponiblesList {
   totalConStock: number;
 }
 
+/** Pedido de verificación que el panel deja para Worker.Verify (que corre aparte y es quien tiene el token de Compras). */
+export interface VerifySolicitud {
+  id: number;
+  tipo: 'disponibilidad' | 'muestra';
+  estado: 'pendiente' | 'corriendo' | 'ok' | 'error';
+  origen: 'panel' | 'auto';
+  solicitadoPor?: string;
+  solicitadoAt: string;
+  iniciadoAt?: string;
+  terminadoAt?: string;
+  resultado?: string;
+  error?: string;
+}
+
 export interface SyncRun {
   id?: number;
   startedAt: string;
@@ -290,17 +304,7 @@ export class ProductoService {
     return this.http.put<Producto>(`/productos/${code}`, producto);
   }
 
-  getCPProducts(token: string, code?: string): Observable<any> {
-    let url = `/comprasparaguai/products?token=${encodeURIComponent(token)}`;
-    if (code) {
-      url += `&code=${encodeURIComponent(code)}`;
-    }
-    return this.http.get<any>(url);
-  }
 
-  importCPProducts(token: string, payload: any): Observable<any> {
-    return this.http.post<any>(`/comprasparaguai/import?token=${encodeURIComponent(token)}`, payload);
-  }
 
   getSendRuns(target?: string, limit: number = 50): Observable<SendRun[]> {
     let url = `/workers/send-runs?limit=${limit}`;
@@ -315,6 +319,15 @@ export class ProductoService {
   /** Productos con stock que Compras marca como no disponibles (foto de Worker.Verify --disponibilidad). */
   getNoDisponibles(page: number = 1, pageSize: number = 50): Observable<NoDisponiblesList> {
     return this.http.get<NoDisponiblesList>(`/compras/no-disponibles?page=${page}&pageSize=${pageSize}`);
+  }
+
+  getVerifySolicitudes(limit: number = 10): Observable<VerifySolicitud[]> {
+    return this.http.get<VerifySolicitud[]>(`/verify/solicitudes?limit=${limit}`);
+  }
+
+  /** Pide una verificación (requiere sesión). Si ya hay una abierta del mismo tipo, devuelve esa con nueva = false. */
+  solicitarVerify(tipo: VerifySolicitud['tipo']): Observable<{ solicitud: VerifySolicitud; nueva: boolean }> {
+    return this.http.post<{ solicitud: VerifySolicitud; nueva: boolean }>(`/verify/solicitudes?tipo=${tipo}`, {});
   }
 
   getNoDisponiblesCodigos(): Observable<string[]> {

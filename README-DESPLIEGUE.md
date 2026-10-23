@@ -24,6 +24,7 @@ CORS_ALLOWED_ORIGINS=http://localhost:4200,http://172.16.249.94:4200,http://172.
 - `worker_sync_prod` → Sincronización Oracle → PostgreSQL
 - `worker_compras_prod` → Envío a Compras Paraguai
 - `worker_compara_prod` → Envío a Compara Paraguai
+- `worker_verify_prod` → Verificación contra Compras (atiende los botones del panel; no envía nada)
 
 ---
 
@@ -371,7 +372,12 @@ Agrégalas al `.env` del servidor (ver `.env.example`).
 cada servicio las aplica al arrancar con un candado en la BD (`pg_advisory_lock`): si la API y varios workers arrancan a la
 vez, migra uno solo y los demás esperan, así que no importa el orden. `worker-sync` lee `ConnectionStrings__Oracle`
 (el compose la arma desde `ORACLE_CONNECTION_STRING` del `.env`; antes pasaba un nombre que el worker no leía).
-Los tokens de Compras/Compara van en `COMPRAS_API_TOKEN` y `COMPARA_API_TOKEN`. `worker-verify` no está en el compose: se corre a mano.
+Los tokens de Compras/Compara van en `COMPRAS_API_TOKEN` y `COMPARA_API_TOKEN`. `worker-verify` sí está en el compose, en modo `--servicio`: queda encendido y atiende los pedidos que se hacen
+desde el panel con **Revisar ahora** (productos con stock que Compras marca como no disponibles) y **Verificar muestra**
+(pestaña Compras; solo con sesión iniciada). La API no corre el worker ni tiene el token de Compras: el botón deja una fila en
+`verify_solicitudes` y el contenedor la toma en unos segundos. Si un pedido se queda en "pendiente", ese contenedor no está
+encendido (`docker compose up -d worker-verify`). Con `VERIFY_AUTO_HORAS=N` además revisa la disponibilidad solo cada N horas.
+Imagen nueva: `Dockerfile.worker-verify` (`proyectsoft/comprasparaguai-worker-verify`), se construye como las otras.
 
 **Crear (o cambiar la contraseña de) un usuario del panel** — alternativa a las variables `AUTH_ADMIN_*`, sirve en cualquier momento y pide la contraseña por consola (mínimo 8 caracteres; se guarda con hash):
 

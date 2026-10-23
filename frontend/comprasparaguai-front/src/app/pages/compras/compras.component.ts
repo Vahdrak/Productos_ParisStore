@@ -5,7 +5,8 @@ import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { interval } from 'rxjs';
 import { ErroresService } from '../../shared/services/errores.service';
-import { NoDisponible, NoDisponiblesList, ProductoService, SendRun, VerifyResult, VerifyRun } from '../../shared/services/producto.service';
+import { NoDisponible, NoDisponiblesList, ProductoService, SendRun, VerifyResult, VerifyRun, VerifySolicitud } from '../../shared/services/producto.service';
+import { AuthService } from '../../shared/services/auth.service';
 import { ErrorService } from '../../shared/services/error.service';
 import { fechaPy, isDateInRange } from '../../shared/utils/fechas';
 import { DateRangeComponent } from '../../shared/ui/date-range.component';
@@ -83,14 +84,25 @@ import { IconComponent } from '../../shared/ui/icon.component';
         <h3 class="section-title"><app-icon name="warn" size="1em"/> No disponibles en Compras ({{ noDisp?.totalCount ?? 0 }})</h3>
         <p class="text-small text-dim">
           Productos que tenemos con stock y que Compras Paraguai marca como <b>no disponibles</b>. El stock y el precio llegaron bien:
-          la marca <code>available</code> la decide Compras, no el envío. Se actualiza con <code>Worker.Verify --disponibilidad</code>.
+          la marca <code>available</code> la decide Compras, no el envío. Se actualiza cuando el worker de verificación consulta a Compras:
+          aprieta <b>Revisar ahora</b> (requiere sesión iniciada).
         </p>
         <div class="search-bar">
+          <button type="button" class="btn btn-sm" (click)="pedir('disponibilidad')"
+                  [disabled]="!auth.logueado || !!abierta('disponibilidad') || pidiendo"
+                  [title]="auth.logueado ? 'Pide al worker que consulte a Compras ahora' : 'Inicia sesión para pedir una revisión'">
+            <app-icon name="refresh" size="1em"/> Revisar ahora
+          </button>
+          <ng-container *ngIf="estado('disponibilidad') as e">
+            <span class="text-small" [ngClass]="e.clase" role="status">
+              <span *ngIf="e.cargando" class="spinner" aria-hidden="true"></span> {{ e.texto }}
+            </span>
+          </ng-container>
           <span class="text-small text-dim" *ngIf="noDisp?.checkedAt">
             Revisado el {{ noDisp?.checkedAt | fechaPy:'yyyy-MM-dd HH:mm' }} · Compras tenía {{ noDisp?.totalConStock }} productos con stock
           </span>
-          <span class="text-small text-warn" *ngIf="noDisp && !noDisp.checkedAt">
-            Todavía no se revisó. Corre <code>Worker.Verify --disponibilidad</code>.
+          <span class="text-small text-warn" *ngIf="noDisp && !noDisp.checkedAt && !abierta('disponibilidad')">
+            Todavía no se revisó.
           </span>
           <button type="button" class="btn btn-ghost btn-sm" (click)="descargarCsv()" [disabled]="!noDisp || noDisp.totalCount === 0">Descargar CSV</button>
         </div>
@@ -128,6 +140,21 @@ import { IconComponent } from '../../shared/ui/icon.component';
       <!-- Verificaciones -->
       <div class="section-card mt-6">
         <h3 class="section-title"><app-icon name="check" size="1em"/> Verificaciones</h3>
+        <p class="text-small text-dim">
+          Toma 500 productos al azar marcados como Enviados y los busca uno por uno en Compras, para comprobar que llegaron con su precio y stock.
+        </p>
+        <div class="search-bar">
+          <button type="button" class="btn btn-sm" (click)="pedir('muestra')"
+                  [disabled]="!auth.logueado || !!abierta('muestra') || pidiendo"
+                  [title]="auth.logueado ? 'Pide al worker que verifique una muestra ahora' : 'Inicia sesión para pedir una verificación'">
+            <app-icon name="refresh" size="1em"/> Verificar muestra
+          </button>
+          <ng-container *ngIf="estado('muestra') as e">
+            <span class="text-small" [ngClass]="e.clase" role="status">
+              <span *ngIf="e.cargando" class="spinner" aria-hidden="true"></span> {{ e.texto }}
+            </span>
+          </ng-container>
+        </div>
         <div class="table-container">
           <table class="data-table" *ngIf="verifyRuns.length > 0">
             <thead>
@@ -208,8 +235,73 @@ export class ComprasComponent implements OnInit {
   page = 1;
   totalPages = 1;
 
-  constructor(private productoService: ProductoService, private erroresService: ErroresService, private errors: ErrorService) {
+  solicitudes: VerifySolicitud[] = [];
+  pidiendo = false;
+
+  constructor(
+    private productoService: ProductoService,
+    private erroresService: ErroresService,
+    private errors: ErrorService,
+    public auth: AuthService
+  ) {
     interval(30000).pipe(takeUntilDestroyed()).subscribe(() => this.load());
+    // Mientras haya un pedido abierto se mira cada 4 s si el worker ya lo terminó.
+    interval(4000).pipe(takeUntilDestroyed()).subscribe(() => { if (this.solicitudes.some(s => this.estaAbierta(s))) this.cargarSolicitudes(); });
+  }
+
+  private estaAbierta(s: VerifySolicitud) { return s.estado === 'pendiente' || s.estado === 'corriendo'; }
+
+  /** El pedido abierto (pendiente o corriendo) de este tipo, si hay. */
+  abierta(tipo: string): VerifySolicitud | undefined {
+    return this.solicitudes.find(s => s.tipo === tipo && this.estaAbierta(s));
+  }
+
+  /** Texto y color para el último pedido de este tipo. Null si nunca se pidió. */
+  estado(tipo: string): { texto: string; clase: string; cargando: boolean } | null {
+    const s = this.solicitudes.find(x => x.tipo === tipo);
+    if (!s) return null;
+    const quien = s.origen === 'auto' ? 'automática' : (s.solicitadoPor ? `pedida por ${s.solicitadoPor}` : 'pedida desde el panel');
+    switch (s.estado) {
+      case 'pendiente':
+        return { texto: 'Pedida; esperando al worker (si tarda, revisa que worker_verify_prod esté encendido)', clase: 'text-warn', cargando: true };
+      case 'corriendo':
+        return { texto: 'Consultando a Compras…', clase: 'text-dim', cargando: true };
+      case 'ok':
+        return { texto: `Última vez ${fechaPy(s.terminadoAt, 'yyyy-MM-dd HH:mm')} (${quien}): ${s.resultado ?? 'listo'}`, clase: 'text-dim', cargando: false };
+      default:
+        return { texto: `Falló (${fechaPy(s.terminadoAt, 'yyyy-MM-dd HH:mm')}): ${s.error ?? 'sin detalle'}`, clase: 'text-err', cargando: false };
+    }
+  }
+
+  cargarSolicitudes() {
+    const habiaAbiertas = this.solicitudes.some(s => this.estaAbierta(s));
+    this.productoService.getVerifySolicitudes(10).subscribe(
+      lista => {
+        this.solicitudes = lista;
+        // Si lo que estaba en curso terminó, refresca las tablas que ese pedido actualiza.
+        if (habiaAbiertas && !lista.some(s => this.estaAbierta(s))) {
+          this.cargarNoDisponibles(this.noDispPage);
+          this.productoService.getVerifyRuns().subscribe(runs => this.verifyRuns = runs);
+        }
+      },
+      () => { /* sin la cola el resto de la pantalla sigue funcionando */ }
+    );
+  }
+
+  /** Pide una verificación al worker. Solo con sesión iniciada (el servidor también lo exige). */
+  pedir(tipo: VerifySolicitud['tipo']) {
+    if (!this.auth.logueado || this.pidiendo) return;
+    this.pidiendo = true;
+    this.productoService.solicitarVerify(tipo).subscribe(
+      () => {
+        this.pidiendo = false;
+        this.cargarSolicitudes();
+      },
+      () => {
+        this.pidiendo = false;
+        this.errors.show('No se pudo pedir la verificación');
+      }
+    );
   }
 
   ngOnInit() {
@@ -237,6 +329,7 @@ export class ComprasComponent implements OnInit {
       () => this.cargandoVerify = false
     );
     this.cargarNoDisponibles(this.noDispPage);
+    this.cargarSolicitudes();
   }
 
   /** Productos con stock que Compras marca como no disponibles (foto de Worker.Verify --disponibilidad). */

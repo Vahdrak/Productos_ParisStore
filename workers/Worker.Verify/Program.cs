@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Globalization;
 using System.Text;
 using ComprasParaguai.Core.Interfaces;
@@ -26,6 +27,10 @@ var comprasToken = config["Compras:Token"]
     ?? throw new InvalidOperationException("Compras:Token no configurado (.env o variable de entorno)");
 var defaultSample = config.GetValue<int>("Verify:SampleSize", 500);
 var delayMs = config.GetValue<int>("Verify:DelayMs", 100);
+// Modo --servicio: cada cuántos segundos mira si el panel pidió algo, y cada cuántas horas pide solo la revisión de
+// disponibilidad (0 = no lo hace; solo corre cuando alguien aprieta el botón del panel).
+var pollSegundos = Math.Max(2, config.GetValue<int>("Verify:PollSegundos", 10));
+var autoDisponibilidadHoras = config.GetValue<int>("Verify:AutoDisponibilidadHoras", 0);
 var outputDir = Path.GetFullPath(config["Verify:OutputDir"] ?? "verify-output", Directory.GetCurrentDirectory());
 
 // Asegura el esquema (p. ej. la tabla de la foto de disponibilidad) aunque la API todavía no haya arrancado.
@@ -41,6 +46,8 @@ builder.Services.AddSingleton<IVerifyRunRepository>(sp =>
     new PostgreSqlVerifyRunRepository(connectionString));
 builder.Services.AddSingleton<IDisponibilidadRepository>(sp =>
     new PostgreSqlDisponibilidadRepository(connectionString));
+builder.Services.AddSingleton<IVerifySolicitudRepository>(sp =>
+    new PostgreSqlVerifySolicitudRepository(connectionString));
 
 var host = builder.Build();
 var logger = host.Services.GetRequiredService<ILogger<Program>>();
@@ -58,9 +65,14 @@ switch (command)
         await DisponibilidadAsync();
         break;
 
+    case "--servicio":
+        await ServicioAsync();
+        break;
+
     default:
         logger.LogError("Comando no reconocido: {Command}", command);
-        logger.LogInformation("Uso: Worker.Verify [--compras] [cantidad] | --disponibilidad");
+        logger.LogInformation("Uso: Worker.Verify [--compras] [cantidad] | --disponibilidad | --servicio");
+        logger.LogInformation("  --servicio         Queda encendido atendiendo los pedidos del panel (es lo que corre en Docker)");
         logger.LogInformation("  --compras [N]      Toma N productos al azar marcados Enviado a Compras (default {N}),", defaultSample);
         logger.LogInformation("                     los busca en la API de Compras y escribe un CSV en {Dir}", outputDir);
         logger.LogInformation("  --disponibilidad   Pide a Compras los productos con stock que marca como no disponibles");
@@ -69,7 +81,84 @@ switch (command)
         break;
 }
 
-async Task DisponibilidadAsync()
+/// <summary>
+/// Queda encendido atendiendo los pedidos que deja el panel en verify_solicitudes (y, opcionalmente, pidiendo solo la
+/// revisión de disponibilidad cada N horas). Se detiene con Ctrl+C o SIGTERM (docker stop).
+/// </summary>
+async Task ServicioAsync()
+{
+    using var cts = new CancellationTokenSource();
+    Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
+    try { PosixSignalRegistration.Create(PosixSignal.SIGTERM, ctx => { ctx.Cancel = true; cts.Cancel(); }); }
+    catch (PlatformNotSupportedException) { /* sin SIGTERM: queda Ctrl+C */ }
+
+    var cola = host.Services.GetRequiredService<IVerifySolicitudRepository>();
+
+    var interrumpidas = await cola.MarcarInterrumpidasAsync(cts.Token);
+    if (interrumpidas > 0) logger.LogWarning("{N} pedido(s) quedaron a medias en la corrida anterior y se marcaron como error", interrumpidas);
+
+    logger.LogInformation("=== Worker.Verify en servicio: atiende los pedidos del panel cada {S} s{Auto} ===",
+        pollSegundos, autoDisponibilidadHoras > 0 ? $"; pide la revisión de disponibilidad cada {autoDisponibilidadHoras} h" : "");
+
+    while (!cts.IsCancellationRequested)
+    {
+        try
+        {
+            await PedirRevisionAutomaticaAsync(cola, cts.Token);
+
+            var pedido = await cola.ReclamarSiguienteAsync(cts.Token);
+            if (pedido is not null)
+            {
+                await AtenderAsync(cola, pedido, cts.Token);
+                continue; // puede haber otro esperando
+            }
+        }
+        catch (OperationCanceledException) { break; }
+        catch (Exception ex)
+        {
+            // Un fallo de la BD no debe tumbar el servicio: se reintenta en el próximo ciclo.
+            logger.LogError(ex, "Error en el ciclo del servicio; reintento en {S} s", pollSegundos);
+        }
+
+        try { await Task.Delay(TimeSpan.FromSeconds(pollSegundos), cts.Token); }
+        catch (OperationCanceledException) { break; }
+    }
+
+    logger.LogInformation("Worker.Verify detenido");
+}
+
+async Task PedirRevisionAutomaticaAsync(IVerifySolicitudRepository cola, CancellationToken ct)
+{
+    if (autoDisponibilidadHoras <= 0) return;
+
+    var ultima = await cola.UltimaSolicitudAsync(VerifyTipo.Disponibilidad, ct);
+    if (ultima is not null && DateTime.UtcNow - ultima.Value < TimeSpan.FromHours(autoDisponibilidadHoras)) return;
+
+    var (_, nueva) = await cola.SolicitarAsync(VerifyTipo.Disponibilidad, "auto", null, ct);
+    if (nueva) logger.LogInformation("Revisión automática de disponibilidad pedida (cada {H} h)", autoDisponibilidadHoras);
+}
+
+async Task AtenderAsync(IVerifySolicitudRepository cola, VerifySolicitudDto pedido, CancellationToken ct)
+{
+    logger.LogInformation("Pedido #{Id} ({Tipo}) de {Quien}: empieza", pedido.Id, pedido.Tipo, pedido.SolicitadoPor ?? pedido.Origen);
+    try
+    {
+        var resumen = pedido.Tipo == VerifyTipo.Muestra
+            ? await VerifyAsync(SyncTarget.ComprasParaguai, "Compras Paraguai", host.Services.GetRequiredService<IProductQueryClient>())
+            : await DisponibilidadAsync();
+
+        await cola.TerminarAsync(pedido.Id, resumen, null, CancellationToken.None);
+        logger.LogInformation("Pedido #{Id} terminado: {Resumen}", pedido.Id, resumen);
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Pedido #{Id} falló", pedido.Id);
+        // Se cierra aunque el servicio esté deteniéndose, para que el panel no lo vea "corriendo" para siempre.
+        await cola.TerminarAsync(pedido.Id, null, ex.Message.Length > 500 ? ex.Message[..500] : ex.Message, CancellationToken.None);
+    }
+}
+
+async Task<string> DisponibilidadAsync()
 {
     logger.LogInformation("=== Worker.Verify → Compras Paraguai: productos con stock marcados como no disponibles ===");
 
@@ -84,15 +173,16 @@ async Task DisponibilidadAsync()
 
     await repo.ReemplazarAsync(noDisponibles, totalConStock, DateTime.UtcNow);
 
-    logger.LogInformation("Compras tiene {Total} productos con stock; {N} figuran como no disponibles ({Pct:P2}).",
-        totalConStock, noDisponibles.Count, totalConStock == 0 ? 0 : (double)noDisponibles.Count / totalConStock);
+    var resumen = $"Compras tiene {totalConStock} productos con stock; {noDisponibles.Count} figuran como no disponibles ({(totalConStock == 0 ? 0 : (double)noDisponibles.Count / totalConStock):P2})";
+    logger.LogInformation("{Resumen}.", resumen);
     foreach (var p in noDisponibles.Take(10))
         logger.LogInformation("  {Code}  stock {Stock}  {Name}", p.Code, p.Stock, p.NamePt);
     if (noDisponibles.Count > 10)
         logger.LogInformation("  ... {N} más en el panel", noDisponibles.Count - 10);
+    return resumen;
 }
 
-async Task VerifyAsync(SyncTarget target, string targetName, IProductQueryClient client)
+async Task<string> VerifyAsync(SyncTarget target, string targetName, IProductQueryClient client)
 {
     logger.LogInformation("=== Worker.Verify → {Target}: {N} productos al azar marcados Enviado ===", targetName, sampleSize);
 
@@ -108,7 +198,7 @@ async Task VerifyAsync(SyncTarget target, string targetName, IProductQueryClient
     if (results.Count == 0)
     {
         logger.LogWarning("No hay productos marcados como Enviado a {Target}", targetName);
-        return;
+        return $"No hay productos marcados como Enviado a {targetName}";
     }
 
     Directory.CreateDirectory(outputDir);
@@ -130,6 +220,7 @@ async Task VerifyAsync(SyncTarget target, string targetName, IProductQueryClient
         logger.LogWarning("  ... ver el CSV para el resto");
 
     logger.LogInformation("Archivo: {File}", file);
+    return $"{found}/{results.Count} encontrados en Compras; precio coincide en {priceOk}, stock en {stockOk}; actualizados hoy: {updatedToday}";
 }
 
 static async Task WriteCsvAsync(string path, List<VerifyResult> results)
