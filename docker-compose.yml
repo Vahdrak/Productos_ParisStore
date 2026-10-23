@@ -33,7 +33,9 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
       POSTGRES_DB: ${DB_NAME:-catalogosdb}
     ports:
-      - "5432:5432"
+      # Solo local por defecto: en un servidor, la base no debe quedar abierta a internet.
+      # Para conectarte desde otra máquina pon DB_BIND=0.0.0.0 en el .env (y protege el puerto con el firewall).
+      - "${DB_BIND:-127.0.0.1}:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: always
