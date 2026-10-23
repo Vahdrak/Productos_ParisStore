@@ -28,21 +28,21 @@ import { IconComponent } from '../../shared/ui/icon.component';
                 <th scope="col">Fin</th>
                 <th scope="col">Duración</th>
                 <th scope="col">Filas</th>
-                <th scope="col">Nuevos</th>
-                <th scope="col">Actualizados</th>
+                <th scope="col" class="tono-teal">Nuevos</th>
+                <th scope="col" class="tono-sky">Actualizados</th>
                 <th scope="col">Estado</th>
               </tr>
             </thead>
             <tbody>
-              <tr *ngFor="let run of syncRuns">
+              <tr *ngFor="let run of syncRuns" [class.fila-tono]="run.notes?.startsWith('Error')" [class.tono-err]="run.notes?.startsWith('Error')">
                 <td>{{ run.startedAt | fechaPy:'yyyy-MM-dd HH:mm:ss' }}</td>
                 <td>{{ run.finishedAt | fechaPy:'yyyy-MM-dd HH:mm:ss' }}</td>
                 <td>{{ getDuration(run) }}</td>
                 <td>{{ run.rowsInView ?? 0 }}</td>
-                <td>{{ run.newCount }}</td>
-                <td>{{ run.updatedCount }}</td>
+                <td class="tono-teal">{{ run.newCount }}</td>
+                <td class="tono-sky">{{ run.updatedCount }}</td>
                 <td>
-                  <span class="badge" [class.badge-success]="!run.notes?.startsWith('Error')" [class.badge-error]="run.notes?.startsWith('Error')">
+                  <span class="badge" [class.badge-success]="!run.notes?.startsWith('Error')" [class.badge-error]="run.notes?.startsWith('Error')" [class.tono-ok]="!run.notes?.startsWith('Error')" [class.tono-err]="run.notes?.startsWith('Error')">
                     {{ run.notes?.startsWith('Error') ? 'Con Error' : 'OK' }}
                   </span>
                 </td>

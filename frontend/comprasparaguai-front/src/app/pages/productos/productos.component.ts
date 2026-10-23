@@ -101,9 +101,9 @@ import { PaginadorComponent } from '../../shared/ui/paginador.component';
           <div *ngFor="let e of estadoEnvio" class="stat-card">
             <span class="stat-title">{{ e.target === 'compras' ? 'Compras Paraguai' : 'Compara Paraguai' }}</span>
             <span class="text-small">
-              <span *ngIf="!e.retenido" class="badge badge-success"><app-icon name="check"></app-icon> Se envía</span>
-              <span *ngIf="e.retenido" class="badge badge-warn"><app-icon name="ban"></app-icon> Retenido</span>
-              <span *ngIf="e.retirado" class="badge badge-secondary" title="Se le envió stock 0 al destino"><app-icon name="box"></app-icon> Retirado</span>
+              <span *ngIf="!e.retenido" class="badge badge-success tono-ok"><app-icon name="check"></app-icon> Se envía</span>
+              <span *ngIf="e.retenido" class="badge badge-warn tono-ret"><app-icon name="ban"></app-icon> Retenido</span>
+              <span *ngIf="e.retirado" class="badge badge-secondary tono-violeta" title="Se le envió stock 0 al destino"><app-icon name="box"></app-icon> Retirado</span>
               <span *ngIf="e.retenidoPor" class="text-dim"> por {{ e.retenidoPor }}</span>
             </span>
             <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px;">
@@ -155,7 +155,7 @@ import { PaginadorComponent } from '../../shared/ui/paginador.component';
                 <span class="badge" [ngClass]="statusClass(p.syncStatus)">
                   <app-icon [name]="statusIcon(p.syncStatus)"></app-icon> {{ statusText(p.syncStatus) }}
                 </span>
-                <span *ngIf="noDisponibles.has(p.code)" class="badge badge-warn"
+                <span *ngIf="noDisponibles.has(p.code)" class="badge badge-warn tono-rosa"
                       title="Compras recibió el producto (stock y precio al día) pero lo marca como no disponible. Lo decide Compras.">
                   No disp.
                 </span>

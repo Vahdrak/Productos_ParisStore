@@ -1,4 +1,4 @@
-import { Component, HostListener } from '@angular/core';
+import { Component, HostBinding, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ErrorService } from './shared/services/error.service';
@@ -84,6 +84,12 @@ import { IconComponent } from './shared/ui/icon.component';
         <app-compara *ngIf="page === 'compara'"></app-compara>
       </main>
     </div>
+
+    <!-- Pintar: enciende/apaga los colores por estado en TODAS las pestañas. Se recuerda en este navegador. -->
+    <button type="button" class="btn-pintar" (click)="alternarPintado()" [attr.aria-pressed]="pintado"
+            [title]="pintado ? 'Volver al aspecto sin colores' : 'Colorear los estados: pendiente, enviado, error…'">
+      <app-icon name="palette" size="1.1em"></app-icon> {{ pintado ? 'Quitar color' : 'Pintar' }}
+    </button>
   `,
   styles: [`
     :host {
@@ -184,6 +190,8 @@ import { IconComponent } from './shared/ui/icon.component';
     .app-content {
       display: block;
       animation: fadeIn 0.3s ease-in-out;
+      /* Espacio al final para que el botón flotante "Pintar" no tape lo último de cada pestaña. */
+      padding-bottom: 72px;
     }
 
     .alert {
@@ -230,6 +238,20 @@ export class AppComponent {
   ];
 
   page = 'dashboard';
+
+  /** Colores por estado en todas las pestañas; se recuerda en este navegador (si el almacenamiento falla, queda apagado). */
+  @HostBinding('class.pintado') pintado = AppComponent.leerPintado();
+
+  private static readonly CLAVE_PINTADO = 'colores-pintado';
+
+  private static leerPintado(): boolean {
+    try { return localStorage.getItem(AppComponent.CLAVE_PINTADO) === '1'; } catch { return false; }
+  }
+
+  alternarPintado() {
+    this.pintado = !this.pintado;
+    try { localStorage.setItem(AppComponent.CLAVE_PINTADO, this.pintado ? '1' : '0'); } catch { /* sin almacenamiento: solo dura la sesión */ }
+  }
 
   mostrarLogin = false;
   loginUsuario = '';

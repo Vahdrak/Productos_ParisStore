@@ -56,7 +56,7 @@ const AYUDA_ORIGEN: Record<string, string> = {
               <div class="text-bold">{{ c.code }}</div>
               <div class="text-small text-dim">{{ c.nombre }}<span *ngIf="c.marca"> · {{ c.marca }}</span></div>
             </td>
-            <td [title]="ayudaOrigen(c.origen)">
+            <td [title]="ayudaOrigen(c.origen)" [class.tono-sky]="c.origen === 'sync'" [class.tono-ret]="c.origen === 'reconciliacion'" [class.tono-indigo]="c.origen === 'api'">
               {{ origen(c.origen) }}
               <div class="text-small text-dim" *ngIf="c.usuario">{{ c.usuario }}</div>
             </td>

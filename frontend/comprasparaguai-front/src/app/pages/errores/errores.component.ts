@@ -36,7 +36,7 @@ import { PaginadorComponent } from '../../shared/ui/paginador.component';
         <h3 class="section-title"><app-icon name="info"></app-icon> Por tipo de error ({{ totalTipos }})</h3>
         <div *ngIf="!cargando && res && res.tipos.length === 0" class="empty-state">Sin errores en {{ nombreDestino }} <app-icon name="check"></app-icon></div>
         <div class="filters-grid" style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));">
-          <div *ngFor="let t of res?.tipos" class="stat-card row-click" role="button" tabindex="0"
+          <div *ngFor="let t of res?.tipos" class="stat-card row-click tono-err" role="button" tabindex="0"
                [attr.aria-pressed]="filtro.tipo === t.codigo"
                [style.border-color]="filtro.tipo === t.codigo ? '#2563eb' : ''" (click)="elegirTipo(t)" (keydown.enter)="elegirTipo(t)">
             <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 8px;">
@@ -61,7 +61,7 @@ import { PaginadorComponent } from '../../shared/ui/paginador.component';
                 <tr *ngFor="let d of res?.porDepartamento" class="row-click" tabindex="0" (click)="elegirDepartamento(d)" (keydown.enter)="elegirDepartamento(d)"
                     [class.row-selected]="!!d.id && filtro.categoriaId === d.id">
                   <td>{{ d.nombre }}</td>
-                  <td class="text-center" style="width: 80px;">{{ d.total }}</td>
+                  <td class="text-center tono-err" style="width: 80px;">{{ d.total }}</td>
                 </tr>
               </tbody>
             </table>
@@ -75,7 +75,7 @@ import { PaginadorComponent } from '../../shared/ui/paginador.component';
                 <tr *ngFor="let m of res?.porMarca" class="row-click" tabindex="0" (click)="elegirMarca(m)" (keydown.enter)="elegirMarca(m)"
                     [class.row-selected]="!!m.id && filtro.marcaId === m.id">
                   <td>{{ m.nombre }}</td>
-                  <td class="text-center" style="width: 80px;">{{ m.total }}</td>
+                  <td class="text-center tono-err" style="width: 80px;">{{ m.total }}</td>
                 </tr>
               </tbody>
             </table>
@@ -138,11 +138,11 @@ import { PaginadorComponent } from '../../shared/ui/paginador.component';
                 <td>{{ e.marca }}</td>
                 <td class="text-small" style="white-space: normal;">{{ e.categoria }}</td>
                 <td>
-                  <span class="badge badge-error">{{ e.tipoTitulo }}</span>
-                  <span *ngIf="e.etapa === 'retiro'" class="badge badge-warn" title="Falló al retirarlo del destino (stock 0)"><app-icon name="box"></app-icon> retiro</span>
+                  <span class="badge badge-error tono-err">{{ e.tipoTitulo }}</span>
+                  <span *ngIf="e.etapa === 'retiro'" class="badge badge-warn tono-ret" title="Falló al retirarlo del destino (stock 0)"><app-icon name="box"></app-icon> retiro</span>
                 </td>
                 <td class="text-small" style="white-space: normal; word-break: break-word;" [title]="e.mensaje || ''">{{ recortar(e.mensaje) }}</td>
-                <td class="text-small">{{ e.updatedAt | fechaPy:'yyyy-MM-dd HH:mm' }}</td>
+                <td class="text-small tono-cian">{{ e.updatedAt | fechaPy:'yyyy-MM-dd HH:mm' }}</td>
               </tr>
             </tbody>
           </table>

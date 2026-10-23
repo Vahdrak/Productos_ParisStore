@@ -29,21 +29,21 @@ import { IconComponent } from '../../shared/ui/icon.component';
                 <th scope="col">Inicio</th>
                 <th scope="col">Fin</th>
                 <th scope="col">Modo</th>
-                <th scope="col">Total</th>
-                <th scope="col"><app-icon name="check" size="1em"/> OK</th>
-                <th scope="col"><app-icon name="x" size="1em"/> Fallidos</th>
+                <th scope="col" class="tono-azul">Total</th>
+                <th scope="col" class="tono-ok"><app-icon name="check" size="1em"/> OK</th>
+                <th scope="col" class="tono-err"><app-icon name="x" size="1em"/> Fallidos</th>
                 <th scope="col">Error</th>
               </tr>
             </thead>
             <tbody>
-              <tr *ngFor="let run of sendRuns">
+              <tr *ngFor="let run of sendRuns" [class.fila-tono]="run.failed > 0" [class.tono-err]="run.failed > 0">
                 <td>{{ run.startedAt | fechaPy:'yyyy-MM-dd HH:mm:ss' }}</td>
                 <td>{{ run.finishedAt | fechaPy:'yyyy-MM-dd HH:mm:ss' }}</td>
                 <td>{{ run.mode }}</td>
-                <td>{{ run.total }}</td>
-                <td class="text-ok">{{ run.sent }}</td>
-                <td class="text-err">{{ run.failed }}</td>
-                <td class="text-small">{{ run.error || '—' }}</td>
+                <td class="tono-azul">{{ run.total }}</td>
+                <td class="text-ok tono-ok">{{ run.sent }}</td>
+                <td class="text-err" [class.tono-err]="run.failed > 0">{{ run.failed }}</td>
+                <td class="text-small" [class.tono-err]="run.error">{{ run.error || '—' }}</td>
               </tr>
             </tbody>
           </table>
@@ -69,7 +69,7 @@ import { IconComponent } from '../../shared/ui/icon.component';
               <tr *ngFor="let e of errorProducts">
                 <td>{{ e.code }}</td>
                 <td>{{ e.nombre }}</td>
-                <td class="text-small td-wrap">{{ e.mensaje }}</td>
+                <td class="text-small td-wrap tono-err">{{ e.mensaje }}</td>
               </tr>
             </tbody>
           </table>
@@ -161,18 +161,18 @@ import { IconComponent } from '../../shared/ui/icon.component';
               <tr>
                 <th scope="col">Inicio</th>
                 <th scope="col">Muestra</th>
-                <th scope="col">Encontrados</th>
-                <th scope="col">Precio OK</th>
-                <th scope="col">Stock OK</th>
+                <th scope="col" class="tono-ok">Encontrados</th>
+                <th scope="col" class="tono-ok">Precio OK</th>
+                <th scope="col" class="tono-ok">Stock OK</th>
               </tr>
             </thead>
             <tbody>
               <tr *ngFor="let v of verifyRuns" (click)="expandVerifyRun(v.id)" (keydown.enter)="expandVerifyRun(v.id)" tabindex="0" class="row-click" [class.row-selected]="verifyAbierta === v.id" [attr.aria-expanded]="verifyAbierta === v.id" title="Ver el detalle de esta verificación">
                 <td>{{ v.startedAt | fechaPy:'yyyy-MM-dd HH:mm:ss' }}</td>
                 <td>{{ v.sampleSize }}</td>
-                <td>{{ v.found }}/{{ v.sampleSize }}</td>
-                <td>{{ v.priceMatch }}</td>
-                <td>{{ v.stockMatch }}</td>
+                <td class="tono-ok">{{ v.found }}/{{ v.sampleSize }}</td>
+                <td class="tono-ok">{{ v.priceMatch }}</td>
+                <td class="tono-ok">{{ v.stockMatch }}</td>
               </tr>
             </tbody>
           </table>
@@ -197,10 +197,10 @@ import { IconComponent } from '../../shared/ui/icon.component';
                 <tr *ngFor="let r of verifyDetalle">
                   <td class="text-bold">{{ r.code }}</td>
                   <td class="td-wrap">{{ r.namePt }}</td>
-                  <td [class.text-err]="!r.found">{{ r.found ? 'Sí' : 'No' }}</td>
+                  <td [class.text-err]="!r.found" [class.tono-err]="!r.found" [class.tono-ok]="r.found">{{ r.found ? 'Sí' : 'No' }}</td>
                   <td>{{ r.priceLocal }} / {{ r.priceApi ?? '—' }}</td>
                   <td>{{ r.stockLocal }} / {{ r.stockApi ?? '—' }}</td>
-                  <td [class.text-warn]="r.availableApi === false">{{ r.availableApi === null || r.availableApi === undefined ? '—' : (r.availableApi ? 'Sí' : 'No') }}</td>
+                  <td [class.text-warn]="r.availableApi === false" [class.tono-rosa]="r.availableApi === false" [class.tono-ok]="r.availableApi === true">{{ r.availableApi === null || r.availableApi === undefined ? '—' : (r.availableApi ? 'Sí' : 'No') }}</td>
                 </tr>
               </tbody>
             </table>

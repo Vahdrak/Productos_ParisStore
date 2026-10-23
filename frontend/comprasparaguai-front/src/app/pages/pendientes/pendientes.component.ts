@@ -75,9 +75,9 @@ import { PaginadorComponent } from '../../shared/ui/paginador.component';
                 <td>{{ (p.precioExenta || 0) | currency:'':'symbol-narrow' }}</td>
                 <td class="text-center">{{ p.stock }}</td>
                 <td>
-                  <span class="badge"><app-icon name="clock"></app-icon> Pendiente</span>
+                  <span class="badge tono-pend"><app-icon name="clock"></app-icon> Pendiente</span>
                   <div *ngIf="p.retenido" class="text-small" style="margin-top: 4px;">
-                    <span class="badge badge-warn" title="No se envía mientras dure la pausa"><app-icon name="ban"></app-icon> Retenido</span>
+                    <span class="badge badge-warn tono-ret" title="No se envía mientras dure la pausa"><app-icon name="ban"></app-icon> Retenido</span>
                     <span class="text-dim">{{ p.retenidoPor }}</span>
                   </div>
                 </td>
@@ -92,9 +92,9 @@ import { PaginadorComponent } from '../../shared/ui/paginador.component';
 
         <div *ngIf="lista && lista.totalCount > 0" class="summary-bar">
           <div class="summary-item"><span class="summary-label"><app-icon name="ticket"></app-icon> Con régimen:</span><span class="summary-value">{{ lista.conRegimen }}</span></div>
-          <div class="summary-item"><span class="summary-label"><app-icon name="ban"></app-icon> Retenidos:</span><span class="summary-value">{{ lista.retenidos }}</span></div>
+          <div class="summary-item"><span class="summary-label tono-ret"><app-icon name="ban"></app-icon> Retenidos:</span><span class="summary-value tono-ret">{{ lista.retenidos }}</span></div>
           <div class="summary-item"><span class="summary-label">Normal:</span><span class="summary-value">{{ lista.totalCount - lista.conRegimen }}</span></div>
-          <div class="summary-item"><span class="summary-label">Total:</span><span class="summary-value">{{ lista.totalCount }}</span></div>
+          <div class="summary-item"><span class="summary-label tono-azul">Total:</span><span class="summary-value tono-azul">{{ lista.totalCount }}</span></div>
         </div>
       </div>
     </div>

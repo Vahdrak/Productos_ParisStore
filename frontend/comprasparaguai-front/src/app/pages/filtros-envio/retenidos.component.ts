@@ -79,9 +79,10 @@ import { PaginadorComponent } from '../../shared/ui/paginador.component';
               <td class="td-wrap">{{ r.namePt }}</td>
               <td>{{ r.marca }}</td>
               <td class="text-center">{{ r.stock }}</td>
-              <td>{{ estadoTexto(r.estado) }}</td>
+              <td [class.tono-pend]="r.estado === 0" [class.tono-ok]="r.estado === 1" [class.tono-err]="r.estado === 2">{{ estadoTexto(r.estado) }}</td>
               <td class="td-wrap">
-                <span class="badge" [class.badge-warn]="r.porExcepcion" [class.badge-secondary]="!r.porExcepcion">
+                <span class="badge" [class.badge-warn]="r.porExcepcion" [class.badge-secondary]="!r.porExcepcion"
+                      [class.tono-ret]="r.porExcepcion" [class.tono-violeta]="!r.porExcepcion">
                   {{ r.porExcepcion ? 'Excepción' : 'Pausa' }}
                 </span>
                 <span class="text-small text-dim">{{ r.porExcepcion ? (r.motivo || 'sin motivo') : r.retenidoPor }}</span>

@@ -603,6 +603,76 @@ li {
   font-size: var(--fs-xs);
 }
 
+/* ==========================================================================
+   Colores por estado ("Pintar"). Un solo botón global (abajo a la derecha) pone la clase `pintado`
+   en <app-root>. Cada pantalla marca sus celdas, insignias y tarjetas con un tono (`tono-*`) y solo
+   con el modo encendido se tiñen. Apagado, no cambia nada.
+   Tonos (r g b): pendiente amarillo · enviado verde · error rojo · retenido naranja · retirado violeta
+   · no disponible rosa · totales azul · fechas celeste.
+   ========================================================================== */
+.tono-pend    { --t: 251 191 36; }
+.tono-ok      { --t: 74 222 128; }
+.tono-err     { --t: 248 113 113; }
+.tono-ret     { --t: 249 115 22; }
+.tono-violeta { --t: 167 139 250; }
+.tono-rosa    { --t: 244 114 182; }
+.tono-azul    { --t: 96 165 250; }
+.tono-cian    { --t: 34 211 238; }
+.tono-indigo  { --t: 129 140 248; }
+.tono-teal    { --t: 45 212 191; }
+.tono-sky     { --t: 56 189 248; }
+.tono-slate   { --t: 148 163 184; }
+
+/* Texto de celdas, encabezados y valores */
+.pintado td[class*="tono-"],
+.pintado th[class*="tono-"],
+.pintado .summary-label[class*="tono-"],
+.pintado .summary-value[class*="tono-"],
+.pintado .txt[class*="tono-"] {
+  color: rgb(var(--t));
+}
+
+/* Insignias */
+.pintado .badge[class*="tono-"] {
+  background: rgb(var(--t) / 0.16);
+  color: rgb(var(--t));
+  box-shadow: inset 0 0 0 1px rgb(var(--t) / 0.4);
+}
+
+/* Tarjetas (Dashboard, Errores…) */
+.stat-card { transition: background-color 0.2s, border-color 0.2s; }
+.pintado .stat-card[class*="tono-"] {
+  background: rgb(var(--t) / 0.10);
+  border-color: rgb(var(--t) / 0.40);
+}
+.pintado .stat-card[class*="tono-"] .stat-title { color: rgb(var(--t) / 0.95); }
+.pintado .stat-card[class*="tono-"] .stat-val { color: rgb(var(--t)); }
+
+/* Filas con algo que atender (p. ej. una corrida con fallidos) */
+.pintado tr.fila-tono[class*="tono-"] td:first-child { box-shadow: inset 3px 0 0 rgb(var(--t) / 0.8); }
+
+/* Botón flotante que enciende/apaga los colores (global) */
+.btn-pintar {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 30;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--card-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+.btn-pintar:hover { background: var(--hover); }
+.btn-pintar[aria-pressed="true"] { border-color: var(--accent); }
+
 /* Cada pestaña es un componente propio: que se comporte como bloque */
 app-dashboard, app-productos, app-pendientes, app-sync, app-compras, app-compara, app-api,
 app-cambios, app-filtros-envio, app-errores {

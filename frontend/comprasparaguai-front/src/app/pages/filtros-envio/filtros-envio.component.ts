@@ -79,8 +79,8 @@ interface Dialogo {
                 <td>
                   <button type="button" class="pill" [class.off]="p.activo" [class.on]="!p.activo" (click)="alternarPausa(p)"
                           [title]="p.activo ? 'Reactivar el envío' : 'Volver a pausar'">
-                    <ng-container *ngIf="p.activo"><app-icon name="ban" size="1em"/> Pausada</ng-container>
-                    <ng-container *ngIf="!p.activo"><app-icon name="check" size="1em"/> Enviando</ng-container>
+                    <span *ngIf="p.activo" class="txt tono-ret"><app-icon name="ban" size="1em"/> Pausada</span>
+                    <span *ngIf="!p.activo" class="txt tono-ok"><app-icon name="check" size="1em"/> Enviando</span>
                   </button>
                 </td>
                 <td><button type="button" class="btn btn-ghost btn-sm" (click)="borrarPausa(p)" title="Borrar la regla" aria-label="Borrar la regla"><app-icon name="trash" size="1em"/></button></td>
@@ -126,11 +126,11 @@ interface Dialogo {
                 <td>{{ f.nodo.productos }}</td>
                 <td>{{ pendientesNodo(f.nodo) }}</td>
                 <td>
-                  <button type="button" *ngIf="heredada(f.nodo)" class="pill off" disabled title="Un nivel superior está pausado"><app-icon name="ban" size="1em"/> Heredado</button>
+                  <button type="button" *ngIf="heredada(f.nodo)" class="pill off" disabled title="Un nivel superior está pausado"><span class="txt tono-ret"><app-icon name="ban" size="1em"/> Heredado</span></button>
                   <button type="button" *ngIf="!heredada(f.nodo)" class="pill" [class.on]="!pausaIdNodo(f.nodo)" [class.off]="!!pausaIdNodo(f.nodo)"
                           (click)="alternarCategoria(f.nodo)">
-                    <ng-container *ngIf="pausaIdNodo(f.nodo)"><app-icon name="ban" size="1em"/> Pausada</ng-container>
-                    <ng-container *ngIf="!pausaIdNodo(f.nodo)"><app-icon name="check" size="1em"/> Enviando</ng-container>
+                    <span *ngIf="pausaIdNodo(f.nodo)" class="txt tono-ret"><app-icon name="ban" size="1em"/> Pausada</span>
+                    <span *ngIf="!pausaIdNodo(f.nodo)" class="txt tono-ok"><app-icon name="check" size="1em"/> Enviando</span>
                   </button>
                 </td>
               </tr>
@@ -167,8 +167,8 @@ interface Dialogo {
                   <td>{{ target === 'compras' ? m.pendientesCompras : m.pendientesCompara }}</td>
                   <td>
                     <button type="button" class="pill" [class.on]="!pausaIdMarca(m)" [class.off]="!!pausaIdMarca(m)" (click)="alternarMarca(m)">
-                      <ng-container *ngIf="pausaIdMarca(m)"><app-icon name="ban" size="1em"/> Pausada</ng-container>
-                      <ng-container *ngIf="!pausaIdMarca(m)"><app-icon name="check" size="1em"/> Enviando</ng-container>
+                      <span *ngIf="pausaIdMarca(m)" class="txt tono-ret"><app-icon name="ban" size="1em"/> Pausada</span>
+                      <span *ngIf="!pausaIdMarca(m)" class="txt tono-ok"><app-icon name="check" size="1em"/> Enviando</span>
                     </button>
                   </td>
                   <td>
@@ -187,10 +187,10 @@ interface Dialogo {
                           <td [style.padding-left.px]="8 + (c.nivel - 2) * 22">{{ c.nombre }}</td>
                           <td style="width: 110px;">{{ c.productos }}</td>
                           <td style="width: 150px;">
-                            <button type="button" *ngIf="pausaIdMarca(m)" class="pill off" disabled title="La marca completa está pausada"><app-icon name="ban" size="1em"/> Pausada (marca)</button>
+                            <button type="button" *ngIf="pausaIdMarca(m)" class="pill off" disabled title="La marca completa está pausada"><span class="txt tono-ret"><app-icon name="ban" size="1em"/> Pausada (marca)</span></button>
                             <button type="button" *ngIf="!pausaIdMarca(m)" class="pill" [class.on]="!c.pausaId" [class.off]="!!c.pausaId" (click)="alternarMarcaEnCategoria(m, c)">
-                              <ng-container *ngIf="c.pausaId"><app-icon name="ban" size="1em"/> Pausada</ng-container>
-                              <ng-container *ngIf="!c.pausaId"><app-icon name="check" size="1em"/> Enviando</ng-container>
+                              <span *ngIf="c.pausaId" class="txt tono-ret"><app-icon name="ban" size="1em"/> Pausada</span>
+                              <span *ngIf="!c.pausaId" class="txt tono-ok"><app-icon name="check" size="1em"/> Enviando</span>
                             </button>
                           </td>
                         </tr>
@@ -222,9 +222,10 @@ interface Dialogo {
             </thead>
             <tbody>
               <tr *ngFor="let h of historial">
-                <td>{{ h.changedAt | fechaPy:'yyyy-MM-dd HH:mm:ss' }}</td>
+                <td class="tono-cian">{{ h.changedAt | fechaPy:'yyyy-MM-dd HH:mm:ss' }}</td>
                 <td>{{ h.usuario || '—' }}</td>
-                <td><span class="badge" [ngClass]="claseAccion(h.accion)">{{ h.accion }}</span></td>
+                <td><span class="badge" [ngClass]="claseAccion(h.accion)"
+                      [class.tono-ok]="h.accion === 'activar' || h.accion === 'crear'" [class.tono-ret]="h.accion === 'desactivar'" [class.tono-err]="h.accion === 'borrar'">{{ h.accion }}</span></td>
                 <td class="td-wrap">
                   <span class="badge badge-secondary">{{ h.tabla === 'pausa' ? 'Pausa' : 'Excepción SKU' }}</span>
                   {{ h.detalle }}
