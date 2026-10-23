@@ -18,7 +18,8 @@ export interface MarcaSeleccion {
   standalone: true,
   imports: [CommonModule, FormsModule],
   template: `
-    <input type="text" class="form-input" [attr.list]="listId" [placeholder]="placeholder"
+    <label class="sr-only" [attr.for]="inputId">{{ ariaLabel }}</label>
+    <input type="text" class="form-input" [id]="inputId" [attr.list]="listId" [placeholder]="placeholder" [attr.aria-label]="ariaLabel"
            [(ngModel)]="texto" (ngModelChange)="onTexto($event)" autocomplete="off" />
     <datalist [id]="listId">
       <option *ngFor="let m of sugerencias" [value]="m.nombre">{{ m.productos }} productos</option>
@@ -30,9 +31,13 @@ export class MarcaPickerComponent {
   private static contador = 0;
 
   @Input() placeholder = 'Marca...';
+  /** Nombre accesible del cuadro (el placeholder no cuenta como etiqueta). */
+  @Input() ariaLabel = 'Marca';
   @Output() marcaChange = new EventEmitter<MarcaSeleccion>();
 
-  readonly listId = `marcas-list-${MarcaPickerComponent.contador++}`;
+  private readonly n = MarcaPickerComponent.contador++;
+  readonly listId = `marcas-list-${this.n}`;
+  readonly inputId = `marca-input-${this.n}`;
   texto = '';
   sugerencias: Marca[] = [];
 

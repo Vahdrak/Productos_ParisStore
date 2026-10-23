@@ -2,6 +2,7 @@ import { FechaPyPipe } from '../utils/fecha-py.pipe';
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Cambio } from '../services/cambios.service';
+import { IconComponent } from './icon.component';
 
 const CAMPOS: Record<string, string> = {
   name_es: 'Nombre (ES)',
@@ -27,16 +28,16 @@ const ORIGENES: Record<string, string> = {
 @Component({
   selector: 'app-cambios-lista',
   standalone: true,
-  imports: [CommonModule, FechaPyPipe],
+  imports: [CommonModule, FechaPyPipe, IconComponent],
   template: `
     <div class="table-container" *ngIf="items.length > 0">
       <table class="data-table">
         <thead>
           <tr>
-            <th style="width: 150px;">Fecha</th>
-            <th *ngIf="mostrarProducto" style="width: 30%;">Producto</th>
-            <th style="width: 130px;">Origen</th>
-            <th>Cambios</th>
+            <th scope="col" style="width: 150px;">Fecha</th>
+            <th scope="col" *ngIf="mostrarProducto" style="width: 30%;">Producto</th>
+            <th scope="col" style="width: 130px;">Origen</th>
+            <th scope="col">Cambios</th>
           </tr>
         </thead>
         <tbody>
@@ -50,25 +51,27 @@ const ORIGENES: Record<string, string> = {
               {{ origen(c.origen) }}
               <div class="text-small text-dim" *ngIf="c.usuario">{{ c.usuario }}</div>
             </td>
-            <td style="white-space: normal;">
-              <span *ngIf="c.operacion === 'Alta'" class="badge badge-success">🆕 Alta del producto</span>
+            <td class="td-wrap">
+              <span *ngIf="c.operacion === 'Alta'" class="badge badge-success"><app-icon name="plus" size="1em"/> Alta del producto</span>
               <div *ngFor="let x of c.cambios" class="text-small">
                 <span class="text-bold">{{ campo(x.campo) }}:</span>
-                <span style="color: #ef4444;">{{ x.antes ?? '—' }}</span>
+                <span class="text-err">{{ x.antes ?? '—' }}</span>
                 →
-                <span style="color: #4ade80;">{{ x.despues ?? '—' }}</span>
+                <span class="text-ok">{{ x.despues ?? '—' }}</span>
               </div>
             </td>
           </tr>
         </tbody>
       </table>
     </div>
-    <div *ngIf="items.length === 0" class="text-center py-8 text-dim">No hay cambios registrados</div>
+    <div *ngIf="!cargando && items.length === 0" class="empty-state">No hay cambios registrados</div>
   `
 })
 export class CambiosListaComponent {
   @Input() items: Cambio[] = [];
   @Input() mostrarProducto = true;
+  /** Mientras es true no se muestra el mensaje de lista vacía. */
+  @Input() cargando = false;
 
   campo(nombre: string): string {
     return CAMPOS[nombre] ?? nombre;
