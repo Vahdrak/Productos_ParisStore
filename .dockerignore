@@ -1,0 +1,37 @@
+# El contexto de build de TODAS las imágenes es la raíz del repo (COPY . .).
+# Lo primero que debe quedar fuera son los secretos: los .csproj de los workers copian su .env al
+# directorio de salida, así que sin esta regla las llaves y contraseñas terminarían dentro de la imagen publicada.
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Control de versiones y herramientas locales
+.git
+.gitignore
+.gitattributes
+.claude
+.vs
+.vscode
+.idea
+*.user
+
+# Artefactos de compilación (se generan dentro del build)
+**/bin
+**/obj
+**/node_modules
+**/.angular
+frontend/comprasparaguai-front/dist
+**/TestResults
+**/verify-output
+
+# No hacen falta para construir ninguna imagen
+docs
+tests
+docker
+docker-compose*.yml
+Dockerfile*
+*.md
+publish-*.bat

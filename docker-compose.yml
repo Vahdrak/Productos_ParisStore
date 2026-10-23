@@ -1,7 +1,30 @@
-version: '3.8'
+# Catálogos Paris Store — producción
+#
+#   db              PostgreSQL 16 (volumen postgres_data)
+#   backend         API .NET (puerto 5000)
+#   frontend        Angular + nginx (puerto 4200)
+#   worker-sync     Oracle → PostgreSQL (carga inicial + cambios por hash cada 2 h)
+#   worker-compras  envía pendientes a Compras Paraguai
+#   worker-compara  envía pendientes a Compara Paraguai
+#   worker-verify   atiende los botones "Revisar ahora" / "Verificar muestra" del panel (no envía nada)
+#
+# Todas las variables salen del .env de este mismo directorio (plantilla: .env.example).
+# Las imágenes NO llevan secretos: los .env de los workers están en .dockerignore.
+# Orden recomendado de arranque: ver README-DESPLIEGUE.md.
+
+# Los logs de los workers son largos: se rotan para que no llenen el disco del servidor.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+# Cadena de conexión a la BD, la misma para todos los servicios.
+x-db-connection: &db-connection
+  ConnectionStrings__PostgreSQL: Host=db;Port=5432;Database=${DB_NAME:-catalogosdb};Username=${DB_USER:-postgres};Password=${DB_PASSWORD:-postgres}
 
 services:
-  # PostgreSQL Database
+  # PostgreSQL
   db:
     image: postgres:16-alpine
     container_name: catalogos_db_prod
@@ -15,57 +38,62 @@ services:
       - postgres_data:/var/lib/postgresql/data
     restart: always
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-catalogosdb}"]
       interval: 10s
       timeout: 5s
       retries: 5
+    logging: *default-logging
     networks:
       - comprasparaguai-network
 
-  # Backend API
+  # API (también aplica las migraciones de db/migrations al arrancar, con candado en la BD)
   backend:
-    image: proyectsoft/comprasparaguai-api:latest
+    image: proyectsoft/comprasparaguai-api:${IMAGE_TAG:-latest}
     container_name: backend_api_prod
     ports:
       - "5000:5000"
     environment:
-      - ASPNETCORE_ENVIRONMENT=Production
-      - ASPNETCORE_URLS=http://+:5000
-      - ConnectionStrings__PostgreSQL=Host=db;Port=5432;Database=${DB_NAME:-catalogosdb};Username=${DB_USER:-postgres};Password=${DB_PASSWORD:-postgres}
-      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:4200,http://172.16.249.94:4200,http://172.16.249.94}
-      - Auth__JwtSecret=${AUTH_JWT_SECRET:-}
-      - Auth__AdminUsuario=${AUTH_ADMIN_USUARIO:-}
-      - Auth__AdminPassword=${AUTH_ADMIN_PASSWORD:-}
+      <<: *db-connection
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:5000
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200,http://172.16.249.94:4200,http://172.16.249.94}
+      # Login del panel: clave de firma del token (mínimo 32 caracteres) y primer usuario (solo si la tabla usuarios está vacía).
+      Auth__JwtSecret: ${AUTH_JWT_SECRET:-}
+      Auth__AdminUsuario: ${AUTH_ADMIN_USUARIO:-}
+      Auth__AdminPassword: ${AUTH_ADMIN_PASSWORD:-}
     depends_on:
       db:
         condition: service_healthy
     restart: always
+    logging: *default-logging
     networks:
       - comprasparaguai-network
 
-  # Frontend (Angular)
+  # Frontend (Angular detrás de nginx). Llama a la API en el puerto 5000 del mismo host.
   frontend:
-    image: proyectsoft/comprasparaguai-frontend:latest
+    image: proyectsoft/comprasparaguai-frontend:${IMAGE_TAG:-latest}
     container_name: frontend_prod
     ports:
       - "4200:80"
     depends_on:
       - backend
     restart: always
+    logging: *default-logging
     networks:
       - comprasparaguai-network
 
   # Worker.Sync (Oracle → PostgreSQL)
   worker-sync:
-    image: proyectsoft/comprasparaguai-worker-sync:latest
+    image: proyectsoft/comprasparaguai-worker-sync:${IMAGE_TAG:-latest}
     container_name: worker_sync_prod
     environment:
-      - ConnectionStrings__PostgreSQL=Host=db;Port=5432;Database=${DB_NAME:-catalogosdb};Username=${DB_USER:-postgres};Password=${DB_PASSWORD:-postgres}
-      - ConnectionStrings__Oracle=${ORACLE_CONNECTION_STRING}
+      <<: *db-connection
+      ConnectionStrings__Oracle: ${ORACLE_CONNECTION_STRING}
     depends_on:
       db:
         condition: service_healthy
     restart: always
+    logging: *default-logging
     networks:
       - comprasparaguai-network
     deploy:
@@ -73,19 +101,20 @@ services:
         limits:
           memory: 2G
 
-  # Worker.Compras (Send to Compras Paraguai API)
+  # Worker.Compras (envía a Compras Paraguai)
   worker-compras:
-    image: proyectsoft/comprasparaguai-worker-compras:latest
+    image: proyectsoft/comprasparaguai-worker-compras:${IMAGE_TAG:-latest}
     container_name: worker_compras_prod
     environment:
-      - ConnectionStrings__PostgreSQL=Host=db;Port=5432;Database=${DB_NAME:-catalogosdb};Username=${DB_USER:-postgres};Password=${DB_PASSWORD:-postgres}
-      - Compras__ApiUrl=${COMPRAS_API_URL:-https://produtos.comprasparaguai.com.br}
-      - Compras__Token=${COMPRAS_API_TOKEN}
-      - Compras__IntervalHours=2
+      <<: *db-connection
+      Compras__ApiUrl: ${COMPRAS_API_URL:-https://produtos.comprasparaguai.com.br}
+      Compras__Token: ${COMPRAS_API_TOKEN}
+      Compras__IntervalHours: "2"
     depends_on:
       db:
         condition: service_healthy
     restart: always
+    logging: *default-logging
     networks:
       - comprasparaguai-network
     deploy:
@@ -93,19 +122,20 @@ services:
         limits:
           memory: 1G
 
-  # Worker.Compara (Send to Compara Paraguai API)
+  # Worker.Compara (envía a Compara Paraguai; límite de la API: 80 requests por hora)
   worker-compara:
-    image: proyectsoft/comprasparaguai-worker-compara:latest
+    image: proyectsoft/comprasparaguai-worker-compara:${IMAGE_TAG:-latest}
     container_name: worker_compara_prod
     environment:
-      - ConnectionStrings__PostgreSQL=Host=db;Port=5432;Database=${DB_NAME:-catalogosdb};Username=${DB_USER:-postgres};Password=${DB_PASSWORD:-postgres}
-      - Compara__ApiUrl=${COMPARA_API_URL:-https://comparaparaguai.com/api/integracao/produtos}
-      - Compara__Token=${COMPARA_API_TOKEN}
-      - Compara__IntervalHours=2
+      <<: *db-connection
+      Compara__ApiUrl: ${COMPARA_API_URL:-https://comparaparaguai.com/api/integracao/produtos}
+      Compara__Token: ${COMPARA_API_TOKEN}
+      Compara__IntervalHours: "2"
     depends_on:
       db:
         condition: service_healthy
     restart: always
+    logging: *default-logging
     networks:
       - comprasparaguai-network
     deploy:
@@ -114,21 +144,22 @@ services:
           memory: 1G
 
   # Worker.Verify en modo servicio: atiende los pedidos "Revisar ahora" / "Verificar muestra" del panel (solo con sesión iniciada).
-  # Es el único contenedor, junto a worker-compras, que lleva el token de Compras: la API no lo tiene.
+  # Es, junto a worker-compras, el único contenedor que lleva el token de Compras: la API no lo tiene.
   worker-verify:
-    image: proyectsoft/comprasparaguai-worker-verify:latest
+    image: proyectsoft/comprasparaguai-worker-verify:${IMAGE_TAG:-latest}
     container_name: worker_verify_prod
     command: ["--servicio"]
     environment:
-      - ConnectionStrings__PostgreSQL=Host=db;Port=5432;Database=${DB_NAME:-catalogosdb};Username=${DB_USER:-postgres};Password=${DB_PASSWORD:-postgres}
-      - Compras__ApiUrl=${COMPRAS_API_URL:-https://produtos.comprasparaguai.com.br}
-      - Compras__Token=${COMPRAS_API_TOKEN}
+      <<: *db-connection
+      Compras__ApiUrl: ${COMPRAS_API_URL:-https://produtos.comprasparaguai.com.br}
+      Compras__Token: ${COMPRAS_API_TOKEN}
       # 0 = solo corre cuando alguien lo pide en el panel; N = además revisa la disponibilidad solo cada N horas.
-      - Verify__AutoDisponibilidadHoras=${VERIFY_AUTO_HORAS:-0}
+      Verify__AutoDisponibilidadHoras: ${VERIFY_AUTO_HORAS:-0}
     depends_on:
       db:
         condition: service_healthy
     restart: always
+    logging: *default-logging
     networks:
       - comprasparaguai-network
     deploy:

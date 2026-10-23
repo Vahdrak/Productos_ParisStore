@@ -32,9 +32,9 @@ El proyecto se divide en **6 imágenes Docker**:
    - Lotes máximo 1000, rate limit 80 req/hora
 
 6. **Worker.Verify** (`proyectsoft/comprasparaguai-worker-verify`)
-   - Verifica productos enviados
-   - On-demand (sin scheduler)
-   - Genera CSV de resultados
+   - Corre siempre encendido (`--servicio`) y atiende los botones **Revisar ahora** / **Verificar muestra** del panel (solo con sesión)
+   - Consulta a Compras la disponibilidad de los productos y comprueba una muestra de los enviados
+   - Es, junto a Worker.Compras, el único que lleva el token de Compras (la API no lo tiene)
 
 ---
 
@@ -68,9 +68,22 @@ COMPRAS_API_TOKEN=tu-token-compras
 # Compara Paraguai API
 COMPARA_API_URL=https://comparaparaguai.com/api/integracao/produtos
 COMPARA_API_TOKEN=tu-token-compara
+
+# Login del panel
+AUTH_JWT_SECRET=una-clave-larga-de-al-menos-32-caracteres
+AUTH_ADMIN_USUARIO=admin
+AUTH_ADMIN_PASSWORD=cambia-esta-contraseña
+
+# Opcional
+IMAGE_TAG=latest        # versión de las imágenes a levantar (p. ej. 1.2.0)
+VERIFY_AUTO_HORAS=0     # 0 = Verify solo corre cuando alguien lo pide en el panel
 ```
 
 Ver `.env.example` para plantilla.
+
+> **Los secretos no viajan en las imágenes.** El `.dockerignore` deja fuera todos los `.env` (el de la raíz y los de cada worker,
+> que los `.csproj` copiarían a la salida) y `bin/`, `obj/`, `node_modules/`, `docs/` y `tests/`. Las imágenes salen sin llaves ni contraseñas:
+> toda la configuración llega por el `.env` del servidor y las variables del `docker-compose.yml`. Si agregas un servicio nuevo, no copies su `.env` a la imagen.
 
 ---
 
@@ -200,6 +213,9 @@ docker compose pull
 docker compose up -d
 ```
 
+Para fijar una versión (en vez de `latest`): `IMAGE_TAG=1.2.0` en el `.env` y repetir los dos comandos. Las migraciones de la base se aplican solas
+al arrancar la API o cualquier worker (con candado en la BD), así que no importa cuál arranque primero.
+
 ---
 
 ## Limpieza
@@ -230,6 +246,11 @@ docker system prune -a
 | `COMPRAS_API_TOKEN` | Token Compras API | secret-token |
 | `COMPARA_API_URL` | URL API Compara | https://comparaparaguai.com/api/integracao/produtos |
 | `COMPARA_API_TOKEN` | Token Compara API | secret-token |
+| `AUTH_JWT_SECRET` | Clave de firma de las sesiones del panel (mínimo 32 caracteres) | `openssl rand -hex 32` |
+| `AUTH_ADMIN_USUARIO` / `AUTH_ADMIN_PASSWORD` | Primer usuario del panel (solo si la tabla `usuarios` está vacía) | admin |
+| `CORS_ALLOWED_ORIGINS` | Orígenes del front que la API acepta | http://172.16.249.94:4200 |
+| `VERIFY_AUTO_HORAS` | 0 = Verify solo cuando se pide en el panel; N = además cada N horas | 0 |
+| `IMAGE_TAG` | Versión de las imágenes a levantar | latest |
 
 ---
 

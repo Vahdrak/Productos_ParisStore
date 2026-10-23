@@ -30,6 +30,16 @@ CORS_ALLOWED_ORIGINS=http://localhost:4200,http://172.16.249.94:4200,http://172.
 
 ## 🚀 Secuencia de Despliegue (PRIMERA VEZ)
 
+### Paso 0: Construir y publicar las imágenes (en tu máquina)
+
+```bash
+docker login
+.publish-all.bat      # api, frontend, worker-sync, worker-compras, worker-compara y worker-verify
+```
+
+El `.dockerignore` deja los `.env` fuera de las imágenes: no llevan llaves ni contraseñas. El `.env` del **servidor** debe tener todas las variables de `.env.example`
+(sobre todo `ORACLE_CONNECTION_STRING`, `COMPRAS_API_TOKEN`, `COMPARA_API_TOKEN` y `AUTH_*`).
+
 ### Paso 1: Copiar archivos al servidor
 
 ```bash
@@ -59,6 +69,9 @@ docker compose logs -f backend
 # Esperar: "Migraciones de base de datos finalizadas"
 ```
 
+Si pusiste `AUTH_ADMIN_USUARIO` y `AUTH_ADMIN_PASSWORD` en el `.env`, la API crea ese primer usuario del panel (solo si la tabla está vacía).
+Sin él no se puede iniciar sesión ni cambiar nada en el panel. También puedes crearlo a mano: `docker exec -it backend_api_prod dotnet ComprasParaguai.Api.dll crear-usuario <usuario>`.
+
 ### Paso 4: Levantar Frontend
 
 ```bash
@@ -81,12 +94,18 @@ docker compose logs -f worker-sync
 
 ⚠️ **IMPORTANTE:** No levantar otros workers hasta que Sync termine.
 
-### Paso 6: Levantar Workers de Envío
+### Paso 5.5: Decidir qué se envía (antes de encender los workers de envío)
+
+En el panel (http://172.16.249.94:4200, con sesión iniciada) → **Filtros de envío**: pausa las marcas o categorías que no deben ir a cada destino
+(por ejemplo FTX) y retiene los productos puntuales desde **Productos**. Lo retenido se ve y se libera en **Filtros de envío → Retenidos**.
+Con la base nueva, los workers envían *todo* lo pendiente apenas arrancan: pausar antes evita publicar lo que no debe salir.
+
+### Paso 6: Levantar Workers de Envío y el de Verificación
 
 Después que Sync termine:
 
 ```bash
-docker compose up -d worker-compras worker-compara
+docker compose up -d worker-compras worker-compara worker-verify
 
 # Ver estado
 docker compose ps
