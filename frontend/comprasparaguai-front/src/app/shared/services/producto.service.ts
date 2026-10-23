@@ -69,9 +69,36 @@ export interface LastSyncRun {
 export interface Dashboard {
   targets: TargetStatus[];
   pendingCount: number;
+  /** Productos con stock que Compras marca como no disponibles (última foto de Worker.Verify --disponibilidad). */
+  noDisponiblesCompras?: number;
+  /** Cuándo se tomó esa foto; vacío si nunca se corrió. */
+  noDisponiblesComprasAt?: string;
   lastSyncAt?: string;
   lastSyncRun?: LastSyncRun;
   status: string;
+}
+
+export interface NoDisponible {
+  code: string;
+  namePt?: string;
+  marca?: string;
+  price?: number;
+  stockLocal: number;
+  stockApi?: number;
+  updatedAtApi?: string;
+  link?: string;
+}
+
+export interface NoDisponiblesList {
+  items: NoDisponible[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  /** Cuándo se tomó la foto; vacío si todavía no se corrió Worker.Verify --disponibilidad. */
+  checkedAt?: string;
+  /** Productos con stock que tenía Compras al tomar la foto. */
+  totalConStock: number;
 }
 
 export interface SyncRun {
@@ -283,6 +310,15 @@ export class ProductoService {
 
   getVerifyRuns(limit: number = 20): Observable<VerifyRun[]> {
     return this.http.get<VerifyRun[]>(`/workers/verify-runs?limit=${limit}`);
+  }
+
+  /** Productos con stock que Compras marca como no disponibles (foto de Worker.Verify --disponibilidad). */
+  getNoDisponibles(page: number = 1, pageSize: number = 50): Observable<NoDisponiblesList> {
+    return this.http.get<NoDisponiblesList>(`/compras/no-disponibles?page=${page}&pageSize=${pageSize}`);
+  }
+
+  getNoDisponiblesCodigos(): Observable<string[]> {
+    return this.http.get<string[]>('/compras/no-disponibles/codigos');
   }
 
   getVerifyResults(runId: number): Observable<VerifyResult[]> {

@@ -101,6 +101,9 @@ builder.Services.AddTransient<ISendRunRepository>(sp =>
 builder.Services.AddTransient<IVerifyRunRepository>(sp =>
     new PostgreSqlVerifyRunRepository(postgresConnStr));
 
+builder.Services.AddTransient<IDisponibilidadRepository>(sp =>
+    new PostgreSqlDisponibilidadRepository(postgresConnStr));
+
 var app = builder.Build();
 
 // ---- Comando: crear un usuario del panel (o cambiarle la contraseña) y salir, sin levantar el servidor ----

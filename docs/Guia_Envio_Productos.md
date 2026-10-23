@@ -50,6 +50,20 @@ dotnet run --project workers/Worker.Verify -- --compras 50     # o la cantidad q
 
 Toma N productos con `sync_status = 1`, hace `GET /api/products/list/?code=…` por cada uno y escribe `verify-output/verify-comprasparaguai-<fecha>.csv` con: encontrado SI/NO, precio y stock local vs API, disponible, `updated_at` de la API. En consola resume `X/N encontrados`. Si un código aparece en la API, el envío llegó. Config propia: `.env` con `ConnectionStrings__PostgreSQL` y `Compras__Token`. Compara no ofrece un GET por código, así que por ahora solo verifica Compras.
 
+```bash
+dotnet run --project workers/Worker.Verify -- --disponibilidad # foto de los no disponibles en Compras
+```
+
+`--disponibilidad` pide a Compras `GET /api/products/list/?available=false&with_stock=true` (todas las páginas, solo lectura) y guarda en la BD
+la lista de productos **con stock que Compras marca como no disponibles** (`compras_disponibilidad`, se reemplaza completa en cada corrida).
+El panel la muestra en **Compras → "No disponibles en Compras"** (con botón *Descargar CSV*), en el **Dashboard** y como insignia *No disp.* en **Productos**.
+
+Es una foto: el panel indica cuándo se tomó. Se puede repetir las veces que haga falta (son pocas peticiones) o programar.
+
+> **`available` lo decide Compras, no nosotros.** El envío no lo manda y el spec del import no lo acepta. Si un producto llegó con su stock y precio
+> al día pero figura *no disponible*, no es un fallo del envío: hay que preguntarle a Compras por qué. El CSV del panel sirve para mandarles la lista.
+> El host correcto de la API es `https://produtos.comprasparaguai.com.br` (el mismo que usa `Worker.Compras`); en `products.` no aparecen nuestros productos.
+
 ## Puesta en marcha (orden recomendado)
 
 ```bash

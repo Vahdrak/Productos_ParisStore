@@ -58,6 +58,15 @@ import { ErrorService } from '../../shared/services/error.service';
             <span class="stat-title">❌ Errores</span>
             <span class="stat-val" style="color: #ef4444;">{{ target.error }}</span>
           </div>
+          <div class="stat-card" *ngIf="target.target === 'ComprasParaguai'"
+               title="Productos con stock que Compras Paraguai marca como no disponibles. Lo decide Compras, no el envío. Foto tomada con Worker.Verify --disponibilidad">
+            <span class="stat-title">⚠️ No disponibles en Compras</span>
+            <span class="stat-val" [style.color]="dashboard?.noDisponiblesCompras ? '#fbbf24' : ''">
+              {{ dashboard?.noDisponiblesComprasAt ? dashboard?.noDisponiblesCompras : '—' }}
+            </span>
+            <span class="text-small text-dim" *ngIf="dashboard?.noDisponiblesComprasAt">al {{ dashboard?.noDisponiblesComprasAt | fechaPy:'yyyy-MM-dd HH:mm' }}</span>
+            <span class="text-small text-dim" *ngIf="!dashboard?.noDisponiblesComprasAt">sin revisar</span>
+          </div>
           <div class="stat-card">
             <span class="stat-title">📊 Total</span>
             <span class="stat-val">{{ target.total }}</span>

@@ -321,7 +321,7 @@ La **carga inicial** (200 lotes de 500) tarda unos minutos, pero ocurre una sola
 
 ## 6. Guía de uso de la API (Compras Paraguai)
 
-**Base URL:** `https://products.comprasparaguai.com.br`
+**Base URL:** `https://produtos.comprasparaguai.com.br`
 **Autenticación:** header llamado `token` (requerido). El valor lo provee Compras Paraguai (Vidal). Si diera `403`, probar también `Authorization: Bearer <token>`.
 
 ### 6.1. Importar productos — `POST /api/products/import/`

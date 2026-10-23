@@ -28,12 +28,19 @@ var defaultSample = config.GetValue<int>("Verify:SampleSize", 500);
 var delayMs = config.GetValue<int>("Verify:DelayMs", 100);
 var outputDir = Path.GetFullPath(config["Verify:OutputDir"] ?? "verify-output", Directory.GetCurrentDirectory());
 
+// Asegura el esquema (p. ej. la tabla de la foto de disponibilidad) aunque la API todavía no haya arrancado.
+DbMigrator.Migrate(connectionString);
+
 builder.Services.AddSingleton<IProductoRepository>(sp =>
     new PostgreSqlProductoRepository(connectionString, sp.GetRequiredService<ILogger<PostgreSqlProductoRepository>>()));
-builder.Services.AddSingleton<IProductQueryClient>(sp =>
+builder.Services.AddSingleton(sp =>
     new ComprasParaguaiHttpClient(new HttpClient(), comprasUrl, comprasToken, sp.GetRequiredService<ILogger<ComprasParaguaiHttpClient>>()));
+builder.Services.AddSingleton<IProductQueryClient>(sp => sp.GetRequiredService<ComprasParaguaiHttpClient>());
+builder.Services.AddSingleton<IProductListClient>(sp => sp.GetRequiredService<ComprasParaguaiHttpClient>());
 builder.Services.AddSingleton<IVerifyRunRepository>(sp =>
     new PostgreSqlVerifyRunRepository(connectionString));
+builder.Services.AddSingleton<IDisponibilidadRepository>(sp =>
+    new PostgreSqlDisponibilidadRepository(connectionString));
 
 var host = builder.Build();
 var logger = host.Services.GetRequiredService<ILogger<Program>>();
@@ -47,13 +54,42 @@ switch (command)
         await VerifyAsync(SyncTarget.ComprasParaguai, "Compras Paraguai", host.Services.GetRequiredService<IProductQueryClient>());
         break;
 
+    case "--disponibilidad":
+        await DisponibilidadAsync();
+        break;
+
     default:
         logger.LogError("Comando no reconocido: {Command}", command);
-        logger.LogInformation("Uso: Worker.Verify [--compras] [cantidad]");
-        logger.LogInformation("  --compras [N]   Toma N productos al azar marcados Enviado a Compras (default {N}),", defaultSample);
-        logger.LogInformation("                  los busca en la API de Compras y escribe un CSV en {Dir}", outputDir);
+        logger.LogInformation("Uso: Worker.Verify [--compras] [cantidad] | --disponibilidad");
+        logger.LogInformation("  --compras [N]      Toma N productos al azar marcados Enviado a Compras (default {N}),", defaultSample);
+        logger.LogInformation("                     los busca en la API de Compras y escribe un CSV en {Dir}", outputDir);
+        logger.LogInformation("  --disponibilidad   Pide a Compras los productos con stock que marca como no disponibles");
+        logger.LogInformation("                     y guarda la foto en la BD (la muestra el panel en Compras > No disponibles)");
         Environment.Exit(1);
         break;
+}
+
+async Task DisponibilidadAsync()
+{
+    logger.LogInformation("=== Worker.Verify → Compras Paraguai: productos con stock marcados como no disponibles ===");
+
+    var client = host.Services.GetRequiredService<IProductListClient>();
+    var repo = host.Services.GetRequiredService<IDisponibilidadRepository>();
+
+    var totalConStock = await client.CountAsync(available: null, withStock: true);
+    var noDisponibles = await client.ListAsync(available: false, withStock: true, delayMs);
+
+    // El destino solo debería devolver los de stock > 0 y available = false; se filtra igual por si cambia el filtro.
+    noDisponibles = noDisponibles.Where(p => p.Available == false && p.Stock > 0).ToList();
+
+    await repo.ReemplazarAsync(noDisponibles, totalConStock, DateTime.UtcNow);
+
+    logger.LogInformation("Compras tiene {Total} productos con stock; {N} figuran como no disponibles ({Pct:P2}).",
+        totalConStock, noDisponibles.Count, totalConStock == 0 ? 0 : (double)noDisponibles.Count / totalConStock);
+    foreach (var p in noDisponibles.Take(10))
+        logger.LogInformation("  {Code}  stock {Stock}  {Name}", p.Code, p.Stock, p.NamePt);
+    if (noDisponibles.Count > 10)
+        logger.LogInformation("  ... {N} más en el panel", noDisponibles.Count - 10);
 }
 
 async Task VerifyAsync(SyncTarget target, string targetName, IProductQueryClient client)

@@ -11,15 +11,18 @@ public class DashboardController : ControllerBase
 {
     private readonly IProductoRepository _productoRepository;
     private readonly ISyncRunRepository _syncRunRepository;
+    private readonly IDisponibilidadRepository _disponibilidadRepository;
     private readonly ILogger<DashboardController> _logger;
 
     public DashboardController(
         IProductoRepository productoRepository,
         ISyncRunRepository syncRunRepository,
+        IDisponibilidadRepository disponibilidadRepository,
         ILogger<DashboardController> logger)
     {
         _productoRepository = productoRepository;
         _syncRunRepository = syncRunRepository;
+        _disponibilidadRepository = disponibilidadRepository;
         _logger = logger;
     }
 
@@ -50,10 +53,17 @@ public class DashboardController : ControllerBase
 
             var comprasPending = statusCounts.FirstOrDefault(sc => sc.Target == SyncTarget.ComprasParaguai)?.Pending ?? 0;
 
+            // Foto de Worker.Verify --disponibilidad: si falla (p. ej. tabla sin migrar) el panel sigue funcionando.
+            NoDisponiblesDto? noDisponibles = null;
+            try { noDisponibles = await _disponibilidadRepository.ListarAsync(1, 1, cancellationToken); }
+            catch (Exception ex) { _logger.LogWarning(ex, "No se pudo leer la foto de disponibilidad de Compras"); }
+
             var dto = new DashboardDto
             {
                 Targets = targets,
                 PendingCount = comprasPending,
+                NoDisponiblesCompras = noDisponibles?.TotalCount ?? 0,
+                NoDisponiblesComprasAt = noDisponibles?.CheckedAt,
                 LastSyncAt = lastSync,
                 Status = comprasPending == 0 ? "OK" : "PENDIENTE",
                 LastSyncRun = lastSyncRun is not null ? new LastSyncRunDto
@@ -163,6 +173,10 @@ public class DashboardDto
 {
     public List<TargetStatusDto> Targets { get; set; } = new();
     public int PendingCount { get; set; }
+    /// <summary>Productos con stock que Compras marca como no disponibles (última foto de Worker.Verify --disponibilidad).</summary>
+    public int NoDisponiblesCompras { get; set; }
+    /// <summary>Cuándo se tomó esa foto (UTC); null si nunca se corrió.</summary>
+    public DateTime? NoDisponiblesComprasAt { get; set; }
     public DateTime? LastSyncAt { get; set; }
     public LastSyncRunDto? LastSyncRun { get; set; }
     public string Status { get; set; } = "UNKNOWN";

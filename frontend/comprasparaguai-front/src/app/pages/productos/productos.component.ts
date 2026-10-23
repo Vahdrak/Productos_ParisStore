@@ -135,6 +135,10 @@ import { CambiosListaComponent } from '../../shared/ui/cambios-lista.component';
                 <span class="badge" [ngClass]="statusClass(p.syncStatus)">
                   {{ statusLabel(p.syncStatus) }}
                 </span>
+                <span *ngIf="noDisponibles.has(p.code)" class="badge badge-warn"
+                      title="Compras recibió el producto (stock y precio al día) pero lo marca como no disponible. Lo decide Compras.">
+                  No disp.
+                </span>
               </td>
               <td>
                 <span class="badge" [ngClass]="statusClass(p.syncComparaStatus)">
@@ -182,6 +186,9 @@ export class ProductosComponent implements OnInit {
   seleccionado: any = null;
   cambiosProducto: Cambio[] = [];
 
+  /** Códigos que Compras marca como no disponibles aunque tengan stock (foto de Worker.Verify --disponibilidad). */
+  noDisponibles = new Set<string>();
+
   // Reenviar
   seleccion = new Set<string>();
   destinoReenvio: 'compras' | 'compara' | 'ambos' = 'compras';
@@ -203,6 +210,10 @@ export class ProductosComponent implements OnInit {
 
   ngOnInit() {
     this.search();
+    this.productoService.getNoDisponiblesCodigos().subscribe(
+      codigos => this.noDisponibles = new Set(codigos),
+      () => { /* la insignia es opcional: si falla, la lista se ve igual */ }
+    );
     // Departamentos = hijos de la raíz del árbol de categorías
     this.catalogo.getArbolCategorias().subscribe(
       arbol => this.departamentos = (arbol[0]?.hijos ?? []).map(h => ({ id: h.id, nombre: h.nombre, productos: h.productos })),

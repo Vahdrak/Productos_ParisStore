@@ -12,7 +12,7 @@ namespace ComprasParaguai.Infrastructure.Clients;
 /// Usa Polly para reintentos, timeout y circuit breaker.
 /// Token va en el header "token" (nunca en URL).
 /// </summary>
-public class ComprasParaguaiHttpClient : IComprasParaguaiClient, IProductQueryClient
+public class ComprasParaguaiHttpClient : IComprasParaguaiClient, IProductQueryClient, IProductListClient
 {
     private readonly HttpClient _httpClient;
     private readonly string _token;
@@ -174,25 +174,97 @@ public class ComprasParaguaiHttpClient : IComprasParaguaiClient, IProductQueryCl
         foreach (var item in data.EnumerateArray())
         {
             if (item.TryGetProperty("code", out var c) && c.GetString() == code)
-                return new RemoteProduct(
-                    Code: code,
-                    NamePt: Str(item, "name_pt"),
-                    Price: Dec(item, "price"),
-                    PriceIva: Dec(item, "price_iva"),
-                    Stock: Dec(item, "stock"),
-                    Available: item.TryGetProperty("available", out var a) && a.ValueKind is JsonValueKind.True or JsonValueKind.False ? a.GetBoolean() : null,
-                    Link: Str(item, "link"),
-                    UpdatedAt: DateTime.TryParse(Str(item, "updated_at"), null, System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal, out var dt) ? dt : null);
+                return ToRemote(item, code);
         }
 
         return null;
-
-        static string? Str(JsonElement e, string name) =>
-            e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
-
-        static decimal? Dec(JsonElement e, string name) =>
-            e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDecimal() : null;
     }
+
+    /// <summary>
+    /// GET /api/products/list/ recorriendo todas las páginas (100 por página) con los filtros dados.
+    /// Ante un 429 espera un minuto y reintenta la misma página.
+    /// </summary>
+    public async Task<List<RemoteProduct>> ListAsync(bool? available, bool? withStock, int delayMs, CancellationToken cancellationToken = default)
+    {
+        var items = new List<RemoteProduct>();
+        for (var page = 1; ; page++)
+        {
+            using var doc = await GetListPageAsync(available, withStock, page, cancellationToken);
+            var root = doc.RootElement;
+            if (root.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in data.EnumerateArray())
+                {
+                    var code = Str(item, "code");
+                    if (code is not null) items.Add(ToRemote(item, code));
+                }
+            }
+
+            var hasNext = root.TryGetProperty("has_next", out var next) && next.ValueKind == JsonValueKind.True;
+            if (!hasNext) return items;
+            if (delayMs > 0) await Task.Delay(delayMs, cancellationToken);
+        }
+    }
+
+    /// <summary>Total de productos que cumplen el filtro (campo total_items de la primera página).</summary>
+    public async Task<int> CountAsync(bool? available, bool? withStock, CancellationToken cancellationToken = default)
+    {
+        using var doc = await GetListPageAsync(available, withStock, 1, cancellationToken);
+        return doc.RootElement.TryGetProperty("total_items", out var t) && t.ValueKind == JsonValueKind.Number ? t.GetInt32() : 0;
+    }
+
+    private const int MaxReintentos429 = 5;
+
+    private async Task<JsonDocument> GetListPageAsync(bool? available, bool? withStock, int page, CancellationToken cancellationToken)
+    {
+        var query = new List<string> { $"page={page}" };
+        if (available.HasValue) query.Add($"available={(available.Value ? "true" : "false")}");
+        if (withStock.HasValue) query.Add($"with_stock={(withStock.Value ? "true" : "false")}");
+        var url = "/api/products/list/?" + string.Join('&', query);
+
+        for (var intento = 1; ; intento++)
+        {
+            var response = await _retryPolicy.ExecuteAsync(async ct => await _httpClient.GetAsync(url, ct), cancellationToken);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            if (response.IsSuccessStatusCode) return JsonDocument.Parse(body);
+
+            if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests && intento < MaxReintentos429)
+            {
+                _logger.LogWarning("GET lista página {Page} → 429. Espero 60 s (intento {N}/{Max})", page, intento, MaxReintentos429);
+                await Task.Delay(TimeSpan.FromSeconds(60), cancellationToken);
+                continue;
+            }
+
+            throw new HttpRequestException($"GET {url} → HTTP {(int)response.StatusCode}: {(body.Length > 300 ? body[..300] : body)}");
+        }
+    }
+
+    private static RemoteProduct ToRemote(JsonElement item, string code) =>
+        new(
+            Code: code,
+            NamePt: Str(item, "name_pt"),
+            Price: Dec(item, "price"),
+            PriceIva: Dec(item, "price_iva"),
+            Stock: Dec(item, "stock"),
+            Available: item.TryGetProperty("available", out var a) && a.ValueKind is JsonValueKind.True or JsonValueKind.False ? a.GetBoolean() : null,
+            Link: Str(item, "link"),
+            UpdatedAt: FechaParaguayAUtc(Str(item, "updated_at")));
+
+    /// <summary>
+    /// Compras devuelve las fechas sin zona y en hora de Paraguay (UTC-3 fijo desde octubre de 2024; mismo criterio que el panel).
+    /// Se pasan a UTC, como el resto de la base.
+    /// </summary>
+    private static DateTime? FechaParaguayAUtc(string? s) =>
+        DateTime.TryParse(s, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var dt)
+            ? DateTime.SpecifyKind(dt.AddHours(3), DateTimeKind.Utc)
+            : null;
+
+    private static string? Str(JsonElement e, string name) =>
+        e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+
+    private static decimal? Dec(JsonElement e, string name) =>
+        e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDecimal() : null;
 
     /// <summary>
     /// Health check: GET /api/products/list/ con token.
