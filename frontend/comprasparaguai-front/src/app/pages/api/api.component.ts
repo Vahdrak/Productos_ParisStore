@@ -1,12 +1,14 @@
 import { Component } from '@angular/core';
+import { IconComponent } from '../../shared/ui/icon.component';
 
 @Component({
   selector: 'app-api',
   standalone: true,
+  imports: [IconComponent],
   template: `
     <div class="fade-in">
       <div class="section-card">
-        <h3 class="section-title">🧪 Pruebas de API</h3>
+        <h3 class="section-title"><app-icon name="info" size="1em"/> Pruebas de API</h3>
         <p class="text-dim">Endpoints disponibles:</p>
         <ul class="text-dim" style="padding-left: 20px; margin: 12px 0;">
           <li><code>GET /api/dashboard</code> - Estado de ambos destinos</li>

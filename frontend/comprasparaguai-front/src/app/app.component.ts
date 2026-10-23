@@ -13,12 +13,13 @@ import { ApiComponent } from './pages/api/api.component';
 import { CambiosComponent } from './pages/cambios/cambios.component';
 import { FiltrosEnvioComponent } from './pages/filtros-envio/filtros-envio.component';
 import { ErroresComponent } from './pages/errores/errores.component';
+import { IconComponent } from './shared/ui/icon.component';
 
 @Component({
   selector: 'app-root',
   standalone: true,
   imports: [
-    CommonModule, FormsModule,
+    CommonModule, FormsModule, IconComponent,
     DashboardComponent, ProductosComponent, PendientesComponent,
     SyncComponent, ComprasComponent, ComparaComponent, ApiComponent, CambiosComponent, FiltrosEnvioComponent, ErroresComponent
   ],
@@ -36,7 +37,7 @@ import { ErroresComponent } from './pages/errores/errores.component';
         </div>
         <div class="header-right">
           <ng-container *ngIf="auth.logueado; else sinSesion">
-            <span class="usuario">👤 {{ auth.nombre || auth.usuario }}</span>
+            <span class="usuario"><app-icon name="user"></app-icon> {{ auth.nombre || auth.usuario }}</span>
             <button class="btn btn-ghost btn-sm" (click)="auth.logout()">Salir</button>
           </ng-container>
           <ng-template #sinSesion>
@@ -67,7 +68,7 @@ import { ErroresComponent } from './pages/errores/errores.component';
 
       <!-- ERROR MESSAGE -->
       <div *ngIf="errors.message" class="alert alert-error" role="alert">
-        <span>⚠️ {{ errors.message }}</span>
+        <span><app-icon name="warn"></app-icon> {{ errors.message }}</span>
         <button (click)="errors.clear()" class="close-btn" aria-label="Cerrar aviso">&times;</button>
       </div>
 

@@ -7,96 +7,97 @@ import { Cambio, CambiosService } from '../../shared/services/cambios.service';
 import { ErrorService } from '../../shared/services/error.service';
 import { AuthService } from '../../shared/services/auth.service';
 import { Destino, EnvioEstadoProducto, EnvioService } from '../../shared/services/envio.service';
-import { statusClass, statusLabel } from '../../shared/utils/estado';
+import { statusClass } from '../../shared/utils/estado';
 import { MarcaPickerComponent, MarcaSeleccion } from '../../shared/ui/marca-picker.component';
 import { CambiosListaComponent } from '../../shared/ui/cambios-lista.component';
+import { IconComponent } from '../../shared/ui/icon.component';
+import { PaginadorComponent } from '../../shared/ui/paginador.component';
 
 @Component({
   selector: 'app-productos',
   standalone: true,
-  imports: [CommonModule, FormsModule, MarcaPickerComponent, CambiosListaComponent],
+  imports: [CommonModule, FormsModule, MarcaPickerComponent, CambiosListaComponent, IconComponent, PaginadorComponent],
   template: `
     <div class="fade-in">
       <div class="search-bar">
-        <input type="text" placeholder="Buscar código..." [(ngModel)]="filterCode" (keyup.enter)="search()" class="form-input" />
+        <input type="text" placeholder="Buscar código..." aria-label="Buscar por código" [(ngModel)]="filterCode" (keyup.enter)="search()" class="form-input" />
         <app-marca-picker placeholder="Marca (ej. NIKE)..." (marcaChange)="onMarca($event)"></app-marca-picker>
-        <select [(ngModel)]="filterCategoriaId" (ngModelChange)="search()" class="form-input" style="width: 190px;">
+        <select [(ngModel)]="filterCategoriaId" (ngModelChange)="search()" class="form-input w-md" aria-label="Filtrar por departamento">
           <option [ngValue]="null">Departamento: Todos</option>
           <option *ngFor="let d of departamentos" [ngValue]="d.id">{{ d.nombre }} ({{ d.productos }})</option>
         </select>
-        <button (click)="search()" class="btn btn-primary">Buscar</button>
+        <button type="button" (click)="search()" class="btn btn-primary">Buscar</button>
       </div>
 
       <div class="search-bar">
-        <select [(ngModel)]="filterTarget" (ngModelChange)="search()" class="form-input" style="width: 120px;">
+        <select [(ngModel)]="filterTarget" (ngModelChange)="search()" class="form-input w-md" aria-label="Filtrar por destino">
           <option value="">Destino: Todos</option>
           <option value="compras">Compras</option>
           <option value="compara">Compara</option>
         </select>
-        <select [(ngModel)]="filterRegimen" (ngModelChange)="search()" class="form-input" style="width: 140px;">
+        <select [(ngModel)]="filterRegimen" (ngModelChange)="search()" class="form-input w-md" aria-label="Filtrar por régimen">
           <option value="">Régimen: Todos</option>
-          <option value="true">🎫 Con régimen turismo</option>
+          <option value="true">Con régimen turismo</option>
           <option value="false">Normal (sin régimen)</option>
         </select>
-        <select [(ngModel)]="filterState" (ngModelChange)="search()" class="form-input" style="width: 140px;">
+        <select [(ngModel)]="filterState" (ngModelChange)="search()" class="form-input w-md" aria-label="Filtrar por estado">
           <option value="">Estado: Todos</option>
-          <option value="0">⏳ Pendiente</option>
-          <option value="1">✅ Enviado</option>
-          <option value="2">❌ Error</option>
+          <option value="0">Pendiente</option>
+          <option value="1">Enviado</option>
+          <option value="2">Error</option>
         </select>
       </div>
 
-      <div class="search-bar">
-
       <div class="search-bar" *ngIf="productList && productList.items.length > 0">
-        <select [(ngModel)]="pageSize" (ngModelChange)="search()" class="form-input" style="width: 140px;">
+        <select [(ngModel)]="pageSize" (ngModelChange)="search()" class="form-input w-md" aria-label="Productos por página">
           <option [ngValue]="10">10 por página</option>
           <option [ngValue]="25">25 por página</option>
           <option [ngValue]="50">50 por página</option>
           <option [ngValue]="100">100 por página</option>
         </select>
-        <span class="label-dim" *ngIf="productList">{{ productList.totalCount }} productos</span>
+        <span class="label-dim">{{ productList.totalCount }} productos</span>
       </div>
 
       <!-- Reenviar: vuelve a Pendiente lo ya enviado o con error, para que el worker lo envíe de nuevo -->
       <div class="search-bar" *ngIf="productList && productList.items.length > 0">
-        <span class="label-dim">↻ Reenviar a:</span>
-        <select [(ngModel)]="destinoReenvio" class="form-input" style="width: 150px;">
+        <span class="label-dim"><app-icon name="refresh"></app-icon> Reenviar a:</span>
+        <select [(ngModel)]="destinoReenvio" class="form-input w-md" aria-label="Destino del reenvío">
           <option value="compras">Compras</option>
           <option value="compara">Compara</option>
           <option value="ambos">Ambos destinos</option>
         </select>
-        <button class="btn btn-primary" [disabled]="seleccion.size === 0" (click)="reenviarSeleccion()"
-                [title]="auth.logueado ? '' : 'Inicia sesión para modificar'">↻ Reenviar seleccionados ({{ seleccion.size }})</button>
-        <button class="btn btn-ghost" (click)="reenviarFiltrados()"
-                [title]="auth.logueado ? '' : 'Inicia sesión para modificar'">↻ Reenviar todo lo filtrado ({{ productList.totalCount }})</button>
-        <span *ngIf="mensaje" class="text-small" style="color: #4ade80;">✅ {{ mensaje }}</span>
+        <button type="button" class="btn btn-primary" [disabled]="seleccion.size === 0" (click)="reenviarSeleccion()"
+                [title]="auth.logueado ? '' : 'Inicia sesión para modificar'"><app-icon name="refresh"></app-icon> Reenviar seleccionados ({{ seleccion.size }})</button>
+        <button type="button" class="btn btn-ghost" (click)="reenviarFiltrados()"
+                [title]="auth.logueado ? '' : 'Inicia sesión para modificar'"><app-icon name="refresh"></app-icon> Reenviar todo lo filtrado ({{ productList.totalCount }})</button>
+        <span *ngIf="mensaje" class="text-small text-ok" role="status"><app-icon name="check"></app-icon> {{ mensaje }}</span>
       </div>
 
       <!-- Últimos cambios del producto elegido -->
       <div id="panel-cambios" class="section-card" *ngIf="seleccionado">
         <div style="display: flex; justify-content: space-between; align-items: center;">
-          <h3 class="section-title" style="margin: 0;">🕘 Últimos cambios de {{ seleccionado.code }} <span class="text-dim text-small">{{ seleccionado.nameEs }}</span></h3>
-          <button class="btn btn-ghost" (click)="seleccionado = null">Cerrar</button>
+          <h3 class="section-title" style="margin: 0;"><app-icon name="history"></app-icon> Últimos cambios de {{ seleccionado.code }} <span class="text-dim text-small">{{ seleccionado.nameEs }}</span></h3>
+          <button type="button" class="btn btn-ghost" (click)="seleccionado = null">Cerrar</button>
         </div>
         <!-- Envío por destino: excepción propia de este SKU -->
         <div class="filters-grid" style="margin: 16px 0; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">
           <div *ngFor="let e of estadoEnvio" class="stat-card">
             <span class="stat-title">{{ e.target === 'compras' ? 'Compras Paraguai' : 'Compara Paraguai' }}</span>
             <span class="text-small">
-              <span *ngIf="!e.retenido" class="badge badge-success">✅ Se envía</span>
-              <span *ngIf="e.retenido" class="badge badge-warn">🚫 Retenido</span>
-              <span *ngIf="e.retirado" class="badge badge-secondary" title="Se le envió stock 0 al destino">📦 Retirado</span>
+              <span *ngIf="!e.retenido" class="badge badge-success"><app-icon name="check"></app-icon> Se envía</span>
+              <span *ngIf="e.retenido" class="badge badge-warn"><app-icon name="ban"></app-icon> Retenido</span>
+              <span *ngIf="e.retirado" class="badge badge-secondary" title="Se le envió stock 0 al destino"><app-icon name="box"></app-icon> Retirado</span>
               <span *ngIf="e.retenidoPor" class="text-dim"> por {{ e.retenidoPor }}</span>
             </span>
             <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px;">
-              <select class="form-input" style="min-width: 150px;" [(ngModel)]="excepciones[e.target].accion">
+              <select class="form-input" style="min-width: 150px;" [(ngModel)]="excepciones[e.target].accion"
+                      [attr.aria-label]="'Excepción de envío a ' + (e.target === 'compras' ? 'Compras' : 'Compara')">
                 <option value="">Seguir las pausas</option>
                 <option value="enviar">Forzar envío</option>
                 <option value="retener">Retener este SKU</option>
               </select>
-              <input type="text" class="form-input" placeholder="Motivo (opcional)" [(ngModel)]="excepciones[e.target].motivo" style="min-width: 150px;" />
-              <button class="btn btn-primary btn-sm" (click)="guardarExcepcion(e.target)" [title]="auth.logueado ? '' : 'Inicia sesión para modificar'">Guardar</button>
+              <input type="text" class="form-input" placeholder="Motivo (opcional)" aria-label="Motivo de la excepción" [(ngModel)]="excepciones[e.target].motivo" style="min-width: 150px;" />
+              <button type="button" class="btn btn-primary btn-sm" (click)="guardarExcepcion(e.target)" [title]="auth.logueado ? '' : 'Inicia sesión para modificar'">Guardar</button>
             </div>
           </div>
         </div>
@@ -104,36 +105,38 @@ import { CambiosListaComponent } from '../../shared/ui/cambios-lista.component';
         <app-cambios-lista [items]="cambiosProducto" [mostrarProducto]="false"></app-cambios-lista>
       </div>
 
+      <div *ngIf="cargando" class="empty-state"><span class="spinner" role="status" aria-label="Cargando"></span></div>
+
       <div class="table-container mt-6" *ngIf="pagedProducts.length > 0">
         <table class="data-table">
           <thead>
             <tr>
-              <th style="width: 36px;"><input type="checkbox" [checked]="todosDeLaPaginaElegidos" (change)="alternarPagina($any($event.target).checked)" /></th>
-              <th style="width: 12%;">Código</th>
-              <th style="width: 24%;">Nombre (ES)</th>
-              <th>Marca</th>
-              <th>Régimen</th>
-              <th>Precio (IVA)</th>
-              <th>Precio Exenta</th>
-              <th>Stock</th>
-              <th>Compras</th>
-              <th>Compara</th>
+              <th scope="col" style="width: 36px;"><input type="checkbox" aria-label="Seleccionar todos los productos de la página" [checked]="todosDeLaPaginaElegidos" (change)="alternarPagina($any($event.target).checked)" /></th>
+              <th scope="col" style="width: 12%;">Código</th>
+              <th scope="col" style="width: 24%;">Nombre (ES)</th>
+              <th scope="col">Marca</th>
+              <th scope="col">Régimen</th>
+              <th scope="col">Precio (IVA)</th>
+              <th scope="col">Precio Exenta</th>
+              <th scope="col">Stock</th>
+              <th scope="col">Compras</th>
+              <th scope="col">Compara</th>
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let p of pagedProducts" (click)="verCambios(p)" style="cursor: pointer;"
-                [style.background]="seleccionado?.code === p.code ? 'rgba(37, 99, 235, 0.15)' : ''" title="Ver últimos cambios">
-              <td (click)="$event.stopPropagation()"><input type="checkbox" [checked]="seleccion.has(p.code)" (change)="alternarProducto(p.code, $any($event.target).checked)" /></td>
+            <tr *ngFor="let p of pagedProducts" class="row-click" tabindex="0" (click)="verCambios(p)" (keydown.enter)="verCambios(p)"
+                [class.row-selected]="seleccionado?.code === p.code" title="Ver últimos cambios">
+              <td (click)="$event.stopPropagation()" (keydown.enter)="$event.stopPropagation()"><input type="checkbox" [attr.aria-label]="'Seleccionar ' + p.code" [checked]="seleccion.has(p.code)" (change)="alternarProducto(p.code, $any($event.target).checked)" /></td>
               <td class="text-bold">{{ p.code }}</td>
               <td>{{ p.nameEs }}</td>
               <td>{{ p.brand }}</td>
-              <td><span class="badge" [class.badge-success]="p.regimenTurismo" [class.badge-secondary]="!p.regimenTurismo">{{ p.regimenTurismo ? '🎫 Sí' : 'No' }}</span></td>
+              <td><span class="badge" [class.badge-success]="p.regimenTurismo" [class.badge-secondary]="!p.regimenTurismo"><app-icon *ngIf="p.regimenTurismo" name="ticket"></app-icon> {{ p.regimenTurismo ? 'Sí' : 'No' }}</span></td>
               <td>{{ p.price | currency:'':'symbol-narrow' }}</td>
               <td>{{ (p.precioExenta || 0) | currency:'':'symbol-narrow' }}</td>
               <td class="text-center">{{ p.stock }}</td>
               <td>
                 <span class="badge" [ngClass]="statusClass(p.syncStatus)">
-                  {{ statusLabel(p.syncStatus) }}
+                  <app-icon [name]="statusIcon(p.syncStatus)"></app-icon> {{ statusText(p.syncStatus) }}
                 </span>
                 <span *ngIf="noDisponibles.has(p.code)" class="badge badge-warn"
                       title="Compras recibió el producto (stock y precio al día) pero lo marca como no disponible. Lo decide Compras.">
@@ -142,7 +145,7 @@ import { CambiosListaComponent } from '../../shared/ui/cambios-lista.component';
               </td>
               <td>
                 <span class="badge" [ngClass]="statusClass(p.syncComparaStatus)">
-                  {{ statusLabel(p.syncComparaStatus) }}
+                  <app-icon [name]="statusIcon(p.syncComparaStatus)"></app-icon> {{ statusText(p.syncComparaStatus) }}
                 </span>
               </td>
             </tr>
@@ -150,15 +153,10 @@ import { CambiosListaComponent } from '../../shared/ui/cambios-lista.component';
         </table>
       </div>
 
-      <div *ngIf="totalPages > 1" class="pagination">
-        <button [disabled]="page === 1" (click)="goToPage(1)">«</button>
-        <button [disabled]="page === 1" (click)="goToPage(page - 1)">‹</button>
-        <span class="page-info">Pág {{ page }}/{{ totalPages }}</span>
-        <button [disabled]="page === totalPages" (click)="goToPage(page + 1)">›</button>
-        <button [disabled]="page === totalPages" (click)="goToPage(totalPages)">»</button>
-      </div>
+      <app-paginador [page]="page" [totalPages]="totalPages"
+                     [info]="productList ? productList.totalCount + ' productos' : ''" (go)="goToPage($event)"></app-paginador>
 
-      <div *ngIf="!productList || productList.items.length === 0" class="text-center py-8 text-dim">
+      <div *ngIf="!cargando && (!productList || productList.items.length === 0)" class="empty-state">
         No hay productos
       </div>
     </div>
@@ -166,11 +164,20 @@ import { CambiosListaComponent } from '../../shared/ui/cambios-lista.component';
 })
 export class ProductosComponent implements OnInit {
   readonly statusClass = statusClass;
-  readonly statusLabel = statusLabel;
+
+  /** Texto del estado sin emoji (el icono lo pone la plantilla). 0 = Pendiente, 1 = Enviado, otro = Error. */
+  statusText(status?: number | null): string {
+    return status === 0 ? 'Pendiente' : status === 1 ? 'Enviado' : 'Error';
+  }
+
+  statusIcon(status?: number | null): string {
+    return status === 0 ? 'clock' : status === 1 ? 'check' : 'x';
+  }
 
   productList: any = null;
   pagedProducts: any[] = [];
   departamentos: { id: number; nombre: string; productos: number }[] = [];
+  cargando = false;
 
   filterCode = '';
   filterMarcaId: number | null = null;
@@ -236,6 +243,7 @@ export class ProductosComponent implements OnInit {
   goToPage(page: number) {
     this.page = Math.max(1, page);
     this.limpiarSeleccion();
+    this.cargando = true;
     this.productoService.getProductos({
       code: this.filterCode,
       target: this.filterTarget,
@@ -245,13 +253,17 @@ export class ProductosComponent implements OnInit {
       regimen: this.filterRegimen
     }, this.page, this.pageSize).subscribe(
       list => {
+        this.cargando = false;
         if (!list || !list.items) return;
         const items: any[] = list.items;
         this.totalPages = list.totalPages || 1;
         this.pagedProducts = items;
         this.productList = list;
       },
-      () => this.errors.show('Error cargando productos')
+      () => {
+        this.cargando = false;
+        this.errors.show('Error cargando productos');
+      }
     );
   }
 

@@ -3,23 +3,24 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Cambio, CambioList, CambiosService } from '../../shared/services/cambios.service';
 import { ErrorService } from '../../shared/services/error.service';
-import { quickRange } from '../../shared/utils/fechas';
-import { QuickRangeComponent } from '../../shared/ui/quick-range.component';
 import { MarcaPickerComponent, MarcaSeleccion } from '../../shared/ui/marca-picker.component';
 import { CambiosListaComponent } from '../../shared/ui/cambios-lista.component';
+import { DateRangeComponent } from '../../shared/ui/date-range.component';
+import { PaginadorComponent } from '../../shared/ui/paginador.component';
+import { IconComponent } from '../../shared/ui/icon.component';
 
 @Component({
   selector: 'app-cambios',
   standalone: true,
-  imports: [CommonModule, FormsModule, QuickRangeComponent, MarcaPickerComponent, CambiosListaComponent],
+  imports: [CommonModule, FormsModule, MarcaPickerComponent, CambiosListaComponent, DateRangeComponent, PaginadorComponent, IconComponent],
   template: `
     <div class="fade-in">
       <div class="section-card">
-        <h3 class="section-title">🕘 Últimos cambios de productos</h3>
+        <h3 class="section-title"><app-icon name="history" size="1em"/> Últimos cambios de productos</h3>
         <div class="search-bar">
-          <input type="text" placeholder="Producto (código o nombre)..." [(ngModel)]="texto" (keyup.enter)="search()" class="form-input" />
-          <app-marca-picker placeholder="Marca (ej. NIKE)..." (marcaChange)="onMarca($event)"></app-marca-picker>
-          <select [(ngModel)]="campo" (ngModelChange)="search()" class="form-input" style="width: 170px;">
+          <input type="text" placeholder="Producto (código o nombre)..." aria-label="Producto (código o nombre)" [(ngModel)]="texto" (keyup.enter)="search()" class="form-input" />
+          <app-marca-picker placeholder="Marca (ej. NIKE)..." ariaLabel="Marca" (marcaChange)="onMarca($event)"></app-marca-picker>
+          <select [(ngModel)]="campo" (ngModelChange)="search()" class="form-input w-md" aria-label="Filtrar por campo">
             <option value="">Campo: Todos</option>
             <option value="price">Precio</option>
             <option value="stock">Stock</option>
@@ -29,22 +30,18 @@ import { CambiosListaComponent } from '../../shared/ui/cambios-lista.component';
             <option value="regimen_turismo">Régimen turismo</option>
             <option value="url_image">Imagen</option>
           </select>
-          <select [(ngModel)]="origen" (ngModelChange)="search()" class="form-input" style="width: 170px;">
+          <select [(ngModel)]="origen" (ngModelChange)="search()" class="form-input w-md" aria-label="Filtrar por origen">
             <option value="">Origen: Todos</option>
             <option value="sync">Sync</option>
             <option value="reconciliacion">Reconciliación (bajas)</option>
             <option value="api">API</option>
             <option value="historico">Histórico</option>
           </select>
-          <button (click)="search()" class="btn btn-primary">Buscar</button>
+          <button type="button" (click)="search()" class="btn btn-primary">Buscar</button>
         </div>
         <div class="search-bar">
-          <label class="label-dim">📅 Rango de fechas:</label>
-          <input type="date" [(ngModel)]="desde" (ngModelChange)="search()" class="form-input" style="width: 120px;" />
-          <span style="color: #8f8f8f;">hasta</span>
-          <input type="date" [(ngModel)]="hasta" (ngModelChange)="search()" class="form-input" style="width: 120px;" />
-          <app-quick-range (pick)="setQuickRange($event)" (clear)="desde = ''; hasta = ''; search();"></app-quick-range>
-          <select [(ngModel)]="pageSize" (ngModelChange)="search()" class="form-input" style="width: 140px;">
+          <app-date-range [(desde)]="desde" [(hasta)]="hasta" label="Rango de fechas:" (changed)="search()" (cleared)="search()"></app-date-range>
+          <select [(ngModel)]="pageSize" (ngModelChange)="search()" class="form-input w-md" aria-label="Cambios por página">
             <option [ngValue]="25">25 por página</option>
             <option [ngValue]="50">50 por página</option>
             <option [ngValue]="100">100 por página</option>
@@ -52,15 +49,10 @@ import { CambiosListaComponent } from '../../shared/ui/cambios-lista.component';
         </div>
 
         <div class="label-dim" *ngIf="lista">{{ lista.totalCount }} cambios</div>
-        <app-cambios-lista [items]="items"></app-cambios-lista>
+        <span class="spinner" role="status" aria-label="Cargando" *ngIf="cargando"></span>
+        <app-cambios-lista [items]="items" [cargando]="cargando"></app-cambios-lista>
 
-        <div *ngIf="totalPages > 1" class="pagination">
-          <button [disabled]="page === 1" (click)="goToPage(1)">«</button>
-          <button [disabled]="page === 1" (click)="goToPage(page - 1)">‹</button>
-          <span class="page-info">Pág {{ page }}/{{ totalPages }}</span>
-          <button [disabled]="page === totalPages" (click)="goToPage(page + 1)">›</button>
-          <button [disabled]="page === totalPages" (click)="goToPage(totalPages)">»</button>
-        </div>
+        <app-paginador [page]="page" [totalPages]="totalPages" (go)="goToPage($event)"></app-paginador>
       </div>
     </div>
   `
@@ -68,6 +60,7 @@ import { CambiosListaComponent } from '../../shared/ui/cambios-lista.component';
 export class CambiosComponent implements OnInit {
   lista: CambioList | null = null;
   items: Cambio[] = [];
+  cargando = false;
 
   texto = '';
   marcaId: number | null = null;
@@ -97,6 +90,7 @@ export class CambiosComponent implements OnInit {
 
   goToPage(page: number) {
     this.page = Math.max(1, page);
+    this.cargando = true;
     this.cambios.getCambios({
       q: this.texto.trim(),
       marcaId: this.marcaId,
@@ -109,15 +103,12 @@ export class CambiosComponent implements OnInit {
         this.lista = lista;
         this.items = lista.items;
         this.totalPages = lista.totalPages || 1;
+        this.cargando = false;
       },
-      () => this.errors.show('Error cargando cambios')
+      () => {
+        this.cargando = false;
+        this.errors.show('Error cargando cambios');
+      }
     );
-  }
-
-  setQuickRange(range: string) {
-    const r = quickRange(range);
-    this.desde = r.desde;
-    this.hasta = r.hasta;
-    this.search();
   }
 }

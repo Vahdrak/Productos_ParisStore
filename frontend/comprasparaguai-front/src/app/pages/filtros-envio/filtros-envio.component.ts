@@ -9,6 +9,8 @@ import { CatalogoService, CategoriaNodo, Marca } from '../../shared/services/cat
 import { Destino, EnvioImpacto, EnvioPausa, EnvioService, MarcaCategoria, ReglaHistorial } from '../../shared/services/envio.service';
 import { ErrorService } from '../../shared/services/error.service';
 import { AuthService } from '../../shared/services/auth.service';
+import { IconComponent } from '../../shared/ui/icon.component';
+import { PaginadorComponent } from '../../shared/ui/paginador.component';
 
 interface FilaArbol {
   nodo: CategoriaNodo;
@@ -29,38 +31,38 @@ interface Dialogo {
 @Component({
   selector: 'app-filtros-envio',
   standalone: true,
-  imports: [CommonModule, FechaPyPipe, FormsModule],
+  imports: [CommonModule, FechaPyPipe, FormsModule, IconComponent, PaginadorComponent],
   template: `
     <div class="fade-in">
       <div class="section-card">
-        <div class="filter-tabs">
-          <button [class.active]="target === 'compras'" (click)="cambiarDestino('compras')">Compras Paraguai</button>
-          <button [class.active]="target === 'compara'" (click)="cambiarDestino('compara')">Compara Paraguai</button>
+        <div class="filter-tabs" role="tablist" aria-label="Destino">
+          <button type="button" role="tab" [attr.aria-selected]="target === 'compras'" [class.active]="target === 'compras'" (click)="cambiarDestino('compras')">Compras Paraguai</button>
+          <button type="button" role="tab" [attr.aria-selected]="target === 'compara'" [class.active]="target === 'compara'" (click)="cambiarDestino('compara')">Compara Paraguai</button>
         </div>
         <p class="text-dim text-small" style="margin: 0;">
           Pausa lo que <b>no</b> quieres enviar a este destino. Mientras esté pausado se sigue actualizando en la base de datos
           pero no se envía; al reactivarlo se envía con los datos más recientes. Una marca y una categoría se pueden combinar
           (por ejemplo, solo la ropa de una marca) y un producto puntual puede tener su propia excepción desde la pestaña Productos.
         </p>
-        <p *ngIf="!auth.logueado" class="text-small" style="margin: 12px 0 0 0; color: #fbbf24;">
-          🔒 Solo lectura: <a href="javascript:void(0)" (click)="auth.pedirLogin = true" style="color: #93c5fd;">inicia sesión</a> para pausar o reactivar.
+        <p *ngIf="!auth.logueado" class="text-small text-warn" style="margin: 12px 0 0 0;">
+          <app-icon name="lock" size="1em"/> Solo lectura: <button type="button" class="link" (click)="auth.pedirLogin = true" style="color: #93c5fd;">inicia sesión</button> para pausar o reactivar.
         </p>
       </div>
 
       <!-- PAUSAS ACTIVAS -->
       <div class="section-card">
-        <h3 class="section-title">⏸ Pausas de {{ nombreDestino }} ({{ pausas.length }})</h3>
+        <h3 class="section-title"><app-icon name="ban" size="1em"/> Pausas de {{ nombreDestino }} ({{ pausas.length }})</h3>
         <div class="table-container" *ngIf="pausas.length > 0">
           <table class="data-table">
             <thead>
               <tr>
-                <th style="width: 30%;">Qué se pausa</th>
-                <th>Motivo</th>
-                <th style="width: 90px;">Productos</th>
-                <th style="width: 120px;">Retira del destino</th>
-                <th style="width: 150px;">Creada por</th>
-                <th style="width: 130px;">Estado</th>
-                <th style="width: 70px;"></th>
+                <th scope="col" style="width: 30%;">Qué se pausa</th>
+                <th scope="col">Motivo</th>
+                <th scope="col" style="width: 90px;">Productos</th>
+                <th scope="col" style="width: 120px;">Retira del destino</th>
+                <th scope="col" style="width: 150px;">Creada por</th>
+                <th scope="col" style="width: 130px;">Estado</th>
+                <th scope="col" style="width: 70px;"><span class="sr-only">Acciones</span></th>
               </tr>
             </thead>
             <tbody>
@@ -69,45 +71,48 @@ interface Dialogo {
                   <span class="badge badge-secondary">{{ tipoPausa(p) }}</span>
                   <span class="text-bold"> {{ descripcionPausa(p) }}</span>
                 </td>
-                <td class="text-small" style="white-space: normal;">{{ p.motivo || '—' }}</td>
+                <td class="text-small td-wrap">{{ p.motivo || '—' }}</td>
                 <td class="text-center">{{ p.productos }}</td>
-                <td class="text-center">{{ p.retirarDelDestino ? '📦 Sí' : 'No' }}</td>
+                <td class="text-center"><ng-container *ngIf="p.retirarDelDestino"><app-icon name="box" size="1em"/> Sí</ng-container><ng-container *ngIf="!p.retirarDelDestino">No</ng-container></td>
                 <td class="text-small">{{ p.createdBy || '—' }}<div class="text-dim">{{ p.createdAt | fechaPy:'yyyy-MM-dd' }}</div></td>
                 <td>
-                  <button class="pill" [class.off]="p.activo" [class.on]="!p.activo" (click)="alternarPausa(p)"
+                  <button type="button" class="pill" [class.off]="p.activo" [class.on]="!p.activo" (click)="alternarPausa(p)"
                           [title]="p.activo ? 'Reactivar el envío' : 'Volver a pausar'">
-                    {{ p.activo ? '⏸ Pausada' : '✅ Enviando' }}
+                    <ng-container *ngIf="p.activo"><app-icon name="ban" size="1em"/> Pausada</ng-container>
+                    <ng-container *ngIf="!p.activo"><app-icon name="check" size="1em"/> Enviando</ng-container>
                   </button>
                 </td>
-                <td><button class="btn btn-ghost btn-sm" (click)="borrarPausa(p)" title="Borrar la regla">🗑</button></td>
+                <td><button type="button" class="btn btn-ghost btn-sm" (click)="borrarPausa(p)" title="Borrar la regla" aria-label="Borrar la regla"><app-icon name="trash" size="1em"/></button></td>
               </tr>
             </tbody>
           </table>
         </div>
-        <div *ngIf="pausas.length === 0" class="text-center py-8 text-dim">No hay pausas: se envía todo a {{ nombreDestino }}.</div>
+        <div *ngIf="cargandoPausas && pausas.length === 0" class="empty-state"><span class="spinner" role="status" aria-label="Cargando"></span></div>
+        <div *ngIf="!cargandoPausas && pausas.length === 0" class="empty-state">No hay pausas: se envía todo a {{ nombreDestino }}.</div>
       </div>
 
       <!-- CATEGORÍAS -->
       <div class="section-card">
-        <h3 class="section-title">🗂 Categorías</h3>
+        <h3 class="section-title"><app-icon name="box" size="1em"/> Categorías</h3>
         <div class="search-bar">
-          <input type="text" class="form-input" placeholder="Buscar categoría (ej. perfumes)..." [(ngModel)]="catBusqueda" (ngModelChange)="construirFilas()" />
-          <button class="btn btn-ghost" (click)="expandirTodo(false)" *ngIf="!catBusqueda">Contraer todo</button>
+          <input type="text" class="form-input" placeholder="Buscar categoría (ej. perfumes)..." aria-label="Buscar categoría" [(ngModel)]="catBusqueda" (ngModelChange)="construirFilas()" />
+          <button type="button" class="btn btn-ghost" (click)="expandirTodo(false)" *ngIf="!catBusqueda">Contraer todo</button>
         </div>
         <div class="table-container" *ngIf="filas.length > 0">
           <table class="data-table">
             <thead>
               <tr>
-                <th>Categoría</th>
-                <th style="width: 110px;">Productos</th>
-                <th style="width: 130px;">Pendientes</th>
-                <th style="width: 150px;">Envío a {{ nombreDestino }}</th>
+                <th scope="col">Categoría</th>
+                <th scope="col" style="width: 110px;">Productos</th>
+                <th scope="col" style="width: 130px;">Pendientes</th>
+                <th scope="col" style="width: 150px;">Envío a {{ nombreDestino }}</th>
               </tr>
             </thead>
             <tbody>
               <tr *ngFor="let f of filas" [style.opacity]="heredada(f.nodo) ? 0.55 : 1">
                 <td [style.padding-left.px]="8 + f.nivel * 22">
-                  <button *ngIf="f.nodo.hijos.length > 0 && !catBusqueda" class="flecha" (click)="alternarExpandido(f.nodo)">
+                  <button type="button" *ngIf="f.nodo.hijos.length > 0 && !catBusqueda" class="flecha" (click)="alternarExpandido(f.nodo)"
+                          [attr.aria-expanded]="expandidos.has(f.nodo.id)" [attr.aria-label]="(expandidos.has(f.nodo.id) ? 'Contraer ' : 'Expandir ') + f.nodo.nombre">
                     {{ expandidos.has(f.nodo.id) ? '▾' : '▸' }}
                   </button>
                   <span *ngIf="f.nodo.hijos.length === 0 || catBusqueda" class="flecha"></span>
@@ -117,35 +122,37 @@ interface Dialogo {
                 <td>{{ f.nodo.productos }}</td>
                 <td>{{ pendientesNodo(f.nodo) }}</td>
                 <td>
-                  <button *ngIf="heredada(f.nodo)" class="pill off" disabled title="Un nivel superior está pausado">⏸ Heredado</button>
-                  <button *ngIf="!heredada(f.nodo)" class="pill" [class.on]="!pausaIdNodo(f.nodo)" [class.off]="!!pausaIdNodo(f.nodo)"
+                  <button type="button" *ngIf="heredada(f.nodo)" class="pill off" disabled title="Un nivel superior está pausado"><app-icon name="ban" size="1em"/> Heredado</button>
+                  <button type="button" *ngIf="!heredada(f.nodo)" class="pill" [class.on]="!pausaIdNodo(f.nodo)" [class.off]="!!pausaIdNodo(f.nodo)"
                           (click)="alternarCategoria(f.nodo)">
-                    {{ pausaIdNodo(f.nodo) ? '⏸ Pausada' : '✅ Enviando' }}
+                    <ng-container *ngIf="pausaIdNodo(f.nodo)"><app-icon name="ban" size="1em"/> Pausada</ng-container>
+                    <ng-container *ngIf="!pausaIdNodo(f.nodo)"><app-icon name="check" size="1em"/> Enviando</ng-container>
                   </button>
                 </td>
               </tr>
             </tbody>
           </table>
         </div>
-        <div *ngIf="filas.length === 0" class="text-center py-8 text-dim">Sin categorías para mostrar</div>
+        <div *ngIf="cargandoArbol && filas.length === 0" class="empty-state"><span class="spinner" role="status" aria-label="Cargando"></span></div>
+        <div *ngIf="!cargandoArbol && filas.length === 0" class="empty-state">Sin categorías para mostrar</div>
       </div>
 
       <!-- MARCAS -->
       <div class="section-card">
-        <h3 class="section-title">🏷 Marcas</h3>
+        <h3 class="section-title"><app-icon name="tag" size="1em"/> Marcas</h3>
         <div class="search-bar">
-          <input type="text" class="form-input" placeholder="Buscar marca (ej. lacoste)..." [(ngModel)]="marcaBusqueda" (ngModelChange)="busquedaMarca$.next($event)" />
+          <input type="text" class="form-input" placeholder="Buscar marca (ej. lacoste)..." aria-label="Buscar marca" [(ngModel)]="marcaBusqueda" (ngModelChange)="busquedaMarca$.next($event)" />
           <span class="label-dim" *ngIf="marcasTotal">{{ marcasTotal }} marcas</span>
         </div>
         <div class="table-container" *ngIf="marcas.length > 0">
           <table class="data-table">
             <thead>
               <tr>
-                <th>Marca</th>
-                <th style="width: 110px;">Productos</th>
-                <th style="width: 130px;">Pendientes</th>
-                <th style="width: 150px;">Envío a {{ nombreDestino }}</th>
-                <th style="width: 150px;"></th>
+                <th scope="col">Marca</th>
+                <th scope="col" style="width: 110px;">Productos</th>
+                <th scope="col" style="width: 130px;">Pendientes</th>
+                <th scope="col" style="width: 150px;">Envío a {{ nombreDestino }}</th>
+                <th scope="col" style="width: 150px;"><span class="sr-only">Por categoría</span></th>
               </tr>
             </thead>
             <tbody>
@@ -155,29 +162,31 @@ interface Dialogo {
                   <td>{{ m.productos }}</td>
                   <td>{{ target === 'compras' ? m.pendientesCompras : m.pendientesCompara }}</td>
                   <td>
-                    <button class="pill" [class.on]="!pausaIdMarca(m)" [class.off]="!!pausaIdMarca(m)" (click)="alternarMarca(m)">
-                      {{ pausaIdMarca(m) ? '⏸ Pausada' : '✅ Enviando' }}
+                    <button type="button" class="pill" [class.on]="!pausaIdMarca(m)" [class.off]="!!pausaIdMarca(m)" (click)="alternarMarca(m)">
+                      <ng-container *ngIf="pausaIdMarca(m)"><app-icon name="ban" size="1em"/> Pausada</ng-container>
+                      <ng-container *ngIf="!pausaIdMarca(m)"><app-icon name="check" size="1em"/> Enviando</ng-container>
                     </button>
                   </td>
                   <td>
-                    <button class="btn btn-ghost btn-sm" (click)="alternarCategoriasDeMarca(m)"
-                            title="Pausar esta marca solo en ciertas categorías">
+                    <button type="button" class="btn btn-ghost btn-sm" (click)="alternarCategoriasDeMarca(m)"
+                            [attr.aria-expanded]="marcaAbierta === m.id" title="Pausar esta marca solo en ciertas categorías">
                       {{ marcaAbierta === m.id ? '▾' : '▸' }} por categoría
                     </button>
                   </td>
                 </tr>
                 <tr *ngIf="marcaAbierta === m.id">
                   <td colspan="5" style="background: rgba(255,255,255,0.02); padding-left: 32px;">
-                    <div *ngIf="categoriasMarca.length === 0" class="text-small text-dim">Cargando...</div>
+                    <div *ngIf="categoriasMarca.length === 0" class="text-small text-dim"><span class="spinner" role="status" aria-label="Cargando"></span> Cargando...</div>
                     <table class="data-table" *ngIf="categoriasMarca.length > 0" style="margin: 4px 0;">
                       <tbody>
                         <tr *ngFor="let c of categoriasMarca">
                           <td [style.padding-left.px]="8 + (c.nivel - 2) * 22">{{ c.nombre }}</td>
                           <td style="width: 110px;">{{ c.productos }}</td>
                           <td style="width: 150px;">
-                            <button *ngIf="pausaIdMarca(m)" class="pill off" disabled title="La marca completa está pausada">⏸ Pausada (marca)</button>
-                            <button *ngIf="!pausaIdMarca(m)" class="pill" [class.on]="!c.pausaId" [class.off]="!!c.pausaId" (click)="alternarMarcaEnCategoria(m, c)">
-                              {{ c.pausaId ? '⏸ Pausada' : '✅ Enviando' }}
+                            <button type="button" *ngIf="pausaIdMarca(m)" class="pill off" disabled title="La marca completa está pausada"><app-icon name="ban" size="1em"/> Pausada (marca)</button>
+                            <button type="button" *ngIf="!pausaIdMarca(m)" class="pill" [class.on]="!c.pausaId" [class.off]="!!c.pausaId" (click)="alternarMarcaEnCategoria(m, c)">
+                              <ng-container *ngIf="c.pausaId"><app-icon name="ban" size="1em"/> Pausada</ng-container>
+                              <ng-container *ngIf="!c.pausaId"><app-icon name="check" size="1em"/> Enviando</ng-container>
                             </button>
                           </td>
                         </tr>
@@ -189,27 +198,22 @@ interface Dialogo {
             </tbody>
           </table>
         </div>
-        <div *ngIf="marcas.length === 0" class="text-center py-8 text-dim">Sin marcas</div>
-        <div *ngIf="marcasTotalPages > 1" class="pagination">
-          <button [disabled]="marcasPage === 1" (click)="cargarMarcas(1)">«</button>
-          <button [disabled]="marcasPage === 1" (click)="cargarMarcas(marcasPage - 1)">‹</button>
-          <span class="page-info">Pág {{ marcasPage }}/{{ marcasTotalPages }}</span>
-          <button [disabled]="marcasPage === marcasTotalPages" (click)="cargarMarcas(marcasPage + 1)">›</button>
-          <button [disabled]="marcasPage === marcasTotalPages" (click)="cargarMarcas(marcasTotalPages)">»</button>
-        </div>
+        <div *ngIf="cargandoMarcas && marcas.length === 0" class="empty-state"><span class="spinner" role="status" aria-label="Cargando"></span></div>
+        <div *ngIf="!cargandoMarcas && marcas.length === 0" class="empty-state">Sin marcas</div>
+        <app-paginador [page]="marcasPage" [totalPages]="marcasTotalPages" (go)="cargarMarcas($event)"></app-paginador>
       </div>
 
       <!-- HISTORIAL -->
       <div class="section-card">
-        <h3 class="section-title">🕘 Historial de reglas de {{ nombreDestino }}</h3>
+        <h3 class="section-title"><app-icon name="history" size="1em"/> Historial de reglas de {{ nombreDestino }}</h3>
         <div class="table-container" *ngIf="historial.length > 0">
           <table class="data-table">
             <thead>
               <tr>
-                <th style="width: 160px;">Fecha</th>
-                <th style="width: 130px;">Usuario</th>
-                <th style="width: 120px;">Acción</th>
-                <th>Regla</th>
+                <th scope="col" style="width: 160px;">Fecha</th>
+                <th scope="col" style="width: 130px;">Usuario</th>
+                <th scope="col" style="width: 120px;">Acción</th>
+                <th scope="col">Regla</th>
               </tr>
             </thead>
             <tbody>
@@ -217,7 +221,7 @@ interface Dialogo {
                 <td>{{ h.changedAt | fechaPy:'yyyy-MM-dd HH:mm:ss' }}</td>
                 <td>{{ h.usuario || '—' }}</td>
                 <td><span class="badge" [ngClass]="claseAccion(h.accion)">{{ h.accion }}</span></td>
-                <td style="white-space: normal;">
+                <td class="td-wrap">
                   <span class="badge badge-secondary">{{ h.tabla === 'pausa' ? 'Pausa' : 'Excepción SKU' }}</span>
                   {{ h.detalle }}
                 </td>
@@ -225,20 +229,17 @@ interface Dialogo {
             </tbody>
           </table>
         </div>
-        <div *ngIf="historial.length === 0" class="text-center py-8 text-dim">Aún no hay cambios de reglas</div>
-        <div *ngIf="historialTotalPages > 1" class="pagination">
-          <button [disabled]="historialPage === 1" (click)="cargarHistorial(historialPage - 1)">‹</button>
-          <span class="page-info">Pág {{ historialPage }}/{{ historialTotalPages }}</span>
-          <button [disabled]="historialPage === historialTotalPages" (click)="cargarHistorial(historialPage + 1)">›</button>
-        </div>
+        <div *ngIf="cargandoHistorial && historial.length === 0" class="empty-state"><span class="spinner" role="status" aria-label="Cargando"></span></div>
+        <div *ngIf="!cargandoHistorial && historial.length === 0" class="empty-state">Aún no hay cambios de reglas</div>
+        <app-paginador [page]="historialPage" [totalPages]="historialTotalPages" (go)="cargarHistorial($event)"></app-paginador>
       </div>
 
       <!-- CONFIRMAR PAUSA -->
       <div *ngIf="dlg" class="modal-fondo" (click)="dlg = null">
-        <div class="modal-caja" (click)="$event.stopPropagation()">
-          <h3 class="section-title">Pausar el envío a {{ nombreDestino }}</h3>
+        <div class="modal-caja" role="dialog" aria-modal="true" aria-labelledby="dlg-titulo" (click)="$event.stopPropagation()">
+          <h3 class="section-title" id="dlg-titulo">Pausar el envío a {{ nombreDestino }}</h3>
           <div><b>{{ dlg.etiqueta }}</b></div>
-          <div *ngIf="!dlg.impacto" class="text-small text-dim">Calculando el impacto...</div>
+          <div *ngIf="!dlg.impacto" class="text-small text-dim"><span class="spinner" role="status" aria-label="Cargando"></span> Calculando el impacto...</div>
           <div *ngIf="dlg.impacto" class="text-small" style="line-height: 1.6;">
             Se retendrán <b>{{ dlg.impacto.productos }}</b> productos
             (<b>{{ dlg.impacto.pendientes }}</b> pendientes de envío; <b>{{ dlg.impacto.publicados }}</b> ya publicados en el destino).
@@ -248,65 +249,36 @@ interface Dialogo {
             <input type="checkbox" [(ngModel)]="dlg.retirar" style="margin-top: 3px;" />
             <span>Retirar del destino: enviar <b>stock 0</b> a lo ya publicado (no se mostrará como disponible). Al reactivar se reenvía con su stock real.</span>
           </label>
-          <input type="text" class="form-input" placeholder="Motivo (opcional, ej. Temporada verano)" [(ngModel)]="dlg.motivo" />
+          <input type="text" class="form-input" placeholder="Motivo (opcional, ej. Temporada verano)" aria-label="Motivo de la pausa" [(ngModel)]="dlg.motivo" />
           <div class="modal-botones">
-            <button class="btn btn-ghost" (click)="dlg = null">Cancelar</button>
-            <button class="btn btn-primary" [disabled]="dlg.enviando || !dlg.impacto" (click)="confirmarPausa()">Pausar envío</button>
+            <button type="button" class="btn btn-ghost" (click)="dlg = null">Cancelar</button>
+            <button type="button" class="btn btn-primary" [disabled]="dlg.enviando || !dlg.impacto" (click)="confirmarPausa()">Pausar envío</button>
           </div>
         </div>
       </div>
     </div>
   `,
   styles: [`
-    .pill {
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 999px;
-      padding: 4px 12px;
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
-      background: transparent;
-      white-space: nowrap;
-    }
-    .pill.on { background: rgba(74, 222, 128, 0.15); color: #4ade80; border-color: rgba(74, 222, 128, 0.4); }
-    .pill.off { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border-color: rgba(245, 158, 11, 0.4); }
-    .pill:disabled { cursor: not-allowed; opacity: 0.8; }
     .flecha {
       display: inline-block;
       width: 20px;
       background: none;
       border: none;
-      color: #8f8f8f;
+      color: var(--text-dim);
       cursor: pointer;
       padding: 0;
     }
-    .modal-fondo {
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.6);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 100;
-    }
-    .modal-caja {
-      background: #131313;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 8px;
-      padding: 24px;
-      width: 460px;
-      max-width: 92vw;
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-    .modal-botones { display: flex; justify-content: flex-end; gap: 8px; }
   `]
 })
 export class FiltrosEnvioComponent implements OnInit {
   target: Destino = 'compras';
 
   pausas: EnvioPausa[] = [];
+
+  cargandoPausas = true;
+  cargandoArbol = true;
+  cargandoMarcas = true;
+  cargandoHistorial = true;
 
   // Categorías: árbol completo (sin la raíz) y filas visibles
   arbol: CategoriaNodo[] = [];
@@ -366,42 +338,64 @@ export class FiltrosEnvioComponent implements OnInit {
   // ---------------------------------------------------------------- carga
 
   cargarPausas() {
+    this.cargandoPausas = true;
     this.envio.getPausas(this.target).subscribe(
-      p => this.pausas = p,
-      () => this.errors.show('Error cargando las pausas')
+      p => {
+        this.pausas = p;
+        this.cargandoPausas = false;
+      },
+      () => {
+        this.cargandoPausas = false;
+        this.errors.show('Error cargando las pausas');
+      }
     );
   }
 
   cargarArbol() {
+    this.cargandoArbol = true;
     this.catalogo.getArbolCategorias().subscribe(
       raices => {
         this.arbol = raices[0]?.hijos ?? [];   // sin la raíz "TOKU IMPORTADOS"
         this.construirFilas();
+        this.cargandoArbol = false;
       },
-      () => this.errors.show('Error cargando las categorías')
+      () => {
+        this.cargandoArbol = false;
+        this.errors.show('Error cargando las categorías');
+      }
     );
   }
 
   cargarMarcas(page: number) {
     this.marcasPage = Math.max(1, page);
+    this.cargandoMarcas = true;
     this.catalogo.getMarcas(this.marcaBusqueda.trim(), this.marcasPage, 15).subscribe(
       lista => {
         this.marcas = lista.items;
         this.marcasTotalPages = lista.totalPages || 1;
         this.marcasTotal = lista.totalCount;
+        this.cargandoMarcas = false;
       },
-      () => this.errors.show('Error cargando las marcas')
+      () => {
+        this.cargandoMarcas = false;
+        this.errors.show('Error cargando las marcas');
+      }
     );
   }
 
   cargarHistorial(page: number) {
     this.historialPage = Math.max(1, page);
+    this.cargandoHistorial = true;
     this.envio.getHistorial(this.target, this.historialPage, 15).subscribe(
       h => {
         this.historial = h.items;
         this.historialTotalPages = h.totalPages || 1;
+        this.cargandoHistorial = false;
       },
-      () => this.errors.show('Error cargando el historial de reglas')
+      () => {
+        this.cargandoHistorial = false;
+        this.errors.show('Error cargando el historial de reglas');
+      }
     );
   }
 

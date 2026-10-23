@@ -7,35 +7,31 @@ import { interval } from 'rxjs';
 import { ErroresService } from '../../shared/services/errores.service';
 import { NoDisponible, NoDisponiblesList, ProductoService, SendRun, VerifyResult, VerifyRun } from '../../shared/services/producto.service';
 import { ErrorService } from '../../shared/services/error.service';
-import { fechaPy, isDateInRange, quickRange } from '../../shared/utils/fechas';
-import { QuickRangeComponent } from '../../shared/ui/quick-range.component';
+import { fechaPy, isDateInRange } from '../../shared/utils/fechas';
+import { DateRangeComponent } from '../../shared/ui/date-range.component';
+import { PaginadorComponent } from '../../shared/ui/paginador.component';
+import { IconComponent } from '../../shared/ui/icon.component';
 
 @Component({
   selector: 'app-compras',
   standalone: true,
-  imports: [CommonModule, FechaPyPipe, FormsModule, QuickRangeComponent],
+  imports: [CommonModule, FechaPyPipe, FormsModule, DateRangeComponent, PaginadorComponent, IconComponent],
   template: `
     <div class="fade-in">
       <div class="section-card">
-        <h3 class="section-title">📤 Envíos a Compras Paraguai</h3>
-        <div class="search-bar">
-          <label class="label-dim">📅 Rango de envíos:</label>
-          <input type="date" [(ngModel)]="fechaDesde" (ngModelChange)="applyFilters()" class="form-input" style="width: 120px;" />
-          <span style="color: #8f8f8f;">hasta</span>
-          <input type="date" [(ngModel)]="fechaHasta" (ngModelChange)="applyFilters()" class="form-input" style="width: 120px;" />
-          <app-quick-range (pick)="setQuickRange($event)" (clear)="fechaDesde = ''; fechaHasta = ''; load();"></app-quick-range>
-        </div>
+        <h3 class="section-title"><app-icon name="send" size="1em"/> Envíos a Compras Paraguai</h3>
+        <app-date-range [(desde)]="fechaDesde" [(hasta)]="fechaHasta" label="Rango de envíos:" (changed)="applyFilters()" (cleared)="load()"></app-date-range>
         <div class="table-container">
           <table class="data-table">
             <thead>
               <tr>
-                <th>Inicio</th>
-                <th>Fin</th>
-                <th>Modo</th>
-                <th>Total</th>
-                <th>✅ OK</th>
-                <th>❌ Fallidos</th>
-                <th>Error</th>
+                <th scope="col">Inicio</th>
+                <th scope="col">Fin</th>
+                <th scope="col">Modo</th>
+                <th scope="col">Total</th>
+                <th scope="col"><app-icon name="check" size="1em"/> OK</th>
+                <th scope="col"><app-icon name="x" size="1em"/> Fallidos</th>
+                <th scope="col">Error</th>
               </tr>
             </thead>
             <tbody>
@@ -44,61 +40,47 @@ import { QuickRangeComponent } from '../../shared/ui/quick-range.component';
                 <td>{{ run.finishedAt | fechaPy:'yyyy-MM-dd HH:mm:ss' }}</td>
                 <td>{{ run.mode }}</td>
                 <td>{{ run.total }}</td>
-                <td style="color: #4ade80;">{{ run.sent }}</td>
-                <td style="color: #ef4444;">{{ run.failed }}</td>
+                <td class="text-ok">{{ run.sent }}</td>
+                <td class="text-err">{{ run.failed }}</td>
                 <td class="text-small">{{ run.error || '—' }}</td>
-              </tr>
-              <tr *ngIf="sendRuns.length === 0">
-                <td colspan="7" class="text-center py-8 text-dim">No hay envíos registrados</td>
               </tr>
             </tbody>
           </table>
+          <div *ngIf="cargando && sendRuns.length === 0" class="empty-state"><span class="spinner" role="status" aria-label="Cargando"></span></div>
+          <div *ngIf="!cargando && sendRuns.length === 0" class="empty-state">No hay envíos registrados</div>
         </div>
-        <div *ngIf="totalPages > 1" class="pagination">
-          <button [disabled]="page === 1" (click)="irAPagina(1)">«</button>
-          <button [disabled]="page === 1" (click)="irAPagina(page - 1)">‹</button>
-          <span class="page-info">Pág {{ page }}/{{ totalPages }} · {{ filtered.length }} corridas</span>
-          <button [disabled]="page === totalPages" (click)="irAPagina(page + 1)">›</button>
-          <button [disabled]="page === totalPages" (click)="irAPagina(totalPages)">»</button>
-        </div>
+        <app-paginador [page]="page" [totalPages]="totalPages" [info]="filtered.length + ' corridas'" (go)="irAPagina($event)"></app-paginador>
       </div>
 
       <!-- Errores -->
       <div class="section-card mt-6">
-        <h3 class="section-title">❌ Productos con Error ({{ erroresTotal }})</h3>
+        <h3 class="section-title"><app-icon name="x" size="1em"/> Productos con Error ({{ erroresTotal }})</h3>
         <div class="table-container">
           <table class="data-table" *ngIf="errorProducts.length > 0">
             <thead>
               <tr>
-                <th>Código</th>
-                <th>Nombre</th>
-                <th>Error</th>
+                <th scope="col">Código</th>
+                <th scope="col">Nombre</th>
+                <th scope="col">Error</th>
               </tr>
             </thead>
             <tbody>
               <tr *ngFor="let e of errorProducts">
                 <td>{{ e.code }}</td>
                 <td>{{ e.nombre }}</td>
-                <td class="text-small" style="white-space: normal; word-break: break-word;">{{ e.mensaje }}</td>
+                <td class="text-small td-wrap">{{ e.mensaje }}</td>
               </tr>
             </tbody>
           </table>
-          <div *ngIf="erroresTotalPages > 1" class="pagination">
-            <button [disabled]="erroresPage === 1" (click)="cargarErrores(1)">«</button>
-            <button [disabled]="erroresPage === 1" (click)="cargarErrores(erroresPage - 1)">‹</button>
-            <span class="page-info">Pág {{ erroresPage }}/{{ erroresTotalPages }} · {{ erroresTotal }} productos</span>
-            <button [disabled]="erroresPage === erroresTotalPages" (click)="cargarErrores(erroresPage + 1)">›</button>
-            <button [disabled]="erroresPage === erroresTotalPages" (click)="cargarErrores(erroresTotalPages)">»</button>
-          </div>
-          <div *ngIf="errorProducts.length === 0" class="text-center py-8 text-dim">
-            Sin errores ✅
-          </div>
+          <div *ngIf="cargandoErrores && errorProducts.length === 0" class="empty-state"><span class="spinner" role="status" aria-label="Cargando"></span></div>
+          <div *ngIf="!cargandoErrores && errorProducts.length === 0" class="empty-state text-ok"><app-icon name="check" size="1em"/> Sin errores</div>
         </div>
+        <app-paginador [page]="erroresPage" [totalPages]="erroresTotalPages" [info]="erroresTotal + ' productos'" (go)="cargarErrores($event)"></app-paginador>
       </div>
 
       <!-- No disponibles en Compras -->
       <div class="section-card mt-6">
-        <h3 class="section-title">⚠️ No disponibles en Compras ({{ noDisp?.totalCount ?? 0 }})</h3>
+        <h3 class="section-title"><app-icon name="warn" size="1em"/> No disponibles en Compras ({{ noDisp?.totalCount ?? 0 }})</h3>
         <p class="text-small text-dim">
           Productos que tenemos con stock y que Compras Paraguai marca como <b>no disponibles</b>. El stock y el precio llegaron bien:
           la marca <code>available</code> la decide Compras, no el envío. Se actualiza con <code>Worker.Verify --disponibilidad</code>.
@@ -110,7 +92,7 @@ import { QuickRangeComponent } from '../../shared/ui/quick-range.component';
           <span class="text-small text-warn" *ngIf="noDisp && !noDisp.checkedAt">
             Todavía no se revisó. Corre <code>Worker.Verify --disponibilidad</code>.
           </span>
-          <button class="btn btn-ghost btn-sm" (click)="descargarCsv()" [disabled]="!noDisp || noDisp.totalCount === 0">Descargar CSV</button>
+          <button type="button" class="btn btn-ghost btn-sm" (click)="descargarCsv()" [disabled]="!noDisp || noDisp.totalCount === 0">Descargar CSV</button>
         </div>
         <div class="table-container" *ngIf="noDisp && noDisp.items.length > 0">
           <table class="data-table">
@@ -136,34 +118,29 @@ import { QuickRangeComponent } from '../../shared/ui/quick-range.component';
             </tbody>
           </table>
         </div>
-        <div *ngIf="noDisp && noDisp.totalPages > 1" class="pagination">
-          <button [disabled]="noDisp.page === 1" (click)="cargarNoDisponibles(1)">«</button>
-          <button [disabled]="noDisp.page === 1" (click)="cargarNoDisponibles(noDisp.page - 1)">‹</button>
-          <span class="page-info">Pág {{ noDisp.page }}/{{ noDisp.totalPages }} · {{ noDisp.totalCount }} productos</span>
-          <button [disabled]="noDisp.page === noDisp.totalPages" (click)="cargarNoDisponibles(noDisp.page + 1)">›</button>
-          <button [disabled]="noDisp.page === noDisp.totalPages" (click)="cargarNoDisponibles(noDisp.totalPages)">»</button>
-        </div>
-        <div *ngIf="noDisp && noDisp.checkedAt && noDisp.totalCount === 0" class="empty-state">
-          Ninguno: todo lo que tiene stock figura disponible en Compras ✅
+        <div *ngIf="cargandoNoDisp && !noDisp" class="empty-state"><span class="spinner" role="status" aria-label="Cargando"></span></div>
+        <app-paginador *ngIf="noDisp" [page]="noDisp.page" [totalPages]="noDisp.totalPages" [info]="noDisp.totalCount + ' productos'" (go)="cargarNoDisponibles($event)"></app-paginador>
+        <div *ngIf="noDisp && noDisp.checkedAt && noDisp.totalCount === 0" class="empty-state text-ok">
+          <app-icon name="check" size="1em"/> Ninguno: todo lo que tiene stock figura disponible en Compras
         </div>
       </div>
 
       <!-- Verificaciones -->
       <div class="section-card mt-6">
-        <h3 class="section-title">✔️ Verificaciones</h3>
+        <h3 class="section-title"><app-icon name="check" size="1em"/> Verificaciones</h3>
         <div class="table-container">
           <table class="data-table" *ngIf="verifyRuns.length > 0">
             <thead>
               <tr>
-                <th>Inicio</th>
-                <th>Muestra</th>
-                <th>Encontrados</th>
-                <th>Precio OK</th>
-                <th>Stock OK</th>
+                <th scope="col">Inicio</th>
+                <th scope="col">Muestra</th>
+                <th scope="col">Encontrados</th>
+                <th scope="col">Precio OK</th>
+                <th scope="col">Stock OK</th>
               </tr>
             </thead>
             <tbody>
-              <tr *ngFor="let v of verifyRuns" (click)="expandVerifyRun(v.id)" class="row-click" [class.row-selected]="verifyAbierta === v.id" title="Ver el detalle de esta verificación">
+              <tr *ngFor="let v of verifyRuns" (click)="expandVerifyRun(v.id)" (keydown.enter)="expandVerifyRun(v.id)" tabindex="0" class="row-click" [class.row-selected]="verifyAbierta === v.id" [attr.aria-expanded]="verifyAbierta === v.id" title="Ver el detalle de esta verificación">
                 <td>{{ v.startedAt | fechaPy:'yyyy-MM-dd HH:mm:ss' }}</td>
                 <td>{{ v.sampleSize }}</td>
                 <td>{{ v.found }}/{{ v.sampleSize }}</td>
@@ -172,9 +149,8 @@ import { QuickRangeComponent } from '../../shared/ui/quick-range.component';
               </tr>
             </tbody>
           </table>
-          <div *ngIf="verifyRuns.length === 0" class="text-center py-8 text-dim">
-            Sin verificaciones
-          </div>
+          <div *ngIf="cargandoVerify && verifyRuns.length === 0" class="empty-state"><span class="spinner" role="status" aria-label="Cargando"></span></div>
+          <div *ngIf="!cargandoVerify && verifyRuns.length === 0" class="empty-state">Sin verificaciones</div>
         </div>
         <div *ngIf="verifyDetalle.length > 0" class="mt-6">
           <h4 class="section-title">Detalle de la verificación #{{ verifyAbierta }} ({{ verifyDetalle.length }} productos)</h4>
@@ -215,6 +191,10 @@ export class ComprasComponent implements OnInit {
   erroresPage = 1;
   erroresTotalPages = 1;
   erroresTotal = 0;
+  cargando = true;
+  cargandoErrores = true;
+  cargandoNoDisp = true;
+  cargandoVerify = true;
   verifyRuns: VerifyRun[] = [];
   verifyDetalle: VerifyResult[] = [];
   verifyAbierta: number | null = null;
@@ -241,12 +221,20 @@ export class ComprasComponent implements OnInit {
       runs => {
         this.original = runs;
         this.applyFilters();
+        this.cargando = false;
       },
-      () => this.errors.show('Error cargando send runs')
+      () => {
+        this.cargando = false;
+        this.errors.show('Error cargando send runs');
+      }
     );
     this.cargarErrores(this.erroresPage);
     this.productoService.getVerifyRuns().subscribe(
-      runs => this.verifyRuns = runs
+      runs => {
+        this.verifyRuns = runs;
+        this.cargandoVerify = false;
+      },
+      () => this.cargandoVerify = false
     );
     this.cargarNoDisponibles(this.noDispPage);
   }
@@ -254,9 +242,16 @@ export class ComprasComponent implements OnInit {
   /** Productos con stock que Compras marca como no disponibles (foto de Worker.Verify --disponibilidad). */
   cargarNoDisponibles(page: number) {
     this.noDispPage = Math.max(1, page);
+    this.cargandoNoDisp = true;
     this.productoService.getNoDisponibles(this.noDispPage, 25).subscribe(
-      r => this.noDisp = r,
-      () => this.errors.show('Error cargando los productos no disponibles en Compras')
+      r => {
+        this.noDisp = r;
+        this.cargandoNoDisp = false;
+      },
+      () => {
+        this.cargandoNoDisp = false;
+        this.errors.show('Error cargando los productos no disponibles en Compras');
+      }
     );
   }
 
@@ -288,13 +283,18 @@ export class ComprasComponent implements OnInit {
   /** Productos en Error de este destino, una página por vez (pueden ser miles). */
   cargarErrores(page: number) {
     this.erroresPage = Math.max(1, page);
+    this.cargandoErrores = true;
     this.erroresService.getErrores('compras', {}, this.erroresPage, 15).subscribe(
       r => {
         this.errorProducts = r.items;
         this.erroresTotal = r.totalCount;
         this.erroresTotalPages = r.totalPages || 1;
+        this.cargandoErrores = false;
       },
-      () => this.errors.show('Error cargando los productos con error')
+      () => {
+        this.cargandoErrores = false;
+        this.errors.show('Error cargando los productos con error');
+      }
     );
   }
 
@@ -309,13 +309,6 @@ export class ComprasComponent implements OnInit {
 
   irAPagina(p: number) {
     this.page = Math.min(Math.max(1, p), this.totalPages);
-    this.applyFilters();
-  }
-
-  setQuickRange(range: string) {
-    const { desde, hasta } = quickRange(range);
-    this.fechaDesde = desde;
-    this.fechaHasta = hasta;
     this.applyFilters();
   }
 

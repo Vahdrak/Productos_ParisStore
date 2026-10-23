@@ -6,35 +6,31 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { interval } from 'rxjs';
 import { ProductoService } from '../../shared/services/producto.service';
 import { ErrorService } from '../../shared/services/error.service';
-import { isDateInRange, parseFecha, quickRange } from '../../shared/utils/fechas';
-import { QuickRangeComponent } from '../../shared/ui/quick-range.component';
+import { isDateInRange, parseFecha } from '../../shared/utils/fechas';
+import { DateRangeComponent } from '../../shared/ui/date-range.component';
+import { PaginadorComponent } from '../../shared/ui/paginador.component';
+import { IconComponent } from '../../shared/ui/icon.component';
 
 @Component({
   selector: 'app-sync',
   standalone: true,
-  imports: [CommonModule, FechaPyPipe, FormsModule, QuickRangeComponent],
+  imports: [CommonModule, FechaPyPipe, FormsModule, DateRangeComponent, PaginadorComponent, IconComponent],
   template: `
     <div class="fade-in">
       <div class="section-card">
-        <h3 class="section-title">🔄 Sincronización Oracle → PostgreSQL</h3>
-        <div class="search-bar">
-          <label class="label-dim">📅 Rango de sincronizaciones:</label>
-          <input type="date" [(ngModel)]="fechaDesde" (ngModelChange)="applyFilters()" class="form-input" style="width: 120px;" />
-          <span style="color: #8f8f8f;">hasta</span>
-          <input type="date" [(ngModel)]="fechaHasta" (ngModelChange)="applyFilters()" class="form-input" style="width: 120px;" />
-          <app-quick-range (pick)="setQuickRange($event)" (clear)="fechaDesde = ''; fechaHasta = ''; load();"></app-quick-range>
-        </div>
+        <h3 class="section-title"><app-icon name="refresh" size="1em"/> Sincronización Oracle → PostgreSQL</h3>
+        <app-date-range [(desde)]="fechaDesde" [(hasta)]="fechaHasta" label="Rango de sincronizaciones:" (changed)="applyFilters()" (cleared)="load()"></app-date-range>
         <div class="table-container">
           <table class="data-table">
             <thead>
               <tr>
-                <th>Inicio</th>
-                <th>Fin</th>
-                <th>Duración</th>
-                <th>Filas</th>
-                <th>Nuevos</th>
-                <th>Actualizados</th>
-                <th>Estado</th>
+                <th scope="col">Inicio</th>
+                <th scope="col">Fin</th>
+                <th scope="col">Duración</th>
+                <th scope="col">Filas</th>
+                <th scope="col">Nuevos</th>
+                <th scope="col">Actualizados</th>
+                <th scope="col">Estado</th>
               </tr>
             </thead>
             <tbody>
@@ -51,25 +47,19 @@ import { QuickRangeComponent } from '../../shared/ui/quick-range.component';
                   </span>
                 </td>
               </tr>
-              <tr *ngIf="syncRuns.length === 0">
-                <td colspan="7" class="text-center py-8 text-dim">No hay corridas de sync</td>
-              </tr>
             </tbody>
           </table>
+          <div *ngIf="cargando" class="empty-state"><span class="spinner" role="status" aria-label="Cargando"></span></div>
+          <div *ngIf="!cargando && syncRuns.length === 0" class="empty-state">No hay corridas de sync</div>
         </div>
-        <div *ngIf="totalPages > 1" class="pagination">
-          <button [disabled]="page === 1" (click)="irAPagina(1)">«</button>
-          <button [disabled]="page === 1" (click)="irAPagina(page - 1)">‹</button>
-          <span class="page-info">Pág {{ page }}/{{ totalPages }} · {{ filtered.length }} corridas</span>
-          <button [disabled]="page === totalPages" (click)="irAPagina(page + 1)">›</button>
-          <button [disabled]="page === totalPages" (click)="irAPagina(totalPages)">»</button>
-        </div>
+        <app-paginador [page]="page" [totalPages]="totalPages" [info]="filtered.length + ' corridas'" (go)="irAPagina($event)"></app-paginador>
       </div>
     </div>
   `
 })
 export class SyncComponent implements OnInit {
   syncRuns: any[] = [];
+  cargando = true;
   original: any[] = [];
   filtered: any[] = [];
 
@@ -93,8 +83,12 @@ export class SyncComponent implements OnInit {
       runs => {
         this.original = runs;
         this.applyFilters();
+        this.cargando = false;
       },
-      () => this.errors.show('Error cargando sync runs')
+      () => {
+        this.cargando = false;
+        this.errors.show('Error cargando sync runs');
+      }
     );
   }
 
@@ -109,13 +103,6 @@ export class SyncComponent implements OnInit {
 
   irAPagina(p: number) {
     this.page = Math.min(Math.max(1, p), this.totalPages);
-    this.applyFilters();
-  }
-
-  setQuickRange(range: string) {
-    const { desde, hasta } = quickRange(range);
-    this.fechaDesde = desde;
-    this.fechaHasta = hasta;
     this.applyFilters();
   }
 
