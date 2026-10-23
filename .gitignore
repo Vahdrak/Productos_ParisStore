@@ -59,3 +59,10 @@ logs/
 *.log
 test-results.txt
 verify-output/
+
+# ==========================================================================
+#  Datos sensibles: reportes y exportaciones (productos, precios, stock).
+#  NUNCA se suben a git ni a las imágenes Docker.
+# ==========================================================================
+docs/reportes/
+*.csv

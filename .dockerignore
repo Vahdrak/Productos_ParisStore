@@ -27,6 +27,9 @@ frontend/comprasparaguai-front/dist
 **/TestResults
 **/verify-output
 
+# Datos sensibles (reportes y exportaciones): nunca dentro de una imagen
+**/*.csv
+
 # No hacen falta para construir ninguna imagen
 docs
 tests
