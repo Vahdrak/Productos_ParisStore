@@ -60,7 +60,7 @@ import { PaginadorComponent } from '../../shared/ui/paginador.component';
       </div>
 
       <!-- Reenviar: vuelve a Pendiente lo ya enviado o con error, para que el worker lo envíe de nuevo -->
-      <div class="search-bar" *ngIf="productList && productList.items.length > 0">
+      <div class="search-bar" *ngIf="auth.logueado && productList && productList.items.length > 0">
         <span class="label-dim"><app-icon name="refresh"></app-icon> Reenviar a:</span>
         <select [(ngModel)]="destinoReenvio" class="form-input w-md" aria-label="Destino del reenvío">
           <option value="compras">Compras</option>
@@ -75,7 +75,7 @@ import { PaginadorComponent } from '../../shared/ui/paginador.component';
       </div>
 
       <!-- Retener: excepción por SKU en bloque (los elegidos o todo lo filtrado); lo retenido se ve y se libera en "Filtros de envío" -->
-      <div class="search-bar" *ngIf="productList && productList.items.length > 0">
+      <div class="search-bar" *ngIf="auth.logueado && productList && productList.items.length > 0">
         <span class="label-dim"><app-icon name="ban"></app-icon> Retener en:</span>
         <select [(ngModel)]="destinoRetencion" class="form-input w-md" aria-label="Destino de la retención">
           <option value="compras">Compras</option>
@@ -128,7 +128,7 @@ import { PaginadorComponent } from '../../shared/ui/paginador.component';
         <table class="data-table">
           <thead>
             <tr>
-              <th scope="col" style="width: 36px;"><input type="checkbox" aria-label="Seleccionar todos los productos de la página" [checked]="todosDeLaPaginaElegidos" (change)="alternarPagina($any($event.target).checked)" /></th>
+              <th *ngIf="auth.logueado" scope="col" style="width: 36px;"><input type="checkbox" aria-label="Seleccionar todos los productos de la página" [checked]="todosDeLaPaginaElegidos" (change)="alternarPagina($any($event.target).checked)" /></th>
               <th scope="col" style="width: 12%;">Código</th>
               <th scope="col" style="width: 24%;">Nombre (ES)</th>
               <th scope="col">Marca</th>
@@ -143,7 +143,7 @@ import { PaginadorComponent } from '../../shared/ui/paginador.component';
           <tbody>
             <tr *ngFor="let p of pagedProducts" class="row-click" tabindex="0" (click)="verCambios(p)" (keydown.enter)="verCambios(p)"
                 [class.row-selected]="seleccionado?.code === p.code" title="Ver últimos cambios">
-              <td (click)="$event.stopPropagation()" (keydown.enter)="$event.stopPropagation()"><input type="checkbox" [attr.aria-label]="'Seleccionar ' + p.code" [checked]="seleccion.has(p.code)" (change)="alternarProducto(p.code, $any($event.target).checked)" /></td>
+              <td *ngIf="auth.logueado" (click)="$event.stopPropagation()" (keydown.enter)="$event.stopPropagation()"><input type="checkbox" [attr.aria-label]="'Seleccionar ' + p.code" [checked]="seleccion.has(p.code)" (change)="alternarProducto(p.code, $any($event.target).checked)" /></td>
               <td class="text-bold">{{ p.code }}</td>
               <td>{{ p.nameEs }}</td>
               <td>{{ p.brand }}</td>

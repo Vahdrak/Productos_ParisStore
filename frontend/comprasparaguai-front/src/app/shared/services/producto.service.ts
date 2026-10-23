@@ -224,6 +224,9 @@ export class ProductoService {
   getPendientes(target: string, filtro: PendientesFiltro, page: number, pageSize: number): Observable<PendientesLista> {
     const params = [`target=${target}`, `page=${page}`, `pageSize=${pageSize}`];
     if (filtro.code) params.push(`code=${encodeURIComponent(filtro.code)}`);
+    if (filtro.name) params.push(`name=${encodeURIComponent(filtro.name)}`);
+    if (filtro.marcaId) params.push(`marcaId=${filtro.marcaId}`);
+    if (filtro.categoriaId) params.push(`categoriaId=${filtro.categoriaId}`);
     if (filtro.regimen) params.push(`regimen=${filtro.regimen}`);
     if (filtro.retencion) params.push(`retencion=${filtro.retencion}`);
     return this.http.get<PendientesLista>(`/productos/pending?${params.join('&')}`);
@@ -364,6 +367,11 @@ export class ProductoService {
 
 export interface PendientesFiltro {
   code?: string;
+  /** Texto contenido en el nombre. */
+  name?: string;
+  marcaId?: number | null;
+  /** Departamento o categoría (incluye su subárbol). */
+  categoriaId?: number | null;
   /** 'true' = solo con régimen turismo, 'false' = solo sin régimen, '' = todos. */
   regimen?: string;
   /** 'retenidos', 'enviables' o '' (todos). */

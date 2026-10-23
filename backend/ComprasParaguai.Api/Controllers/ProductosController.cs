@@ -104,6 +104,9 @@ public class ProductosController : ControllerBase
     public async Task<ActionResult<ProductoPendienteListDto>> GetPending(
         [FromQuery] string? target = null,
         [FromQuery] string? code = null,
+        [FromQuery] string? name = null,
+        [FromQuery] int? marcaId = null,
+        [FromQuery] int? categoriaId = null,
         [FromQuery] bool? regimen = null,
         [FromQuery] string? retencion = null,
         [FromQuery] int page = 1,
@@ -116,6 +119,9 @@ public class ProductosController : ControllerBase
             var result = await _repository.BuscarPendientesAsync(syncTarget, new PendientesFiltro
             {
                 Code = code,
+                Name = name,
+                MarcaId = marcaId,
+                CategoriaId = categoriaId,
                 Regimen = regimen,
                 Retencion = retencion,
                 Page = page,

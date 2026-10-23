@@ -432,20 +432,13 @@ public class PostgreSqlProductoRepository : IProductoRepository
         var c = Cols(target);
         string retenidoPor = EnvioSql.RetenidoPor(target);
 
+        // Mismo filtro que la lista de productos (código, nombre, marca, departamento con su subárbol, régimen).
+        var (filtros, parametros) = FiltroProductos(
+            string.IsNullOrWhiteSpace(filtro.Code) ? null : filtro.Code.Trim(),
+            string.IsNullOrWhiteSpace(filtro.Name) ? null : filtro.Name.Trim(),
+            null, target, filtro.MarcaId, filtro.CategoriaId, filtro.Regimen);
         var condiciones = new List<string> { $"p.{c.Status} = 0" };
-        var parametros = new DynamicParameters();
-
-        if (!string.IsNullOrWhiteSpace(filtro.Code))
-        {
-            condiciones.Add("p.code ILIKE @code");
-            parametros.Add("code", $"%{filtro.Code.Trim()}%");
-        }
-
-        if (filtro.Regimen.HasValue)
-        {
-            condiciones.Add("p.regimen_turismo = @regimen");
-            parametros.Add("regimen", filtro.Regimen.Value);
-        }
+        condiciones.AddRange(filtros);
 
         if (string.Equals(filtro.Retencion, "retenidos", StringComparison.OrdinalIgnoreCase))
             condiciones.Add($"{retenidoPor} IS NOT NULL");

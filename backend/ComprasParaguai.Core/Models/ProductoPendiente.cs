@@ -15,6 +15,14 @@ public class PendientesFiltro
 {
     public string? Code { get; set; }
 
+    /// <summary>Texto contenido en el nombre (ES o PT).</summary>
+    public string? Name { get; set; }
+
+    public int? MarcaId { get; set; }
+
+    /// <summary>Departamento o categoría; incluye todo su subárbol.</summary>
+    public int? CategoriaId { get; set; }
+
     /// <summary>true = solo con régimen turismo, false = solo sin régimen, null = todos.</summary>
     public bool? Regimen { get; set; }
 

@@ -23,7 +23,7 @@ import { PaginadorComponent } from '../../shared/ui/paginador.component';
       <h3 class="section-title"><app-icon name="lock" size="1em"/> Retenidos en {{ nombreDestino }} ({{ lista?.totalCount ?? 0 }})</h3>
       <p class="text-small text-dim">
         Todo lo que hoy <b>no se envía</b> a {{ nombreDestino }}: lo que cubre una pausa y los productos con la excepción «retener».
-        Marca los que quieras y libéralos: a los de excepción se les quita la excepción; a los que retiene una pausa se les pone «enviar»
+        Con sesión iniciada puedes marcar los que quieras y liberarlos: a los de excepción se les quita la excepción; a los que retiene una pausa se les pone «enviar»
         (la excepción gana sobre la pausa, que sigue vigente para el resto).
       </p>
 
@@ -45,7 +45,7 @@ import { PaginadorComponent } from '../../shared/ui/paginador.component';
         <button type="button" class="btn btn-ghost btn-sm" (click)="cargar()" title="Volver a pedir la lista"><app-icon name="refresh" size="1em"/> Actualizar</button>
       </div>
 
-      <div class="search-bar" *ngIf="lista && lista.items.length > 0">
+      <div class="search-bar" *ngIf="auth.logueado && lista && lista.items.length > 0">
         <input type="text" class="form-input w-md" placeholder="Motivo (opcional)" aria-label="Motivo de la liberación" [(ngModel)]="motivo" maxlength="200" />
         <button type="button" class="btn btn-primary" [disabled]="seleccion.size === 0" (click)="liberarSeleccion()"
                 [title]="auth.logueado ? '' : 'Inicia sesión para modificar'">
@@ -58,7 +58,7 @@ import { PaginadorComponent } from '../../shared/ui/paginador.component';
         <table class="data-table">
           <thead>
             <tr>
-              <th scope="col" style="width: 36px;">
+              <th *ngIf="auth.logueado" scope="col" style="width: 36px;">
                 <input type="checkbox" aria-label="Elegir todos los de esta página" [checked]="todosElegidos"
                        (change)="alternarPagina($any($event.target).checked)" />
               </th>
@@ -68,12 +68,12 @@ import { PaginadorComponent } from '../../shared/ui/paginador.component';
               <th scope="col">Stock</th>
               <th scope="col">En {{ nombreDestino }}</th>
               <th scope="col">Lo retiene</th>
-              <th scope="col"></th>
+              <th *ngIf="auth.logueado" scope="col"></th>
             </tr>
           </thead>
           <tbody>
             <tr *ngFor="let r of lista.items" [class.row-selected]="seleccion.has(r.code)">
-              <td><input type="checkbox" [attr.aria-label]="'Elegir ' + r.code" [checked]="seleccion.has(r.code)"
+              <td *ngIf="auth.logueado"><input type="checkbox" [attr.aria-label]="'Elegir ' + r.code" [checked]="seleccion.has(r.code)"
                          (change)="alternar(r.code, $any($event.target).checked)" /></td>
               <td class="text-bold">{{ r.code }}</td>
               <td class="td-wrap">{{ r.namePt }}</td>
@@ -86,7 +86,7 @@ import { PaginadorComponent } from '../../shared/ui/paginador.component';
                 </span>
                 <span class="text-small text-dim">{{ r.porExcepcion ? (r.motivo || 'sin motivo') : r.retenidoPor }}</span>
               </td>
-              <td>
+              <td *ngIf="auth.logueado">
                 <button type="button" class="btn btn-ghost btn-sm" (click)="liberarUno(r)"
                         [title]="auth.logueado ? 'Liberar este producto' : 'Inicia sesión para modificar'">Liberar</button>
               </td>
